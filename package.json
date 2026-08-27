@@ -1,0 +1,30 @@
+{
+  "name": "mets-home-run-apple",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Standalone ESP32 firmware, engineering simulator and virtual Home Run Apple",
+  "type": "module",
+  "packageManager": "pnpm@10.14.0",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "dev:lab": "pnpm --filter @apple/apple-lab dev",
+    "dev:virtual": "pnpm --filter @apple/virtual-apple dev",
+    "build": "pnpm --filter @apple/apple-lab --filter @apple/virtual-apple run build",
+    "typecheck": "pnpm --filter @apple/apple-lab --filter @apple/virtual-apple run typecheck",
+    "check:public": "node scripts/check-public-boundary.mjs",
+    "check:assets": "node scripts/check-3d-assets.mjs",
+    "test:unit": "pnpm --filter @apple/protocol --filter @apple/test-fixtures run test",
+    "test": "pnpm run check:public && pnpm run check:assets && pnpm run test:unit"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@types/three": "^0.185.0",
+    "@vitejs/plugin-react": "^6.1.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.2",
+    "vitest": "^4.1.11"
+  }
+}

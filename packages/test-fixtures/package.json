@@ -1,0 +1,13 @@
+{
+  "name": "@apple/test-fixtures",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "dependencies": {
+    "@apple/protocol": "workspace:*"
+  },
+  "scripts": {
+    "test": "vitest run --config ../../vitest.config.ts src/index.test.ts"
+  }
+}

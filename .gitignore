@@ -1,0 +1,16 @@
+node_modules/
+package-lock.json
+dist/
+coverage/
+.pio/
+.cache/
+.wrangler/
+.env
+.env.*
+!.env.example
+.DS_Store
+
+# Personal marks and locally supplied artwork are never repository assets.
+user-assets/
+*.local.glb
+*.local.png

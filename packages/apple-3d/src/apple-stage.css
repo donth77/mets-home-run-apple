@@ -1,0 +1,51 @@
+.apple-stage {
+  background: #0b111a;
+  min-height: 320px;
+  overflow: hidden;
+  position: relative;
+}
+
+.apple-stage canvas {
+  display: block;
+  height: 100% !important;
+  width: 100% !important;
+}
+
+.apple-stage__fallback {
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  position: absolute;
+  width: 1px;
+  clip: rect(0 0 0 0);
+}
+
+.apple-dimension-label {
+  background: rgba(8, 18, 29, 0.9);
+  border: 1px solid rgba(97, 168, 227, 0.58);
+  border-radius: 7px;
+  color: #c9ddf1;
+  display: grid;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.65rem;
+  gap: 2px;
+  min-width: 78px;
+  padding: 6px 8px;
+  pointer-events: none;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.apple-dimension-label strong {
+  color: #ff8a4c;
+}
+
+.outfield-distance-marker {
+  color: #ef6331;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 0.28rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  pointer-events: none;
+  text-shadow: 0 1px 2px #071423;
+}

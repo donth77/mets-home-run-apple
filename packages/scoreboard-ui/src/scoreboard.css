@@ -1,0 +1,137 @@
+.apple-scoreboard {
+  --board-blue: #123b72;
+  --board-orange: #ff5a1f;
+  align-items: stretch;
+  background: rgba(4, 13, 26, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 14px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.3);
+  color: #fff;
+  display: grid;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  grid-template-columns: minmax(126px, auto) minmax(112px, 1fr) auto;
+  min-width: min(420px, calc(100vw - 32px));
+  overflow: hidden;
+  position: relative;
+}
+
+.apple-scoreboard__teams {
+  display: grid;
+}
+
+.apple-scoreboard__team {
+  align-items: center;
+  background: #1e3550;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: 1fr auto;
+  min-height: 38px;
+  padding: 0 13px;
+}
+
+.apple-scoreboard__team + .apple-scoreboard__team {
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.apple-scoreboard__team--mets {
+  background: var(--board-blue);
+  box-shadow: inset 4px 0 0 var(--board-orange);
+}
+
+.apple-scoreboard__team span,
+.apple-scoreboard__state span,
+.apple-scoreboard__outs > span,
+.apple-scoreboard__game {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.11em;
+}
+
+.apple-scoreboard__team strong {
+  font-size: 1.22rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.apple-scoreboard__state {
+  align-content: center;
+  display: grid;
+  gap: 5px;
+  justify-items: center;
+  padding: 9px 14px;
+  text-align: center;
+}
+
+.apple-scoreboard__state strong {
+  color: #ffb080;
+  font-size: 0.74rem;
+  letter-spacing: 0.08em;
+}
+
+.apple-scoreboard__state span {
+  color: #d6e2f1;
+}
+
+.apple-scoreboard__outs {
+  align-content: center;
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  padding: 10px 14px;
+}
+
+.apple-scoreboard__outs > span {
+  color: #91a5bd;
+  font-size: 0.58rem;
+}
+
+.apple-scoreboard__outs div {
+  display: flex;
+  gap: 5px;
+}
+
+.apple-scoreboard__outs i {
+  background: #28384b;
+  border-radius: 50%;
+  display: block;
+  height: 8px;
+  width: 8px;
+}
+
+.apple-scoreboard__outs i.is-on {
+  background: #ffad28;
+  box-shadow: 0 0 9px rgba(255, 173, 40, 0.72);
+}
+
+.apple-scoreboard__game {
+  background: var(--board-orange);
+  border-radius: 999px;
+  color: #fff;
+  padding: 4px 8px;
+  position: absolute;
+  right: 8px;
+  top: 6px;
+}
+
+.apple-scoreboard--lab {
+  border-radius: 8px;
+  box-shadow: none;
+  min-width: 0;
+  width: 100%;
+}
+
+@media (max-width: 560px) {
+  .apple-scoreboard {
+    grid-template-columns: minmax(110px, auto) minmax(92px, 1fr) auto;
+  }
+
+  .apple-scoreboard__team {
+    gap: 10px;
+    padding-inline: 10px;
+  }
+
+  .apple-scoreboard__state,
+  .apple-scoreboard__outs {
+    padding-inline: 9px;
+  }
+}

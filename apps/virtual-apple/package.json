@@ -1,0 +1,18 @@
+{
+  "name": "@apple/virtual-apple",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 4174",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@apple/apple-3d": "workspace:*",
+    "@apple/scoreboard-ui": "workspace:*",
+    "@apple/test-fixtures": "workspace:*",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  }
+}

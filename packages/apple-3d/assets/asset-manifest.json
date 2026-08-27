@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "assets": [
+    {
+      "id": "mets-roundel-default",
+      "path": "mets-logo.svg",
+      "role": "AppleDecalTarget default texture",
+      "source": "https://en.wikipedia.org/wiki/File:New_York_Mets.svg",
+      "sourceFile": "https://upload.wikimedia.org/wikipedia/en/7/7b/New_York_Mets.svg",
+      "retrieved": "2026-08-26",
+      "format": "image/svg+xml",
+      "viewBox": "0 0 150 149.99792",
+      "sha256": "d2a917d7fa95cc01574c0b2b46659e4fd6eec1980210dbe43a5c0f25f3912b63"
+    },
+    {
+      "id": "citi-apple-model",
+      "path": "models/citi-apple.glb",
+      "role": "Logo-free AppleRoot visual mesh",
+      "source": "Project-original Meshy multi-view generation supplied by the maintainer",
+      "retrieved": "2026-08-26",
+      "format": "model/gltf-binary",
+      "triangles": 8535,
+      "textureResolution": 1024,
+      "sourceArchiveSha256": "07c3982d0312c34a3cf12566321cabfdf9f5247ac9a8de26472dd0633990a16f",
+      "modifications": "FBX2glTF 0.9.7 conversion; glTF Transform 4.4.2 meshopt/quantization; WebP texture resize; no mesh simplification; runtime scale and anchor wrappers",
+      "license": "Project asset; public-release license pending",
+      "sha256": "70afdd2bdc0f04d310a22c85b834db0a7a36678a60098f4df63d9823c1334445"
+    },
+    {
+      "id": "citi-base-model",
+      "path": "models/citi-base.glb",
+      "role": "BaseRoot visual mesh",
+      "source": "Project-original Meshy multi-view generation supplied by the maintainer",
+      "retrieved": "2026-08-26",
+      "format": "model/gltf-binary",
+      "triangles": 4240,
+      "textureResolution": 1024,
+      "sourceArchiveSha256": "bf72f60bba6f65ef126b7952543a433d4f9836035b012c3bd111e85a6983802e",
+      "modifications": "FBX2glTF 0.9.7 conversion; glTF Transform 4.4.2 meshopt/quantization; WebP texture resize; no mesh simplification; runtime scale and anchor wrappers",
+      "license": "Project asset; public-release license pending",
+      "sha256": "3655dfaa9df89ee7f5f04b26c8d88fd83ec8315a98dcde67fe69d5acd446535b"
+    }
+  ]
+}
