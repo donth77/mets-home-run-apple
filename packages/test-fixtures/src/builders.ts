@@ -1,11 +1,14 @@
 import type {
   AppleCommand,
+  AppleCoreEvent,
+  CelebrationKind,
   DeviceFixtureDefinition,
   DeviceFixtureInputFrame,
   FixtureFrame,
   GameSnapshot,
   NormalizedGameInput,
   NormalizedPlayEvidence,
+  PresentationSnapshot,
 } from "@apple/protocol";
 
 export const baseSnapshot: GameSnapshot = {
@@ -47,7 +50,7 @@ export const baseSnapshot: GameSnapshot = {
   },
 };
 
-function snapshot(overrides: Partial<GameSnapshot>): GameSnapshot {
+function snapshot(overrides: Partial<PresentationSnapshot>): PresentationSnapshot {
   return {
     ...baseSnapshot,
     ...overrides,
@@ -64,14 +67,19 @@ export function command(type: AppleCommand["type"], eventKey: string, positionMm
   };
 }
 
+export function celebrationEvent(celebration: CelebrationKind, eventKey: string, subject: string): AppleCoreEvent {
+  return { type: "CELEBRATION_STARTED", eventKey, celebration, subject };
+}
+
 export function frame(
   atMs: number,
-  state: Partial<GameSnapshot>,
+  state: Partial<PresentationSnapshot>,
   positionMm: number,
   trace: string,
   commands: readonly AppleCommand[] = [],
+  events: readonly AppleCoreEvent[] = [],
 ): FixtureFrame {
-  return { atMs, snapshot: snapshot(state), positionMm, commands, trace };
+  return { atMs, snapshot: snapshot(state), positionMm, events, commands, trace };
 }
 
 export function normalizedInput(cursor: string, overrides: Partial<NormalizedGameInput> = {}): NormalizedGameInput {
@@ -106,6 +114,18 @@ export function normalizedHomeRun(
     kind: "HOME_RUN",
     complete: true,
     review,
+  };
+}
+
+export function normalizedGrandSlam(eventKey: string): NormalizedPlayEvidence {
+  return {
+    eventKey,
+    atBatIndex: 48,
+    battingTeamId: 121,
+    batterName: "Pete Alonso",
+    kind: "GRAND_SLAM",
+    complete: true,
+    review: "NONE",
   };
 }
 

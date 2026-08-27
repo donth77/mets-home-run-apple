@@ -33,9 +33,7 @@ const NEXT_GAME_DATE = "2026-08-28T23:10:00Z";
 const SCHEDULE_TEST_NOW = new Date("2026-08-27T12:00:00Z");
 
 function expectedNextGameTime() {
-  return new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" }).format(
-    new Date(NEXT_GAME_DATE),
-  );
+  return new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" }).format(new Date(NEXT_GAME_DATE));
 }
 
 vi.mock("canvas-confetti", () => ({
@@ -201,6 +199,7 @@ describe("Virtual Apple accessibility", () => {
   it("shows the Demo controls only when the local debug query flag is present", () => {
     const hidden = render(<App />);
     expect(hidden.container.querySelector(".virtual-controls")).toBeNull();
+    expect(hidden.container.querySelector(".virtual-brand small")?.textContent).toBe("Citi Field");
     hidden.unmount();
 
     window.history.replaceState({}, "", "/?demo=1");
@@ -228,6 +227,7 @@ describe("Virtual Apple accessibility", () => {
   it.each([
     ["live", 0],
     ["home-run", 1],
+    ["grand-slam", 1],
     ["review-confirmed", 1],
     ["rain-delay", 0],
     ["mets-win", 2],
@@ -270,6 +270,7 @@ describe("Virtual Apple accessibility", () => {
 
   it.each([
     ["home-run", "HOME_RUN"],
+    ["grand-slam", "HOME_RUN"],
     ["review-confirmed", "HOME_RUN"],
     ["mets-win", "METS_WIN"],
   ] as const)("routes the %s celebration to the %s sound", (scenarioId, kind) => {
@@ -279,6 +280,25 @@ describe("Virtual Apple accessibility", () => {
     render(<App />);
 
     expect(soundTestState.cue).toEqual({ id: `demo:${scenarioId}`, kind });
+  });
+
+  it("labels a live grand slam distinctly while retaining the home-run sound", () => {
+    liveTestState.game = { venue: "Citi Field" };
+    liveTestState.snapshot = getScenario("live").frames[0].snapshot;
+    liveTestState.celebration = {
+      eventKey: "777686:play-48",
+      kind: "GRAND_SLAM",
+      subject: "Pete Alonso",
+    };
+    liveTestState.status = "POLLING";
+    const { container, getByRole } = render(<App />);
+    const stage = getByRole("img", { name: "Virtual Home Run Apple behind the center-field wall" });
+
+    expect(stage.getAttribute("data-scoreboard-label")).toBe("GRAND SLAM!!");
+    expect(container.querySelector(".apple-scorebug__event strong")?.textContent).toBe("GRAND SLAM!!");
+    expect(container.querySelector(".moment-card h2")?.textContent).toBe("GRAND SLAM!!");
+    expect(container.querySelector(".moment-card p")?.textContent).toContain("Pete Alonso clears the bases");
+    expect(soundTestState.cue).toEqual({ id: "777686:play-48", kind: "HOME_RUN" });
   });
 
   it("keeps celebration scoreboard data stable while only the Apple position changes", () => {
@@ -295,7 +315,7 @@ describe("Virtual Apple accessibility", () => {
     expect(stageTestState.scoreboardData.at(-1)).toBe(firstScoreboardData);
   });
 
-  it.each(["Home run", "Raise the Apple", "Review", "Delay", "Mets win"])(
+  it.each(["Home run", "Grand slam", "Raise the Apple", "Review", "Delay", "Mets win"])(
     "automatically arms sound when the %s demo is selected",
     (label) => {
       enableDemo();
@@ -400,6 +420,7 @@ describe("Virtual Apple accessibility", () => {
         "data-scoreboard-label",
       ),
     ).toBe("OFFSEASON");
+    expect(container.querySelector(".moment-card")).toBeNull();
   });
 
   it("uses the offseason presentation when MLB season metadata says the season is over", () => {
@@ -408,7 +429,8 @@ describe("Virtual Apple accessibility", () => {
 
     expect(container.querySelector(".apple-scorebug")).toBeNull();
     expect(container.querySelector(".upcoming-games")).toBeNull();
-    expect(container.querySelector(".moment-card")?.textContent).toContain("OFFSEASON");
+    expect(container.querySelector(".moment-card")).toBeNull();
+    expect(container.querySelector('.skip-link[href="#game-status"]')).toBeNull();
     expect(
       getByRole("img", { name: "Virtual Home Run Apple behind the center-field wall" }).getAttribute(
         "data-scoreboard-label",
@@ -460,6 +482,42 @@ describe("Virtual Apple accessibility", () => {
     rerender(<App />);
     expect(stage.getAttribute("data-scoreboard-label")).toBe("FINAL");
     expect(stage.getAttribute("data-position-mm")).toBe("0");
+  });
+
+  it("keeps a Mets loss in the final presentation on both scoreboards", () => {
+    const finalSnapshot = getScenario("mets-win").frames.at(-1)?.snapshot;
+    if (!finalSnapshot) throw new Error("Missing final fixture frame");
+    liveTestState.game = { venue: "Citi Field" };
+    liveTestState.snapshot = {
+      ...finalSnapshot,
+      label: "Game Over",
+      away: { id: 144, abbreviation: "ATL", name: "Braves", runs: 5 },
+      home: { id: 121, abbreviation: "NYM", name: "Mets", runs: 3 },
+      lastEvent: "Braves defeat the Mets, 5-3.",
+    };
+    liveTestState.status = "FINAL";
+
+    const { container, getByRole, rerender } = render(<App />);
+    const stage = getByRole("img", { name: "Virtual Home Run Apple behind the center-field wall" });
+
+    expect(stage.getAttribute("data-scoreboard-label")).toBe("FINAL");
+    expect(container.querySelector(".apple-scorebug__final")?.textContent).toBe("FINAL");
+    expect(container.querySelector(".apple-scorebug__event strong")?.textContent).toBe("FINAL");
+    expect(container.querySelector(".moment-card h2")?.textContent).toBe("FINAL");
+    expect(container.querySelector(".moment-card__next")).toBeNull();
+    expect(container.textContent).not.toContain("METS WIN!");
+
+    liveTestState.status = "CHECKING";
+    rerender(<App />);
+    expect(stage.getAttribute("data-scoreboard-label")).toBe("FINAL");
+    expect(container.querySelector(".apple-scorebug__event strong")?.textContent).toBe("FINAL");
+
+    liveTestState.game = undefined;
+    liveTestState.snapshot = undefined;
+    liveTestState.status = "BETWEEN_GAMES";
+    rerender(<App />);
+    expect(container.querySelector(".apple-scorebug")).toBeNull();
+    expect(container.querySelector(".moment-card__next")).not.toBeNull();
   });
 
   it("waits for the Mets-win Apple to be fully raised before starting confetti", () => {

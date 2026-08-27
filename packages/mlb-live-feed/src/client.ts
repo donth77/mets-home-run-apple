@@ -53,7 +53,7 @@ export class MlbRecordingClient {
     this.#deliveryCursor = upstreamCursor;
     this.#sameCursorRevision = 0;
     this.#fingerprints = normalized.fingerprints;
-    this.#stateFingerprint = normalizedStateFingerprint(normalized.capture.snapshot, normalized.fingerprints);
+    this.#stateFingerprint = normalizedStateFingerprint(normalized.capture.gameSnapshot, normalized.fingerprints);
     return {
       capture: normalized.capture,
       cursor: this.#deliveryCursor,
@@ -117,7 +117,7 @@ export class MlbRecordingClient {
       this.#now().toISOString(),
       upstreamCursor,
     );
-    const stateFingerprint = normalizedStateFingerprint(normalized.capture.snapshot, normalized.fingerprints);
+    const stateFingerprint = normalizedStateFingerprint(normalized.capture.gameSnapshot, normalized.fingerprints);
     if (upstreamCursor === this.#upstreamCursor && stateFingerprint === this.#stateFingerprint) {
       this.#baseline = nextFeed;
       this.#fingerprints = normalized.fingerprints;
@@ -137,7 +137,7 @@ export class MlbRecordingClient {
         : {
             ...normalized.capture,
             cursor: deliveryCursor,
-            input: { ...normalized.capture.input, cursor: deliveryCursor },
+            coreInput: { ...normalized.capture.coreInput, cursor: deliveryCursor },
           };
 
     this.#baseline = nextFeed;

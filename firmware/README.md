@@ -1,21 +1,48 @@
-# Firmware
+# Physical Apple firmware
 
-`lib/core` is the portable C++17 decision and motion-sequence engine shared by native tests and the browser build. Nano ESP32 adapters for networking, storage, display, motor control, setup, local management, and sleep still need to be added through PlatformIO.
+This directory contains the shared decision-making code for the Home Run Apple. The code that connects it to a real Nano ESP32 is still being built.
 
-The core accepts small, versioned game updates instead of raw MLB JSON. It:
+The physical build is intended to be reproduced for other owners. See the [Physical build guide](../docs/PHYSICAL_BUILD.md) for the parts, assembly, calibration, and acceptance process.
 
-- keeps separate state for each `gamePk`, including doubleheaders;
-- treats the first observation as history and does not celebrate it;
-- rejects malformed, wrong-team, duplicate, older, or review-pending evidence;
-- saves a confirmed Mets home run or win before starting a sequence;
-- runs one sequence at a time with a two-second display/LED lead-in;
-- extends 50 mm, waits for position feedback, holds for 30 seconds, and retracts;
-- disables motion and latches a fault after persistence, clock, or direction-timeout failures.
+## Current status
 
-Run the native suite from the repository root:
+Working today:
+
+- the game and celebration rules;
+- the timed raise, hold, and lower sequence;
+- safety checks for bad, old, duplicated, or unconfirmed game events;
+- automated tests that run without physical hardware.
+
+Still to build:
+
+- Wi-Fi setup and game updates;
+- saved settings and event history;
+- the physical display;
+- motor, end-stop, and power controls;
+- local setup and management from Apple Lab;
+- per-device identity, ownership, and recovery;
+- sleep and recovery behavior.
+
+## What the shared code does
+
+The shared code receives a small game update and decides whether a celebration should begin. It supports doubleheaders, ignores plays that happened before startup, and waits for reviews to finish before accepting a home run.
+
+Before starting movement, it records the accepted event so a restart cannot trigger the same celebration again. The current tested sequence waits two seconds, raises the Apple 50 mm, holds it for 30 seconds, and lowers it.
+
+If time moves backward, storage fails, or movement takes too long, the sequence stops and records what went wrong.
+
+## Why hardware code stays separate
+
+The shared rules do not know how to join Wi-Fi, draw a screen, save to a particular chip, or power a motor. The Nano firmware will provide those hardware-specific pieces.
+
+Keeping them separate lets Apple Lab, Virtual Apple, automated tests, and the physical device follow the same celebration rules. The Nano still makes the final decision about whether physical movement is safe.
+
+## Run the firmware tests
+
+From the repository root, run:
 
 ```bash
 pnpm test:native
 ```
 
-The core deliberately knows nothing about Arduino APIs, Wi-Fi, JSON, displays, motors, storage implementations, or wall-clock time. Those details belong in adapters. Before a loaded physical test, the motion adapter must use the real end-stop strategy and measured travel.
+These tests use a simulated clock, storage, and motor. Before the real Apple is attached, the physical motor code must be tested without a load using measured travel limits and working switches at both ends of its travel.

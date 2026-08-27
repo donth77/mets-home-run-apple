@@ -204,7 +204,7 @@ export function useMlbHistoricalReplay(): MlbHistoricalReplayState {
           controller.signal,
         );
         if (token !== operationTokenRef.current || !result.capture) return false;
-        const nextDecision = core.ingest(result.capture.input, 0);
+        const nextDecision = core.ingest(result.capture.coreInput, 0);
         currentIndexRef.current = targetIndex;
         setCurrentIndex(targetIndex);
         setCapture(result.capture);
@@ -269,7 +269,7 @@ export function useMlbHistoricalReplay(): MlbHistoricalReplayState {
         clockRef.current += elapsed;
         if (result.capture) {
           const acceptedCapture = result.capture;
-          const acceptedDecision = core.ingest(acceptedCapture.input, clockRef.current);
+          const acceptedDecision = core.ingest(acceptedCapture.coreInput, clockRef.current);
           setCapture(acceptedCapture);
           setDecision(acceptedDecision);
           setReceipts((current) =>

@@ -1,6 +1,6 @@
 import { AppleStage, type StadiumScoreboardData, useActuatorSimulation } from "@apple/apple-3d";
 import { METS_TEAM_ID } from "@apple/mlb-live-feed";
-import { type GameSnapshot, MAX_STROKE_MM } from "@apple/protocol";
+import { MAX_STROKE_MM, type PresentationSnapshot } from "@apple/protocol";
 import { Scoreboard } from "@apple/scoreboard-ui";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { gameStatusAnnouncement } from "./accessibilityPresentation";
@@ -29,6 +29,7 @@ import { VictoryConfetti } from "./VictoryConfetti";
 const modes = [
   { id: "live", label: "Live inning" },
   { id: "home-run", label: "Home run" },
+  { id: "grand-slam", label: "Grand slam" },
   { id: "review-confirmed", label: "Review" },
   { id: "rain-delay", label: "Delay" },
   { id: "mets-win", label: "Mets win" },
@@ -80,7 +81,7 @@ export function App() {
           : liveMoment(live.status, sourceSnapshot, live.celebration, homeRunPhrase),
     [demoOverride, homeRunPhrase, live.celebration, live.status, offseason, playback.scenarioId, sourceSnapshot],
   );
-  const rawPublicSnapshot = useMemo<GameSnapshot>(
+  const rawPublicSnapshot = useMemo<PresentationSnapshot>(
     () => ({
       ...sourceSnapshot,
       ...(demoOverride || !live.celebration ? {} : { phase: "CELEBRATION" as const }),
@@ -117,7 +118,7 @@ export function App() {
     ],
   );
   const celebrationSound = useCelebrationSound(celebrationSoundCue, rainDelay);
-  const heldWinSnapshotRef = useRef<GameSnapshot | undefined>(undefined);
+  const heldWinSnapshotRef = useRef<PresentationSnapshot | undefined>(undefined);
   useEffect(() => {
     if (rawWinCelebration) heldWinSnapshotRef.current = rawPublicSnapshot;
   }, [rawPublicSnapshot, rawWinCelebration]);
@@ -156,13 +157,13 @@ export function App() {
       ...publicSnapshot,
       atCitiField,
       label: publicSnapshot.phase === "FINAL" ? "FINAL" : publicSnapshot.label,
-      batter: publicSnapshot.atBat?.batter,
+      batter: publicSnapshot.phase === "CELEBRATION" ? homeRunSubject : publicSnapshot.atBat?.batter,
       batterLine: publicSnapshot.atBat?.batterLine,
       pitcher: publicSnapshot.atBat?.pitcher,
       pitchCount: publicSnapshot.atBat?.pitchCount,
       nextGame: betweenGames && nextGame.time ? { day: nextGame.day, time: nextGame.time } : undefined,
     }),
-    [atCitiField, betweenGames, nextGame.day, nextGame.time, publicSnapshot],
+    [atCitiField, betweenGames, homeRunSubject, nextGame.day, nextGame.time, publicSnapshot],
   );
   const liveInningMoment = publicSnapshot.phase === "LIVE" && publicSnapshot.label.trim().toUpperCase() === "LIVE";
   const momentEyebrow = offseason ? "SEE YOU NEXT SEASON" : publicSnapshot.phase;
@@ -179,7 +180,7 @@ export function App() {
 
   async function playScenario(id: string) {
     celebrationSound.stop();
-    if (["home-run", "review-confirmed", "rain-delay", "mets-win"].includes(id)) {
+    if (["home-run", "grand-slam", "review-confirmed", "rain-delay", "mets-win"].includes(id)) {
       await celebrationSound.enable();
     }
     if (id === "home-run") setHomeRunRoll(Math.random());
@@ -201,9 +202,11 @@ export function App() {
       data-scene-ready={sceneReady}
       data-weather={rainDelay ? "rain" : "clear"}
     >
-      <a className="skip-link" href="#game-status">
-        Skip to game status
-      </a>
+      {!offseason && (
+        <a className="skip-link" href="#game-status">
+          Skip to game status
+        </a>
+      )}
       <h1 className="visually-hidden">Virtual Apple</h1>
       <p className="visually-hidden" role="status" aria-live="polite" aria-atomic="true">
         {statusAnnouncement}
@@ -222,7 +225,7 @@ export function App() {
           <img className="brand-logo" src="/favicon.png" alt="" />
           <div>
             <strong>Virtual Apple</strong>
-            <small>Citi Field · center field</small>
+            <small>Citi Field</small>
           </div>
           <button
             type="button"
@@ -255,23 +258,29 @@ export function App() {
       {gameIsActive && !winCelebration && <LiveGamedayWidget snapshot={publicSnapshot} />}
       {!winCelebration && <UpcomingGames games={upcomingGames} />}
 
-      <section id="game-status" className={`moment-card${liveInningMoment ? " moment-card--live" : ""}`} tabIndex={-1}>
-        {betweenGames ? (
-          <div className="moment-card__next">
-            <span className="moment-card__next-label">NEXT GAME</span>
-            <h2 className="moment-card__next-game">
-              <strong>{nextGame.day}</strong>
-              {nextGame.time && <time dateTime={nextGameDateTime}>{nextGame.time}</time>}
-            </h2>
-          </div>
-        ) : (
-          <>
-            {showMomentEyebrow && <span>{momentEyebrow}</span>}
-            {!liveInningMoment && <h2>{momentHeadline}</h2>}
-          </>
-        )}
-        {!betweenGames && <p>{publicSnapshot.lastEvent}</p>}
-      </section>
+      {!offseason && (
+        <section
+          id="game-status"
+          className={`moment-card${liveInningMoment ? " moment-card--live" : ""}`}
+          tabIndex={-1}
+        >
+          {betweenGames ? (
+            <div className="moment-card__next">
+              <span className="moment-card__next-label">NEXT GAME</span>
+              <h2 className="moment-card__next-game">
+                <strong>{nextGame.day}</strong>
+                {nextGame.time && <time dateTime={nextGameDateTime}>{nextGame.time}</time>}
+              </h2>
+            </div>
+          ) : (
+            <>
+              {showMomentEyebrow && <span>{momentEyebrow}</span>}
+              {!liveInningMoment && <h2>{momentHeadline}</h2>}
+            </>
+          )}
+          {!betweenGames && <p>{publicSnapshot.lastEvent}</p>}
+        </section>
+      )}
 
       {showDemoControls && (
         <nav className="virtual-controls" aria-label="Virtual Apple demo scenes">

@@ -1,7 +1,7 @@
 import { MAXIMUM_ARCHIVE_TIMESTAMPS, MLB_STATS_API_ORIGIN, MLB_TIMECODE_PATTERN } from "./constants";
 import { MlbFeedError } from "./errors";
-import { isFullFeed } from "./feedPayload";
 import { playEventKey } from "./feedNormalization";
+import { isFullFeed } from "./feedPayload";
 import { arrayAt, numberAt, objectAt, stringAt } from "./jsonValue";
 import { formatMlbTimecode } from "./timecode";
 import { fetchJson } from "./transport";
@@ -55,10 +55,12 @@ export async function fetchMlbHistoricalGameIndex(
   const bookmarks: MlbHistoricalBookmark[] = [];
 
   for (const play of plays) {
-    if (stringAt(objectAt(play, "result"), "eventType") !== "home_run") continue;
+    const result = objectAt(play, "result");
+    if (stringAt(result, "eventType") !== "home_run") continue;
     const about = objectAt(play, "about");
     const matchup = objectAt(play, "matchup");
     const batterName = stringAt(objectAt(matchup, "batter"), "fullName", "Unknown batter");
+    const grandSlam = numberAt(result, "rbi") === 4;
     const eventDate = stringAt(about, "endTime");
     let target: string;
     try {
@@ -72,9 +74,9 @@ export async function fetchMlbHistoricalGameIndex(
     const battingTeamId = half === "bottom" ? homeTeamId : awayTeamId;
     bookmarks.push({
       id: playEventKey(play, gamePk),
-      kind: "HOME_RUN",
-      label: `Home run · ${batterName}`,
-      detail: stringAt(objectAt(play, "result"), "description", `Home run by ${batterName}`),
+      kind: grandSlam ? "GRAND_SLAM" : "HOME_RUN",
+      label: `${grandSlam ? "Grand slam" : "Home run"} · ${batterName}`,
+      detail: stringAt(result, "description", `${grandSlam ? "Grand slam" : "Home run"} by ${batterName}`),
       targetIndex,
       beforeIndex,
       targetTimecode: timestamps[targetIndex],

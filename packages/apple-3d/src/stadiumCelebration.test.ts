@@ -7,6 +7,10 @@ describe("stadium scoreboard celebrations", () => {
     expect(stadiumCelebrationKind("JUAN SOTO · HR CONFIRMED")).toBe("HOME_RUN");
   });
 
+  it("selects distinct grand-slam artwork", () => {
+    expect(stadiumCelebrationKind("GRAND SLAM!!")).toBe("GRAND_SLAM");
+  });
+
   it("hands the Mets-win artwork back to the final line score", () => {
     expect(stadiumCelebrationKind("METS WIN!")).toBe("METS_WIN");
     expect(stadiumCelebrationKind("METS WIN! · FINAL")).toBeNull();

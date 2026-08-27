@@ -1,5 +1,13 @@
 import type { FixtureScenario } from "@apple/protocol";
-import { baseSnapshot, command, deviceFixture, frame, inputFrame, normalizedInput } from "../builders";
+import {
+  baseSnapshot,
+  celebrationEvent,
+  command,
+  deviceFixture,
+  frame,
+  inputFrame,
+  normalizedInput,
+} from "../builders";
 
 export const passiveScenarios: readonly FixtureScenario[] = [
   {
@@ -60,7 +68,8 @@ export const passiveScenarios: readonly FixtureScenario[] = [
         },
         0,
         "Final transition persisted; display celebration begins.",
-        [command("DISPLAY_RENDER", "777686:final"), command("LED_CELEBRATE", "777686:final")],
+        [],
+        [celebrationEvent("METS_WIN", "777686:final", "Mets Win!")],
       ),
       frame(
         3200,

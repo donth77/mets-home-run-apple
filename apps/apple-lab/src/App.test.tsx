@@ -1,8 +1,8 @@
 /** @vitest-environment happy-dom */
 
-import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import axe from "axe-core";
+import { afterEach, describe, expect, it } from "vitest";
 import { App } from "./App";
 
 afterEach(() => {
@@ -76,6 +76,16 @@ describe("Apple Lab manager", () => {
     expect(screen.getByRole("button", { name: "Run on device" }).hasAttribute("disabled")).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Physical cycle" }));
     expect(screen.getByRole("button", { name: "Physical cycle" }).getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("labels the grand-slam Simulator scenario distinctly", () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: /Simulator/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Grand slam/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Step frame" }));
+
+    expect(screen.getByText("GRAND SLAM!!")).toBeTruthy();
+    expect(screen.getByText(/1 raise \/ lower sequence expected/)).toBeTruthy();
   });
 
   it("exposes Historical Replay as a standard Apple Lab source", () => {

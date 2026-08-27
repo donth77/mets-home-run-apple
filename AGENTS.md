@@ -7,8 +7,7 @@ These rules apply to the whole public monorepo.
 - `firmware/lib/core` owns game decisions and sequence safety.
 - Keep the core free of Arduino, networking, storage, display, motor, and wall-clock code.
 - Compile the same core for native tests, browser WebAssembly, and the Nano.
-- Do not recreate home-run, win, review, or deduplication rules in TypeScript or the edge Worker.
-- The edge Worker may validate, limit, and cache requests. It must never make game decisions.
+- Do not recreate home-run, win, review, or deduplication rules outside the C++ core.
 
 ## Preserve motion safety
 
@@ -18,6 +17,15 @@ These rules apply to the whole public monorepo.
 - Never celebrate opponent, overturned, bootstrap, or historical events.
 - Run one sequence at a time. Every direction needs a timeout and must end home or in a disabled fault.
 - Tests and browser demos always use fake or recording-only motion.
+
+## Build repeatable devices
+
+- Follow `docs/PHYSICAL_BUILD.md` for the BOM, assembly, calibration, testing, and build record.
+- Follow `docs/3D_PRINTING.md` for printable replacement parts. Browser GLB assets are visual references, not manufacturing CAD.
+- Give every physical Apple unique credentials. Never reuse a claim code, setup secret, or device key across units.
+- Keep remote services optional. The device must follow games and remain safe without Apple Lab or a hosted service.
+- Do not expose raw motor commands through local or remote management.
+- Require physical presence and a short-lived authenticated maintenance session for hardware tests.
 
 ## Keep tests useful
 

@@ -2,7 +2,7 @@ import type { GameSnapshot, NormalizedGameInput } from "@apple/protocol";
 
 type CoreInputEnvelope = NormalizedGameInput;
 
-export type MlbHistoricalBookmarkKind = "HOME_RUN" | "FINAL";
+export type MlbHistoricalBookmarkKind = "HOME_RUN" | "GRAND_SLAM" | "FINAL";
 
 export interface MlbHistoricalBookmark {
   id: string;
@@ -24,8 +24,10 @@ export interface MlbHistoricalGameIndex {
 export type FeedPayloadKind = "FULL_BOOTSTRAP" | "DIFF_PATCH" | "FULL_DIFF_RESPONSE" | "FULL_FALLBACK" | "NO_CHANGE";
 
 export interface NormalizedFeedCapture {
-  input: CoreInputEnvelope;
-  snapshot: GameSnapshot;
+  /** Small evidence envelope consumed by the C++ rules engine. */
+  coreInput: CoreInputEnvelope;
+  /** Full read-only game state consumed by scoreboards and displays. */
+  gameSnapshot: GameSnapshot;
   cursor: string;
   waitMs: number;
   payloadKind: Exclude<FeedPayloadKind, "NO_CHANGE">;

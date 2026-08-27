@@ -2,6 +2,10 @@
 
 Virtual Apple is a public, browser-based game companion: live Mets information, a Citi-inspired center-field scene, and an Apple that rises for home runs and wins.
 
+Live site: [virtual-mets-apple.pages.dev](https://virtual-mets-apple.pages.dev/).
+
+To run it locally:
+
 ```bash
 pnpm dev:virtual
 ```
@@ -55,4 +59,4 @@ Celebration sound is also opt-in. A home run chooses one of four supplied clips;
 
 The readable score and status live in HTML; the Three.js scoreboard is supporting artwork. A polite live region announces meaningful changes, reduced-motion users do not receive confetti, and the public views are included in the automated accessibility suite.
 
-Virtual Apple builds as static files and needs no always-on application server. Production source maps are off. The optional bounded edge cache is only needed when a host cannot call MLB directly.
+Virtual Apple builds as static files, reads MLB data directly, and needs no always-on application server. Production source maps are off.

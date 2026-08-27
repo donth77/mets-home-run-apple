@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { selectTrackableMetsGame } from "./useLiveMetsGame";
+import { FINAL_SCOREBOARD_HOLD_MS, liveFeedContinuation, selectTrackableMetsGame } from "./useLiveMetsGame";
 
 function game(gamePk: number, abstractState: string, detailedState: string) {
   return {
@@ -26,5 +26,19 @@ describe("live Mets game selection", () => {
 
   it("returns no game between games", () => {
     expect(selectTrackableMetsGame([game(1, "Final", "Final"), game(2, "Preview", "Scheduled")])).toBeUndefined();
+  });
+});
+
+describe("live feed continuation", () => {
+  it("holds an accepted final snapshot before checking for the next game", () => {
+    expect(liveFeedContinuation("FINAL", 5_000)).toEqual({
+      kind: "DISCOVER",
+      delayMs: FINAL_SCOREBOARD_HOLD_MS,
+    });
+    expect(FINAL_SCOREBOARD_HOLD_MS).toBe(60_000);
+  });
+
+  it("keeps polling at the feed cadence while the game is not final", () => {
+    expect(liveFeedContinuation("LIVE", 5_000)).toEqual({ kind: "POLL", delayMs: 5_000 });
   });
 });

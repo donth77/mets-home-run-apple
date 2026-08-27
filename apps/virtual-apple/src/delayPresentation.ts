@@ -1,6 +1,6 @@
-import type { GameSnapshot } from "@apple/protocol";
+import type { PresentationSnapshot } from "@apple/protocol";
 
-type DelaySnapshot = Pick<GameSnapshot, "label" | "phase">;
+type DelaySnapshot = Pick<PresentationSnapshot, "label" | "phase">;
 
 export function isRainDelayPresentation(snapshot: DelaySnapshot) {
   return snapshot.phase === "DELAYED" && snapshot.label.trim().toUpperCase() === "RAIN DELAY";

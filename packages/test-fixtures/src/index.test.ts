@@ -3,7 +3,19 @@ import { fixtureScenarios, frameAt, getScenario, scenarioDuration } from "./inde
 
 describe("offline browser fixtures", () => {
   it("records exactly one extend and retract for a confirmed Mets home run", () => {
-    const commands = getScenario("home-run").frames.flatMap((frame) => frame.commands);
+    const scenario = getScenario("home-run");
+    const commands = scenario.frames.flatMap((frame) => frame.commands);
+    const events = scenario.frames.flatMap((frame) => frame.events);
+    expect(events).toMatchObject([{ type: "CELEBRATION_STARTED", celebration: "HOME_RUN" }]);
+    expect(commands.filter((command) => command.type === "MOTION_EXTEND")).toHaveLength(1);
+    expect(commands.filter((command) => command.type === "MOTION_RETRACT")).toHaveLength(1);
+  });
+
+  it("labels a grand slam distinctly while retaining the home-run motion sequence", () => {
+    const scenario = getScenario("grand-slam");
+    const commands = scenario.frames.flatMap((fixtureFrame) => fixtureFrame.commands);
+    expect(scenario.frames.some((fixtureFrame) => fixtureFrame.snapshot.label === "GRAND SLAM!!")).toBe(true);
+    expect(scenario.deviceFixture.frames[1].input.plays[0].kind).toBe("GRAND_SLAM");
     expect(commands.filter((command) => command.type === "MOTION_EXTEND")).toHaveLength(1);
     expect(commands.filter((command) => command.type === "MOTION_RETRACT")).toHaveLength(1);
   });

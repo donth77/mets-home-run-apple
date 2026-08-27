@@ -15,11 +15,14 @@ interface AppleCoreEmscriptenModule {
   _apple_core_ledger_contains(handle: number, eventKeyPointer: number): number;
   _apple_core_sequence_state(handle: number): number;
   _apple_core_fault_latched(handle: number): number;
+  _apple_core_event_count(handle: number): number;
+  _apple_core_event_type(handle: number, index: number): number;
+  _apple_core_event_key(handle: number, index: number): number;
+  _apple_core_event_celebration(handle: number, index: number): number;
+  _apple_core_event_subject(handle: number, index: number): number;
   _apple_core_command_count(handle: number): number;
   _apple_core_command_type(handle: number, index: number): number;
   _apple_core_command_event_key(handle: number, index: number): number;
-  _apple_core_command_subject(handle: number, index: number): number;
-  _apple_core_command_celebration(handle: number, index: number): number;
   _apple_core_command_position_mm(handle: number, index: number): number;
   _apple_core_command_deadline_ms(handle: number, index: number): number;
   _apple_core_trace_count(handle: number): number;

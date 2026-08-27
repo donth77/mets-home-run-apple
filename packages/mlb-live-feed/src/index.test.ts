@@ -1,6 +1,6 @@
-import { describe, expect, it, vi } from "vitest";
 import { GameCore } from "@apple/game-core-wasm";
-import { applyJsonPatch, fetchMlbHistoricalGameIndex, fetchMetsSchedule, MlbRecordingClient } from "./index";
+import { describe, expect, it, vi } from "vitest";
+import { applyJsonPatch, fetchMetsSchedule, fetchMlbHistoricalGameIndex, MlbRecordingClient } from "./index";
 
 function play({
   atBatIndex,
@@ -12,6 +12,7 @@ function play({
   isComplete = true,
   eventType = "single",
   playEventDescription,
+  rbi = 0,
   resultDescription,
   reviewDetails,
   strikes = 0,
@@ -25,12 +26,13 @@ function play({
   isComplete?: boolean;
   eventType?: string;
   playEventDescription?: string;
+  rbi?: number;
   resultDescription?: string;
   reviewDetails?: Record<string, unknown>;
   strikes?: number;
 }) {
   return {
-    result: { eventType, description: resultDescription ?? `${eventType} description` },
+    result: { eventType, description: resultDescription ?? `${eventType} description`, rbi },
     about: { atBatIndex, halfInning, inning, isComplete },
     count: { balls, strikes },
     matchup: {
@@ -140,12 +142,23 @@ describe("MLB recording transport", () => {
     const client = new MlbRecordingClient(fetcher, () => new Date("2026-08-27T23:00:00Z"));
 
     const bootstrap = await client.poll({ gamePk: 777001, gameNumber: 1 });
-    expect(bootstrap.capture?.input.updateMode).toBe("BOOTSTRAP");
+    expect(bootstrap.capture?.coreInput.updateMode).toBe("BOOTSTRAP");
     expect(bootstrap.capture?.changedPlayCount).toBe(1);
-    expect(bootstrap.capture?.snapshot.atBat).toMatchObject({ batterLine: "1–2", pitchCount: 74 });
+    expect(bootstrap.capture?.gameSnapshot.atBat).toMatchObject({ batterLine: "1–2", pitchCount: 74 });
+    expect(bootstrap.capture?.coreInput).toMatchObject({
+      gamePk: bootstrap.capture?.gameSnapshot.gamePk,
+      gameNumber: bootstrap.capture?.gameSnapshot.gameNumber,
+      phase: bootstrap.capture?.gameSnapshot.phase,
+      inning: bootstrap.capture?.gameSnapshot.inning,
+      half: bootstrap.capture?.gameSnapshot.half,
+      awayTeamId: bootstrap.capture?.gameSnapshot.away.id,
+      homeTeamId: bootstrap.capture?.gameSnapshot.home.id,
+      awayRuns: bootstrap.capture?.gameSnapshot.away.runs,
+      homeRuns: bootstrap.capture?.gameSnapshot.home.runs,
+    });
     const incremental = await client.poll({ gamePk: 777001, gameNumber: 1 });
-    expect(incremental.capture?.input.updateMode).toBe("INCREMENTAL");
-    expect(incremental.capture?.input.plays.map(({ eventKey }) => eventKey)).toEqual(["777001:play-2"]);
+    expect(incremental.capture?.coreInput.updateMode).toBe("INCREMENTAL");
+    expect(incremental.capture?.coreInput.plays.map(({ eventKey }) => eventKey)).toEqual(["777001:play-2"]);
   });
 
   it("preserves a pending review for the C++ decision gate", async () => {
@@ -158,8 +171,40 @@ describe("MLB recording transport", () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(response(feed("20260827_190000", [reviewed])));
     const client = new MlbRecordingClient(fetcher);
     const result = await client.poll({ gamePk: 777001, gameNumber: 1 });
-    expect(result.capture?.input.phase).toBe("REVIEW");
-    expect(result.capture?.input.plays[0].review).toBe("PENDING");
+    expect(result.capture?.coreInput.phase).toBe("REVIEW");
+    expect(result.capture?.coreInput.plays[0].review).toBe("PENDING");
+  });
+
+  it("preserves a four-RBI home run as a grand slam through the C++ decision boundary", async () => {
+    const priorPlay = play({ atBatIndex: 8, halfInning: "bottom" });
+    const grandSlam = play({
+      atBatIndex: 9,
+      batterName: "Pete Alonso",
+      eventType: "home_run",
+      halfInning: "bottom",
+      rbi: 4,
+      resultDescription: "Pete Alonso hits a grand slam.",
+    });
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(response(feed("20260827_190000", [priorPlay])))
+      .mockResolvedValueOnce(response(feed("20260827_190010", [priorPlay, grandSlam])));
+    const client = new MlbRecordingClient(fetcher, () => new Date("2026-08-27T19:00:10Z"));
+    const core = await GameCore.create();
+
+    const bootstrap = await client.poll({ gamePk: 777001, gameNumber: 1 });
+    if (!bootstrap.capture) throw new Error("Expected a bootstrap capture.");
+    core.ingest(bootstrap.capture.coreInput, 0);
+
+    const update = await client.poll({ gamePk: 777001, gameNumber: 1 });
+    expect(update.capture?.coreInput.plays).toMatchObject([
+      { kind: "GRAND_SLAM", batterName: "Pete Alonso", battingTeamId: 121 },
+    ]);
+    if (!update.capture) throw new Error("Expected a grand-slam capture.");
+    expect(core.ingest(update.capture.coreInput, 100).events).toMatchObject([
+      { type: "CELEBRATION_STARTED", celebration: "GRAND_SLAM", subject: "Pete Alonso" },
+    ]);
+    core.dispose();
   });
 
   it("labels an MLB-reported rain delay without guessing other delay reasons", async () => {
@@ -188,9 +233,9 @@ describe("MLB recording transport", () => {
     const generic = await client.poll({ gamePk: 777001, gameNumber: 1 });
     const suspended = await client.poll({ gamePk: 777001, gameNumber: 1 });
 
-    expect(rain.capture?.snapshot).toMatchObject({ phase: "DELAYED", label: "RAIN DELAY" });
-    expect(generic.capture?.snapshot).toMatchObject({ phase: "DELAYED", label: "Delayed" });
-    expect(suspended.capture?.snapshot).toMatchObject({ phase: "DELAYED", label: "Suspended: Rain" });
+    expect(rain.capture?.gameSnapshot).toMatchObject({ phase: "DELAYED", label: "RAIN DELAY" });
+    expect(generic.capture?.gameSnapshot).toMatchObject({ phase: "DELAYED", label: "Delayed" });
+    expect(suspended.capture?.gameSnapshot).toMatchObject({ phase: "DELAYED", label: "Suspended: Rain" });
   });
 
   it("resets the count when the linescore advances to a new batter", async () => {
@@ -212,7 +257,7 @@ describe("MLB recording transport", () => {
 
     const result = await client.poll({ gamePk: 777001, gameNumber: 1 });
 
-    expect(result.capture?.snapshot.atBat).toMatchObject({
+    expect(result.capture?.gameSnapshot.atBat).toMatchObject({
       balls: 0,
       strikes: 0,
       batter: "Pete Alonso",
@@ -241,10 +286,10 @@ describe("MLB recording transport", () => {
 
     const result = await client.poll({ gamePk: 777001, gameNumber: 1 });
 
-    expect(result.capture?.snapshot.outs).toBe(0);
-    expect(result.capture?.snapshot.atBat).toBeUndefined();
-    expect(result.capture?.snapshot.lastEvent).toBe("Top seventh begins");
-    expect(result.capture?.input.outs).toBe(3);
+    expect(result.capture?.gameSnapshot.outs).toBe(0);
+    expect(result.capture?.gameSnapshot.atBat).toBeUndefined();
+    expect(result.capture?.gameSnapshot.lastEvent).toBe("Top seventh begins");
+    expect(result.capture?.coreInput.outs).toBe(3);
   });
 
   it("updates the activity line from the newest pitch event", async () => {
@@ -268,8 +313,10 @@ describe("MLB recording transport", () => {
       .mockResolvedValueOnce(response(feed("20260827_190010", [secondPitch])));
     const client = new MlbRecordingClient(fetcher);
 
-    expect((await client.poll({ gamePk: 777001, gameNumber: 1 })).capture?.snapshot.lastEvent).toBe("Ball");
-    expect((await client.poll({ gamePk: 777001, gameNumber: 1 })).capture?.snapshot.lastEvent).toBe("Called Strike");
+    expect((await client.poll({ gamePk: 777001, gameNumber: 1 })).capture?.gameSnapshot.lastEvent).toBe("Ball");
+    expect((await client.poll({ gamePk: 777001, gameNumber: 1 })).capture?.gameSnapshot.lastEvent).toBe(
+      "Called Strike",
+    );
   });
 
   it("clears the live situation and labels the game FINAL when it ends", async () => {
@@ -290,7 +337,7 @@ describe("MLB recording transport", () => {
 
     const result = await client.poll({ gamePk: 777001, gameNumber: 1 });
 
-    expect(result.capture?.snapshot).toMatchObject({
+    expect(result.capture?.gameSnapshot).toMatchObject({
       atBat: undefined,
       half: "END",
       label: "FINAL",
@@ -342,7 +389,7 @@ describe("MLB recording transport", () => {
     const update = await client.poll({ gamePk: 777001, gameNumber: 1 });
 
     expect(update.payloadKind).toBe("DIFF_PATCH");
-    expect(update.capture?.input.plays).toMatchObject([
+    expect(update.capture?.coreInput.plays).toMatchObject([
       { kind: "HOME_RUN", batterName: "Juan Soto", battingTeamId: 121 },
     ]);
     expect(fetcher).toHaveBeenCalledTimes(2);
@@ -370,35 +417,45 @@ describe("MLB recording transport", () => {
     const before = await client.poll({ gamePk: 777001, gameNumber: 1 });
     expect(before.capture).toBeTruthy();
     if (!before.capture) throw new Error("Expected a bootstrap capture.");
-    core.ingest(before.capture.input, 0);
+    core.ingest(before.capture.coreInput, 0);
     const after = await client.poll({ gamePk: 777001, gameNumber: 1 });
-    expect(after.capture?.snapshot.phase).toBe("FINAL");
+    expect(after.capture?.gameSnapshot.phase).toBe("FINAL");
     expect(after.cursor).toBe("20260827_220000~000001");
 
     if (!after.capture) throw new Error("Expected a final-state capture.");
-    const decision = core.ingest(after.capture.input, 1_000);
-    expect(decision.commands).toMatchObject([
-      { type: "DISPLAY_RENDER", celebration: "METS_WIN", subject: "Mets Win!" },
-      { type: "LED_CELEBRATE", celebration: "METS_WIN", subject: "Mets Win!" },
+    const decision = core.ingest(after.capture.coreInput, 1_000);
+    expect(decision.events).toMatchObject([
+      { type: "CELEBRATION_STARTED", celebration: "METS_WIN", subject: "Mets Win!" },
     ]);
     core.dispose();
   });
 
-  it("builds home-run and final bookmarks from a completed archived feed", async () => {
+  it("builds home-run, grand-slam, and final bookmarks from a completed archived feed", async () => {
     const homeRun = play({ atBatIndex: 18, halfInning: "bottom", eventType: "home_run", batterName: "Juan Soto" });
+    const grandSlam = play({
+      atBatIndex: 19,
+      halfInning: "bottom",
+      eventType: "home_run",
+      batterName: "Pete Alonso",
+      rbi: 4,
+    });
     const archivedHomeRun = {
       ...homeRun,
       about: { ...homeRun.about, endTime: "2026-08-27T19:00:10.000Z" },
     };
-    const finalFeed = feed("20260827_220000", [archivedHomeRun], "Final");
+    const archivedGrandSlam = {
+      ...grandSlam,
+      about: { ...grandSlam.about, endTime: "2026-08-27T19:00:20.000Z" },
+    };
+    const finalFeed = feed("20260827_220000", [archivedHomeRun, archivedGrandSlam], "Final");
     const fetcher = vi
       .fn<typeof fetch>()
-      .mockResolvedValueOnce(response(["20260827_190000", "20260827_190010", "20260827_220000"]))
+      .mockResolvedValueOnce(response(["20260827_190000", "20260827_190010", "20260827_190020", "20260827_220000"]))
       .mockResolvedValueOnce(response(finalFeed));
 
     const index = await fetchMlbHistoricalGameIndex(777001, fetcher);
 
-    expect(index.timestamps).toHaveLength(3);
+    expect(index.timestamps).toHaveLength(4);
     expect(index.bookmarks).toMatchObject([
       {
         kind: "HOME_RUN",
@@ -408,8 +465,15 @@ describe("MLB recording transport", () => {
         battingTeamId: 121,
       },
       {
-        kind: "FINAL",
+        kind: "GRAND_SLAM",
+        label: "Grand slam · Pete Alonso",
         beforeTimecode: "20260827_190010",
+        targetTimecode: "20260827_190020",
+        battingTeamId: 121,
+      },
+      {
+        kind: "FINAL",
+        beforeTimecode: "20260827_190020",
         targetTimecode: "20260827_220000",
       },
     ]);

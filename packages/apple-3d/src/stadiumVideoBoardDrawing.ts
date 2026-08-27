@@ -1,10 +1,10 @@
 import { mlbTeamNickname } from "@apple/protocol";
-import { getTrademarkFreeTeamLogoUrl } from "./teamLogos";
 import type { StadiumCelebrationKind } from "./stadiumCelebration";
 import { stadiumEventPanelText } from "./stadiumEventPanel";
 import { stadiumHeaderText, stadiumVenueLabel } from "./stadiumHeader";
 import { stadiumInningScores, stadiumInningWindow } from "./stadiumInnings";
 import { stadiumMatchupFooter } from "./stadiumMatchup";
+import { getTrademarkFreeTeamLogoUrl } from "./teamLogos";
 import type { StadiumScoreboardData } from "./types";
 
 const teamLogoCache = new Map<number, Promise<HTMLImageElement | null>>();
@@ -294,9 +294,10 @@ export function drawCelebrationScoreboard(
   const mets = metsAreAway ? data.away : data.home;
   const opponent = metsAreAway ? data.home : data.away;
   const isMetsWin = celebrationKind === "METS_WIN";
+  const isGrandSlam = celebrationKind === "GRAND_SLAM";
   const primaryEyebrow = isMetsWin ? "FINAL · NEW YORK METS" : "NEW YORK METS";
-  const primaryHeadline = isMetsWin ? "METS WIN!" : "HOME RUN";
-  const secondaryEyebrow = isMetsWin ? "FINAL · PUT IT IN THE BOOKS!" : "HOME RUN";
+  const primaryHeadline = isMetsWin ? "METS WIN!" : isGrandSlam ? "GRAND SLAM!!" : "HOME RUN";
+  const secondaryEyebrow = isMetsWin ? "FINAL · PUT IT IN THE BOOKS!" : isGrandSlam ? "GRAND SLAM!!" : "HOME RUN";
   const secondaryHeadline = isMetsWin
     ? `${mets.abbreviation} ${mets.runs}  —  ${opponent.abbreviation} ${opponent.runs}`
     : hitter;
@@ -340,7 +341,7 @@ export function drawCelebrationScoreboard(
     context.font = "900 56px Arial, sans-serif";
     context.fillText(primaryEyebrow, 0, -116);
     context.fillStyle = "#ffffff";
-    context.font = `900 ${isMetsWin ? 184 : 178}px Arial Black, Arial, sans-serif`;
+    context.font = `900 ${isMetsWin ? 184 : isGrandSlam ? 150 : 178}px Arial Black, Arial, sans-serif`;
     context.fillText(primaryHeadline, 0, 35, width - 150);
   } else {
     context.globalAlpha = transitionProgress;
