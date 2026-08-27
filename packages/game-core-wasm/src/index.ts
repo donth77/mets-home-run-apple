@@ -100,7 +100,7 @@ export class GameCore {
   private constructor(module: Module) {
     this.#module = module;
     this.#handle = module._apple_core_create();
-    if (this.#handle === 0) throw new Error("Unable to allocate the game core");
+    if (this.#handle === 0) throw new Error("Unable to allocate the core");
   }
 
   dispose(): void {

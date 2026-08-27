@@ -1,47 +1,44 @@
-# Agent Guide
+# Working in this repository
 
-These rules apply to the complete public monorepo.
+These rules apply to the whole public monorepo.
 
-## Product boundaries
+## Keep one source of truth
 
-- The Nano ESP32 must operate without Apple Lab, Virtual Apple, a desktop computer or a paid server.
-- `firmware/lib/core` is the canonical game-decision implementation. Keep it free of Arduino, networking, storage, display, motor and wall-clock headers.
-- Compile that core for native tests, browser WebAssembly and the Nano target. Do not reproduce event rules in TypeScript, UI components or the edge Worker.
-- The edge Worker is a bounded transport/cache adapter. It may allowlist requests, enforce limits and cache confirmed responses; it must not infer home runs, wins or motion commands.
+- `firmware/lib/core` owns game decisions and sequence safety.
+- Keep the core free of Arduino, networking, storage, display, motor, and wall-clock code.
+- Compile the same core for native tests, browser WebAssembly, and the Nano.
+- Do not recreate home-run, win, review, or deduplication rules in TypeScript or the edge Worker.
+- The edge Worker may validate, limit, and cache requests. It must never make game decisions.
 
-## Safety invariants
+## Preserve motion safety
 
-- Uncertain, malformed, stale, duplicate, wrong-game or review-pending data produces no physical motion.
-- Only a completed Mets batting home run can enqueue a home-run sequence.
-- Persist the accepted event key before issuing a motion command.
-- Opponent, overturned and historical bootstrap plays never trigger motion.
-- One motion sequence may run at a time. Every extend/retract command has a hard timeout and ends at home or in a latched disabled fault.
-- Tests and web demos use recording/fake motion unless the operator explicitly builds and arms an embedded hardware target.
+- Unclear, stale, malformed, duplicate, wrong-game, or review-pending data means no motion.
+- Only a newly confirmed Mets home run or Mets win may start a celebration.
+- Persist the event key before exposing motion intent.
+- Never celebrate opponent, overturned, bootstrap, or historical events.
+- Run one sequence at a time. Every direction needs a timeout and must end home or in a disabled fault.
+- Tests and browser demos always use fake or recording-only motion.
 
-## Data and tests
+## Keep tests useful
 
-- Keep fixtures deterministic, minimal and redistributable. Prefer synthetic normalized cases over checking in large third-party feed captures.
-- Never make live MLB network calls in CI.
-- Use a fake monotonic clock; tests must not sleep.
-- Add a golden trace for every rule or protocol change and compare native, WASM and embedded outputs where practical.
-- Use integer milliseconds, millimeters and stable identifiers across target boundaries.
+- Prefer small synthetic fixtures over raw third-party feed captures.
+- CI must never call the live MLB feed.
+- Use fake monotonic time; tests must not sleep.
+- Add a golden trace when a rule or protocol changes.
+- Keep cross-target values in integer milliseconds, millimeters, and stable IDs.
 
-## Module ownership
+## Keep files focused
 
-- Keep package barrels small. Stateful transport, normalization, rendering, and React orchestration belong in separate modules with package-owned tests.
-- Web app shells own navigation and composition only. Reusable widgets, workspaces, presentation rules, and scene drawing helpers belong in focused files.
-- Keep the Apple geometry and the Mets decal separate. The runtime decal must remain replaceable without modifying the 3D mesh.
-- Add or update source metadata when introducing externally sourced binary assets. Never silently replace a checked-in model or audio file.
+- Package index files should mostly export public APIs.
+- Separate transport, parsing, decisions, presentation, and React composition.
+- Keep the Apple mesh and decal separate.
+- Record the source and checksum of new binary assets.
 
-## Repository hygiene
+## Before handing off
 
-- Keep credentials, device tokens, local hostnames, raw diagnostic exports, and machine-local artifacts out of the repository.
-- Run `pnpm check:public` before every commit and push.
-- Do not add `CONTRIBUTING.md` until the maintainer asks for a contributor workflow.
-
-## Verification
-
-For every change, run the narrowest relevant tests plus:
+- Do not commit credentials, device tokens, local hostnames, diagnostic exports, or machine-local files.
+- Do not add a contributor guide until the maintainer asks for one.
+- Run the narrowest relevant tests, then:
 
 ```bash
 pnpm lint
@@ -49,4 +46,4 @@ pnpm typecheck
 pnpm check:public
 ```
 
-Firmware rule changes also require native replay tests. Browser changes require an offline fixture smoke test. Motion-adapter changes require an embedded disarmed test before any loaded cycle.
+Core changes also need native and WASM tests. Browser changes need an offline fixture check. A motion-adapter change needs a disarmed embedded test before any loaded cycle.

@@ -1,21 +1,21 @@
 # Firmware
 
-`lib/core` is the canonical hardware-free ISO C++17 decision and sequence engine. It currently builds for the host and browser WebAssembly; Nano ESP32 adapters for HTTPS, NVS, display, motion, provisioning, local administration and sleep remain to be added through PlatformIO.
+`lib/core` is the portable C++17 decision and motion-sequence engine shared by native tests and the browser build. Nano ESP32 adapters for networking, storage, display, motor control, setup, local management, and sleep still need to be added through PlatformIO.
 
-The core accepts normalized, versioned envelopes rather than raw MLB JSON. It:
+The core accepts small, versioned game updates instead of raw MLB JSON. It:
 
-- keeps independent game contexts by `gamePk`, including doubleheaders;
-- treats the first observation as bootstrap and seeds historical event keys without celebrating them;
-- rejects malformed, wrong-team, duplicate, regressed and review-pending evidence;
-- persists a confirmed Mets home-run or newly observed Mets-win key before queueing a sequence;
-- allows only one active sequence, with a two-second display/LED lead-in;
-- commands a 50 mm extend, waits for explicit position feedback, holds raised for **30,000 ms**, then retracts;
-- emits `MOTION_DISABLE` and latches a fault on persistence, monotonic-clock or direction timeout failures.
+- keeps separate state for each `gamePk`, including doubleheaders;
+- treats the first observation as history and does not celebrate it;
+- rejects malformed, wrong-team, duplicate, older, or review-pending evidence;
+- saves a confirmed Mets home run or win before starting a sequence;
+- runs one sequence at a time with a two-second display/LED lead-in;
+- extends 50 mm, waits for position feedback, holds for 30 seconds, and retracts;
+- disables motion and latches a fault after persistence, clock, or direction-timeout failures.
 
-Build and run native tests from the repository root:
+Run the native suite from the repository root:
 
 ```bash
 pnpm test:native
 ```
 
-The C++ layer intentionally contains no Arduino, networking, JSON, display, motor, storage implementation or wall-clock headers. `EventLedger` is a synchronous persistence port; the future NVS adapter must implement its durability contract. The physical motion adapter must verify the actual end-stop strategy and measured travel before a loaded test.
+The core deliberately knows nothing about Arduino APIs, Wi-Fi, JSON, displays, motors, storage implementations, or wall-clock time. Those details belong in adapters. Before a loaded physical test, the motion adapter must use the real end-stop strategy and measured travel.

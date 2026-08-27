@@ -1,44 +1,72 @@
-# Mets Home Run Apple
+<p align="center">
+  <img src="docs/assets/home-run-apple-roundel.svg" width="150" height="150" alt="Home Run Apple logo" />
+</p>
 
-An unofficial, open-source fan project for a self-contained Wi-Fi Home Run Apple. The target device uses an Arduino Nano ESP32 to read live game updates, show score/inning/outs, and control a small linear actuator without an always-on PC or paid application server.
+<h1 align="center">Mets Home Run Apple</h1>
 
-This repository also houses two web experiences built around the same decision core:
+<p align="center"><strong>A Home Run Apple, hardware lab, and a live gameday website.</strong></p>
 
-- **Apple Lab** — a deterministic engineering simulator with historical replay, fake time, fault injection and a 3D hardware preview.
-- **Virtual Apple** — a public game-day presentation that follows the live Mets schedule/feed through the same compiled core, with fixture controls available only in an explicitly enabled local development session.
+<p align="center">
+  <a href="https://github.com/donth77/mets-home-run-apple/actions/workflows/ci.yml"><img alt="Checks" src="https://img.shields.io/github/actions/workflow/status/donth77/mets-home-run-apple/ci.yml?branch=main&style=flat-square&label=checks&logo=githubactions&logoColor=white" /></a>
+  <a href="https://nodejs.org/"><img alt="Node.js 22.13 or newer" src="https://img.shields.io/badge/Node.js-22.13%2B-339933?style=flat-square&logo=nodedotjs&logoColor=white" /></a>
+  <a href="https://pnpm.io/"><img alt="pnpm 10" src="https://img.shields.io/badge/pnpm-10-F69220?style=flat-square&logo=pnpm&logoColor=white" /></a>
+  <img alt="C++17" src="https://img.shields.io/badge/C%2B%2B-17-00599C?style=flat-square&logo=cplusplus&logoColor=white" />
+</p>
 
-The physical Apple operates independently. Neither web app is required after the firmware is installed and Wi-Fi is configured.
+This is a fan project inspired by the Home Run Apple at Citi Field. The build is designed to follow Mets games, show the score, and raise the Apple for confirmed home runs and wins.
 
-## Status
+The repository also includes two browser apps:
 
-The first canonical decision slice is implemented. `firmware/lib/core` now compiles as ISO C++17 for host tests and as a self-contained Emscripten module. It owns bootstrap suppression, cursor ordering, Mets/opponent selection, review gating, event-ledger writes, win detection, the two-second display lead-in, 50 mm motion intent, 30-second raised hold and timeout fault latch.
+- **Apple Lab** is the local manager, simulator, and replay tool used for physical Apple.
+- **Virtual Apple** is a public gameday experience with a 3D center-field scene, live scoreboards, upcoming games, radio, and celebrations.
 
-Apple Lab can replay synthetic presentation fixtures, step through archived MLB updates, run every normalized device fixture through the WASM core and—only after an explicit developer selection—record direct MLB schedule/live-feed data. Virtual Apple automatically checks the Mets schedule, stays quiet between games, and follows an active game through the same normalized transport and WASM core. Neither browser transport has a device-command route. The Nano networking, NVS, display, provisioning and physical motion adapters remain future gates, as do calibrated donor measurements and guarded loaded testing.
+## Project status
 
-## Run the browser apps
+Working today:
 
-Requires Node.js 22.13 or newer.
+- the shared C++ core, native tests, and WebAssembly build;
+- live schedule/feed reading and completed-game replay;
+- review, delay, doubleheader, win, duplicate-event, and between-game handling;
+- Apple Lab's simulator, diagnostics, CSV exports, and 3D preview;
+- Virtual Apple's live presentation, local demo mode, audio, rain, and accessibility features.
+
+Still to build:
+
+- the Nano ESP32 networking, display, storage, provisioning, and motor adapters;
+- authenticated local device management and a safe update path;
+- final physical calibration after the giveaway Apple arrives;
+- unloaded and guarded actuator tests before the Apple is attached.
+
+The browser apps cannot command physical hardware. The Nano will remain in charge once the hardware layer is added.
+
+## Quick start
+
+You need Node.js 22.13 or newer and pnpm 10.
 
 ```bash
 pnpm install
 pnpm dev:lab
 ```
 
-In a second terminal:
+Run Virtual Apple in a second terminal:
 
 ```bash
 pnpm dev:virtual
 ```
 
-Apple Lab defaults to `http://localhost:4173`; Virtual Apple defaults to `http://localhost:4174`. Apple Lab’s direct MLB source remains opt-in. Virtual Apple checks the schedule on load, opens a live feed only when a Mets game is active, and otherwise renders its between-games state.
+- Apple Lab: `http://localhost:4173`
+- Virtual Apple: `http://localhost:4174`
+- Virtual Apple demo controls: `http://localhost:4174/?demo=1`
 
-Historical Replay is a first-class Apple Lab workspace: open `http://localhost:4173` and select **Historical replay** directly in the left sidebar. No query flag is required.
+To replay a completed game, open Apple Lab and choose **Historical replay**. Nothing is fetched until you choose a date and game.
 
-Virtual Apple's public-facing fixture controls remain locally gated: `http://localhost:4174/?demo=1` enables its **Demo** bar only in a Vite development build on a loopback hostname.
+## Architecture
 
-The Virtual Apple bar is absent by default and cannot be enabled in a production build, even when the query parameter is present.
+One C++ core owns event decisions and sequence safety. It runs in native tests, in both browser apps through WebAssembly, and eventually on the Nano ESP32. The optional edge Worker can cache public feed requests, but it never decides whether the Apple should move.
 
-Validate the public boundary, asset checks, offline fixtures and both production bundles with:
+Read the [architecture guide](docs/ARCHITECTURE.md).
+
+## Check your work
 
 ```bash
 pnpm lint
@@ -47,37 +75,24 @@ pnpm test
 pnpm build
 ```
 
-The complete verification path also requires CMake, a C++17 compiler and Emscripten. `pnpm test` verifies that shared web constants still match the canonical C++ motion constants before running native and browser suites. Generated WASM is checked in for normal app development; `pnpm wasm:build` regenerates it from the C++ core sources.
+The full test command also needs CMake, a C++17 compiler, and Emscripten. Generated WebAssembly is checked in, so normal browser development does not require rebuilding it by hand.
 
-## Architecture
+## Repository guide
 
-```text
-                    hardware-free ISO C++ game core
-                     /            |             \
-             native tests       WASM         Nano ESP32
-                                  |              |
-                    Apple Lab + Virtual Apple   device ports
-                                  |
-                      optional feed-cache Worker
-```
+| Path | What lives there |
+|---|---|
+| `apps/apple-lab/` | Local manager, simulator, and historical replay |
+| `apps/virtual-apple/` | Public game-day website |
+| `firmware/` | Shared C++ core, native tests, and future ESP32 adapters |
+| `packages/apple-3d/` | Apple model, scene, textures, and actuator animation |
+| `packages/game-core-wasm/` | Browser wrapper around the C++ core |
+| `packages/mlb-live-feed/` | Schedule, live-feed, and archive handling |
+| `packages/protocol/` | Shared snapshots, inputs, commands, and identifiers |
+| `packages/scoreboard-ui/` | Reusable accessible scoreboard |
+| `packages/test-fixtures/` | Offline game scenarios |
+| `edge/mlb-feed-cache/` | Optional public-site request cache |
 
-Game decisions live in one hardware-free C++ core. Native tests, the browser WebAssembly wrapper and the Nano firmware replay the same normalized inputs and golden traces. The optional edge Worker validates and caches transport requests only; it never decides whether to move the Apple.
 
-## Repository map
+## Inspiration and credit
 
-```text
-apps/apple-lab/            engineering simulator and trace console
-apps/virtual-apple/        public fan experience
-packages/apple-3d/         Three.js scene and model adapter
-packages/game-core-wasm/   generated browser binding for the C++ core
-packages/mlb-live-feed/    shared bounded MLB transport and normalizer
-packages/protocol/         versioned cross-target contracts
-packages/scoreboard-ui/    accessible score, inning and outs display
-packages/test-fixtures/    synthetic and redistributable replay cases
-packages/web-debug/        Virtual Apple local-development query gate
-firmware/                  canonical core plus ESP32 adapters
-edge/mlb-feed-cache/       optional stateless cache/proxy
-docs/                      public architecture, testing, security and accessibility policy
-```
-
-Start with [the architecture](docs/ARCHITECTURE.md) and [browser-app guide](docs/WEB_APPS.md), then read the [test strategy](docs/TESTING.md), [security model](docs/SECURITY.md), and [accessibility notes](docs/ACCESSIBILITY.md).
+Special thanks to Reddit user [u/jboogie1844](https://www.reddit.com/user/jboogie1844/) for sharing his WiFi Home Run Apple in [this r/NewYorkMets post](https://www.reddit.com/r/NewYorkMets/comments/1v96vfz/1_year_later_and_my_wifi_home_run_apple_has/).

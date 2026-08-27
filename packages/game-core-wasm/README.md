@@ -1,12 +1,12 @@
-# Game Core WASM
+# C++ core for the web
 
-Generated Emscripten binding around the canonical hardware-free C++ core. Memory ownership and schema versions are explicit; generated output is never edited by hand.
+This package compiles the hardware-free C++ core to WebAssembly so the browser apps make the same game decisions as the future device.
 
-`src/c_api.cpp` exposes a flat begin/add/commit boundary, monotonic ticks, position feedback, commands and traces. `src/index.ts` owns only enum/string marshaling and memory cleanup; it contains no home-run or win rules. The browser build uses an in-memory ledger and is recording-only.
+`src/c_api.cpp` exposes the small C boundary. `src/index.ts` converts enums and strings and cleans up memory; it contains no home-run or win rules. Browser motion and persistence are recording-only.
 
 ```bash
 pnpm --filter @apple/game-core-wasm build
 pnpm --filter @apple/game-core-wasm test
 ```
 
-The parity test feeds the same normalized scenarios used by Simulator through compiled C++, checks expected motion counts, and verifies persistence failure closes with `MOTION_DISABLE`. The single-file ESM output is generated at `src/generated/apple-core.mjs` so Vite and Node tests load the same artifact.
+The parity test sends the Simulator scenarios through compiled C++, checks expected motion counts, and confirms that a storage failure ends with `MOTION_DISABLE`. Emscripten writes the single-file module to `src/generated/apple-core.mjs`. Do not edit generated output by hand.

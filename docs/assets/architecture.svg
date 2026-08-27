@@ -1,0 +1,164 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="830" viewBox="0 0 1200 830" role="img" aria-labelledby="title description">
+  <title id="title">Mets Home Run Apple software architecture</title>
+  <desc id="description">The hardware-free C++ core compiles for native tests, WebAssembly browser applications, and autonomous Nano ESP32 firmware. An optional edge worker provides browser transport and caching but never makes decisions.</desc>
+
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#061326" />
+      <stop offset="0.58" stop-color="#0a1d37" />
+      <stop offset="1" stop-color="#07111f" />
+    </linearGradient>
+    <linearGradient id="coreFill" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#123b70" />
+      <stop offset="1" stop-color="#0a2448" />
+    </linearGradient>
+    <linearGradient id="orangeFill" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ff6b22" />
+      <stop offset="1" stop-color="#dd3f0b" />
+    </linearGradient>
+    <linearGradient id="blueFill" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1675d1" />
+      <stop offset="1" stop-color="#0d4b91" />
+    </linearGradient>
+    <pattern id="grid" width="34" height="34" patternUnits="userSpaceOnUse">
+      <path d="M34 0H0V34" fill="none" stroke="#7ba7d8" stroke-opacity="0.055" />
+    </pattern>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="160%">
+      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#000814" flood-opacity="0.46" />
+    </filter>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M1 1L9 5L1 9Z" fill="#6ca4df" />
+    </marker>
+    <marker id="arrowOrange" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M1 1L9 5L1 9Z" fill="#ff6b22" />
+    </marker>
+    <style>
+      text { font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .eyebrow { fill: #8fb4dc; font-size: 14px; font-weight: 800; letter-spacing: 2.1px; }
+      .title { fill: #ffffff; font-size: 30px; font-weight: 800; }
+      .subtitle { fill: #a9c0da; font-size: 16px; font-weight: 500; }
+      .card-title { fill: #ffffff; font-size: 22px; font-weight: 800; }
+      .card-subtitle { fill: #90aeca; font-size: 15px; font-weight: 600; }
+      .body { fill: #c9d8e8; font-size: 15px; font-weight: 500; }
+      .small { fill: #8eabc7; font-size: 13px; font-weight: 650; }
+      .pill { fill: #dcecff; font-size: 13px; font-weight: 750; }
+      .orange { fill: #ff7a32; }
+      .blue { fill: #56a9ff; }
+      .mint { fill: #55d6bb; }
+    </style>
+  </defs>
+
+  <rect width="1200" height="830" rx="30" fill="url(#background)" />
+  <rect width="1200" height="830" rx="30" fill="url(#grid)" />
+  <rect x="1.5" y="1.5" width="1197" height="827" rx="28.5" fill="none" stroke="#23466d" stroke-width="3" />
+
+  <text x="56" y="60" class="title">One core. Three targets.</text>
+  <text x="56" y="84" class="subtitle">The same normalized inputs, safety rules, and golden traces run everywhere.</text>
+
+  <g filter="url(#shadow)">
+    <rect x="310" y="125" width="580" height="164" rx="22" fill="url(#coreFill)" stroke="#ff6b22" stroke-width="2.5" />
+    <rect x="334" y="147" width="174" height="28" rx="14" fill="#ff5910" />
+    <text x="421" y="166" text-anchor="middle" fill="#ffffff" font-size="12" font-weight="850" letter-spacing="1.3">CANONICAL LAYER</text>
+    <text x="334" y="209" class="card-title">C++ core</text>
+    <text x="334" y="235" class="card-subtitle">firmware/lib/core</text>
+
+    <g transform="translate(334 251)">
+      <rect width="108" height="24" rx="12" fill="#173e68" stroke="#356d9f" />
+      <text x="54" y="16" text-anchor="middle" class="pill">game state</text>
+      <rect x="118" width="115" height="24" rx="12" fill="#173e68" stroke="#356d9f" />
+      <text x="175.5" y="16" text-anchor="middle" class="pill">review gate</text>
+      <rect x="243" width="116" height="24" rx="12" fill="#173e68" stroke="#356d9f" />
+      <text x="301" y="16" text-anchor="middle" class="pill">event ledger</text>
+      <rect x="369" width="128" height="24" rx="12" fill="#173e68" stroke="#356d9f" />
+      <text x="433" y="16" text-anchor="middle" class="pill">motion intent</text>
+    </g>
+  </g>
+
+  <g fill="none" stroke="#6ca4df" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)">
+    <path d="M600 289V320H210V347" />
+    <path d="M600 289V347" />
+    <path d="M600 320H990V347" />
+  </g>
+  <rect x="509" y="304" width="182" height="24" rx="12" fill="#0d2340" stroke="#284e74" />
+  <text x="600" y="321" text-anchor="middle" class="small">same source + contracts</text>
+
+  <g filter="url(#shadow)">
+    <rect x="70" y="350" width="280" height="170" rx="18" fill="#0b1e36" stroke="#356d9f" stroke-width="2" />
+    <circle cx="105" cy="388" r="18" fill="#143d68" />
+    <rect x="95" y="379" width="20" height="18" rx="3" fill="none" stroke="#56a9ff" stroke-width="2" />
+    <path d="M99 385l4 3-4 3M106 393h5" fill="none" stroke="#56a9ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+    <text x="136" y="395" class="card-title">Native tests</text>
+    <text x="94" y="431" class="eyebrow">HOST C++</text>
+    <text x="94" y="460" class="body">Deterministic scenario tests.</text>
+    <text x="94" y="485" class="body">Fake clocks + recording ports.</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="460" y="350" width="280" height="170" rx="18" fill="#0b1e36" stroke="#ff6b22" stroke-width="2" />
+    <circle cx="495" cy="388" r="18" fill="#542813" />
+    <path d="M486 382l-7 6 7 6M504 382l7 6-7 6M499 378l-8 20" fill="none" stroke="#ff7a32" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+    <text x="526" y="395" class="card-title">WebAssembly</text>
+    <text x="484" y="431" class="eyebrow orange">EMSCRIPTEN BINDING</text>
+    <text x="484" y="460" class="body">C++ decisions run in browsers.</text>
+    <text x="484" y="485" class="body">No hardware command route.</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="850" y="350" width="280" height="170" rx="18" fill="#0b1e36" stroke="#42bfa6" stroke-width="2" />
+    <circle cx="885" cy="388" r="18" fill="#113f3c" />
+    <rect x="878" y="381" width="14" height="14" rx="2" fill="none" stroke="#55d6bb" stroke-width="2" />
+    <path d="M874 383h4M874 389h4M874 395h4M892 383h4M892 389h4M892 395h4M880 377v4M886 377v4M892 377v4M880 395v4M886 395v4M892 395v4" stroke="#55d6bb" stroke-width="1.5" stroke-linecap="round" />
+    <text x="916" y="395" class="card-title">Nano ESP32</text>
+    <text x="874" y="431" class="eyebrow mint">AUTONOMOUS FIRMWARE</text>
+    <text x="874" y="460" class="body">Runs schedule, feed, display, and</text>
+    <text x="874" y="485" class="body">safe motion without a PC or server.</text>
+  </g>
+
+  <g fill="none" stroke="#6ca4df" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)">
+    <path d="M210 520V568" />
+    <path d="M600 520V548H495V568" />
+    <path d="M600 548H705V568" />
+  </g>
+  <path d="M990 520V568" fill="none" stroke="#55d6bb" stroke-width="2.5" stroke-linecap="round" marker-end="url(#arrow)" />
+
+  <g>
+    <rect x="70" y="572" width="280" height="94" rx="16" fill="#0d2543" stroke="#284e74" />
+    <text x="94" y="605" class="eyebrow blue">CI + GOLDEN TRACES</text>
+    <text x="94" y="633" class="body">Native ↔ WASM parity</text>
+    <text x="94" y="653" class="small">offline fixtures · failure scenarios</text>
+  </g>
+
+  <g>
+    <rect x="395" y="572" width="200" height="94" rx="16" fill="#0d2543" stroke="#ff6b22" />
+    <text x="419" y="605" class="card-title" font-size="20">Apple Lab</text>
+    <text x="419" y="632" class="body">Manager + simulator</text>
+    <text x="419" y="653" class="small">local engineering tool</text>
+
+    <rect x="605" y="572" width="200" height="94" rx="16" fill="#0d2543" stroke="#ff6b22" />
+    <text x="629" y="605" class="card-title" font-size="20">Virtual Apple</text>
+    <text x="629" y="632" class="body">Public game-day site</text>
+    <text x="629" y="653" class="small">static browser application</text>
+  </g>
+
+  <g>
+    <rect x="850" y="572" width="280" height="94" rx="16" fill="#0c2a32" stroke="#318f80" />
+    <text x="874" y="605" class="eyebrow mint">DEVICE PORTS</text>
+    <text x="874" y="633" class="body">Wi-Fi · NVS · display · motion</text>
+    <text x="874" y="653" class="small">hardware adapters enforce final safety</text>
+  </g>
+
+  <g fill="none" stroke="#ff7a32" stroke-width="2.5" stroke-dasharray="7 7" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowOrange)">
+    <path d="M600 700V686H495V671" />
+    <path d="M600 686H705V671" />
+  </g>
+  <g>
+    <rect x="350" y="700" width="500" height="94" rx="18" fill="#251b1a" stroke="#ff6b22" stroke-width="1.5" stroke-dasharray="7 6" />
+    <rect x="370" y="717" width="84" height="22" rx="11" fill="#ff5910" />
+    <text x="412" y="732" text-anchor="middle" fill="#ffffff" font-size="11" font-weight="850" letter-spacing="1">OPTIONAL</text>
+    <text x="470" y="733" class="card-title" font-size="18">feed-cache Worker</text>
+    <text x="370" y="763" class="small">Allowlists, bounds, and caches browser requests.</text>
+    <text x="370" y="783" class="small">It never decides whether the Apple moves.</text>
+  </g>
+
+  <text x="600" y="813" text-anchor="middle" class="small">The physical Apple remains operational when every browser and hosted service is offline.</text>
+</svg>
