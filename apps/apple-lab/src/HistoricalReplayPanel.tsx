@@ -1,5 +1,6 @@
+import { dateFromMlbTimecode, METS_TEAM_ID, type MlbHistoricalBookmark } from "@apple/mlb-live-feed";
 import { Scoreboard } from "@apple/scoreboard-ui";
-import { METS_TEAM_ID, dateFromMlbTimecode, type MlbHistoricalBookmark } from "@apple/mlb-live-feed";
+import { appleLabPresentationSnapshot } from "./corePresentation";
 import { useMlbHistoricalReplay } from "./useMlbHistoricalReplay";
 
 function timecodeLabel(timecode: string | undefined) {
@@ -13,11 +14,15 @@ function timecodeLabel(timecode: string | undefined) {
 
 function bookmarkContext(bookmark: MlbHistoricalBookmark) {
   if (bookmark.kind === "FINAL") return "Final transition";
-  return bookmark.battingTeamId === METS_TEAM_ID ? "Mets home run" : "Opponent home run";
+  const event = bookmark.kind === "GRAND_SLAM" ? "grand slam" : "home run";
+  return bookmark.battingTeamId === METS_TEAM_ID ? `Mets ${event}` : `Opponent ${event}`;
 }
 
 export function HistoricalReplayPanel() {
   const replay = useMlbHistoricalReplay();
+  const presentedSnapshot = replay.capture
+    ? appleLabPresentationSnapshot(replay.capture.gameSnapshot, replay.decision)
+    : undefined;
   const busy = ["DISCOVERING", "INDEXING", "LOADING"].includes(replay.status);
   const updateCount = replay.archive?.timestamps.length ?? 0;
   const progress = updateCount === 0 || replay.currentIndex < 0 ? 0 : ((replay.currentIndex + 1) / updateCount) * 100;
@@ -157,13 +162,13 @@ export function HistoricalReplayPanel() {
                 </div>
                 <span className="read-only-badge">WASM · recording</span>
               </header>
-              {replay.capture ? (
+              {replay.capture && presentedSnapshot ? (
                 <>
-                  <Scoreboard snapshot={replay.capture.snapshot} variant="lab" />
+                  <Scoreboard snapshot={presentedSnapshot} variant="lab" />
                   <div className="live-game-detail">
                     <div>
                       <span>Feed event</span>
-                      <strong>{replay.capture.snapshot.lastEvent}</strong>
+                      <strong>{presentedSnapshot.lastEvent}</strong>
                     </div>
                     <div>
                       <span>Delivery cursor</span>
@@ -282,13 +287,25 @@ export function HistoricalReplayPanel() {
                     <strong>{replay.decision.faultLatched ? "LATCHED" : "CLEAR"}</strong>
                   </div>
                   <div>
+                    <span>Events</span>
+                    {replay.decision.events.length === 0 ? (
+                      <code>NO_EVENT</code>
+                    ) : (
+                      replay.decision.events.map((event) => (
+                        <code key={`${event.eventKey}-${event.type}`}>
+                          {event.type} · {event.celebration} · {event.subject}
+                        </code>
+                      ))
+                    )}
+                  </div>
+                  <div>
                     <span>Commands</span>
                     {replay.decision.commands.length === 0 ? (
                       <code>NO_COMMAND</code>
                     ) : (
                       replay.decision.commands.map((command) => (
                         <code key={`${command.eventKey}-${command.type}-${command.positionMm ?? "none"}`}>
-                          {command.type} · {command.celebration} · {command.subject}
+                          {command.type} · {command.eventKey}
                         </code>
                       ))
                     )}
@@ -331,11 +348,9 @@ export function HistoricalReplayPanel() {
                       {timecodeLabel(receipt.timecode)}
                     </time>
                     <span>Update {receipt.updateIndex + 1}</span>
-                    <strong>{receipt.capture.snapshot.phase}</strong>
+                    <strong>{receipt.capture.gameSnapshot.phase}</strong>
                     <code>{receipt.payloadKind}</code>
-                    <span>
-                      {receipt.decision.commands.map((command) => command.celebration).join(" · ") || "NO_COMMAND"}
-                    </span>
+                    <span>{receipt.decision.events.map((event) => event.celebration).join(" · ") || "NO_EVENT"}</span>
                   </li>
                 ))}
               </ol>

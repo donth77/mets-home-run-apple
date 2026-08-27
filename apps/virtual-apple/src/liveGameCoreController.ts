@@ -48,14 +48,17 @@ export class LiveGameCoreController {
   #accept(result: CoreResult): LiveCorePresentation {
     let celebration = this.#presentation.celebration;
     let targetPositionMm = this.#presentation.targetPositionMm;
-    for (const command of result.commands) {
-      if (command.type === "DISPLAY_RENDER") {
+    for (const event of result.events) {
+      if (event.type === "CELEBRATION_STARTED") {
         celebration = {
-          eventKey: command.eventKey,
-          kind: command.celebration,
-          subject: command.subject,
+          eventKey: event.eventKey,
+          kind: event.celebration,
+          subject: event.subject,
         };
-      } else if (command.type === "MOTION_EXTEND") {
+      }
+    }
+    for (const command of result.commands) {
+      if (command.type === "MOTION_EXTEND") {
         this.#expectedPositionMm = MAX_STROKE_MM;
         targetPositionMm = MAX_STROKE_MM;
       } else if (command.type === "MOTION_RETRACT" || command.type === "MOTION_DISABLE") {

@@ -13,16 +13,16 @@ function numericConstant(contents, name) {
   return Number(match[1].replaceAll(/[_'\\s]/g, ""));
 }
 
-const [coreTypes, protocol, actuator, mlbConstants] = await Promise.all([
+const [coreTypes, protocolCore, actuator, mlbConstants] = await Promise.all([
   source("firmware/lib/core/include/apple/core/types.hpp"),
-  source("packages/protocol/src/index.ts"),
+  source("packages/protocol/src/core.ts"),
   source("packages/apple-3d/src/actuatorPhysics.ts"),
   source("packages/mlb-live-feed/src/constants.ts"),
 ]);
 
 const checks = [
   ["Mets team ID", numericConstant(coreTypes, "kMetsTeamId"), numericConstant(mlbConstants, "METS_TEAM_ID")],
-  ["maximum stroke", numericConstant(coreTypes, "kMaxStrokeMm"), numericConstant(protocol, "MAX_STROKE_MM")],
+  ["maximum stroke", numericConstant(coreTypes, "kMaxStrokeMm"), numericConstant(protocolCore, "MAX_STROKE_MM")],
   [
     "celebration lead-in",
     numericConstant(coreTypes, "kCelebrationLeadInMs"),

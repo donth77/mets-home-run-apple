@@ -119,7 +119,7 @@ export function useMlbRecordingFeed(): MlbRecordingFeedState {
           setCapture(result.capture);
           const core = coreRef.current;
           if (!core) throw new Error("The C++ decision core was released unexpectedly.");
-          setDecision(core.ingest(result.capture.input, performance.now()));
+          setDecision(core.ingest(result.capture.coreInput, performance.now()));
         }
         setStatus("POLLING");
         const next = new Date(Date.now() + result.waitMs).toISOString();

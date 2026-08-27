@@ -1,9 +1,9 @@
-import { inningLabel, mlbTeamNickname, type AtBatState, type GameSnapshot } from "@apple/protocol";
+import { inningLabel, mlbTeamNickname, type AtBatState, type PresentationSnapshot } from "@apple/protocol";
 import type { CSSProperties } from "react";
 import { teamScorebugColors } from "./teamColors";
 
 export interface ScoreboardProps {
-  snapshot: GameSnapshot;
+  snapshot: PresentationSnapshot;
   variant?: "lab" | "broadcast";
   announceUpdates?: boolean;
 }
@@ -26,11 +26,11 @@ function BaseDiamond({ bases }: { bases?: AtBatState["bases"] }) {
   );
 }
 
-function isMetsTeam(team: GameSnapshot["home"]) {
+function isMetsTeam(team: PresentationSnapshot["home"]) {
   return team.id === 121 || team.abbreviation.trim().toUpperCase() === "NYM";
 }
 
-function metsMatchupRole(snapshot: GameSnapshot): "BATTING" | "PITCHING" | null {
+function metsMatchupRole(snapshot: PresentationSnapshot): "BATTING" | "PITCHING" | null {
   const metsAreHome = isMetsTeam(snapshot.home);
   const metsAreAway = isMetsTeam(snapshot.away);
   if ((snapshot.half === "BOTTOM" && metsAreHome) || (snapshot.half === "TOP" && metsAreAway)) return "BATTING";
@@ -43,7 +43,13 @@ function compactBatterLine(line: string | undefined) {
   return match ? `${match[1]} FOR ${match[2]}${match[3]}` : line;
 }
 
-function BroadcastScorebug({ snapshot, announceUpdates }: { snapshot: GameSnapshot; announceUpdates: boolean }) {
+function BroadcastScorebug({
+  snapshot,
+  announceUpdates,
+}: {
+  snapshot: PresentationSnapshot;
+  announceUpdates: boolean;
+}) {
   const teams = [
     { side: "away", team: snapshot.away },
     { side: "home", team: snapshot.home },
@@ -134,7 +140,7 @@ function BroadcastScorebug({ snapshot, announceUpdates }: { snapshot: GameSnapsh
   );
 }
 
-function LabScoreboard({ snapshot, announceUpdates }: { snapshot: GameSnapshot; announceUpdates: boolean }) {
+function LabScoreboard({ snapshot, announceUpdates }: { snapshot: PresentationSnapshot; announceUpdates: boolean }) {
   const occupiedOuts = Math.min(snapshot.outs, 3);
   const gameDetail = snapshot.gameNumber === 2 ? "GAME 2" : `GAME ${snapshot.gameNumber}`;
   const teams = [

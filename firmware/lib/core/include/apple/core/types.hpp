@@ -23,7 +23,6 @@ enum class Phase : std::uint8_t {
   Live,
   Review,
   Delayed,
-  Celebration,
   Final,
   Sleep,
 };
@@ -45,19 +44,23 @@ enum class ReviewState : std::uint8_t {
 enum class PlayKind : std::uint8_t {
   Other,
   HomeRun,
+  GrandSlam,
 };
 
 enum class CelebrationKind : std::uint8_t {
   HomeRun,
   MetsWin,
+  GrandSlam,
 };
 
 enum class CommandType : std::uint8_t {
-  DisplayRender,
-  LedCelebrate,
   MotionExtend,
   MotionRetract,
   MotionDisable,
+};
+
+enum class EventType : std::uint8_t {
+  CelebrationStarted,
 };
 
 enum class SequenceState : std::uint8_t {
@@ -98,12 +101,17 @@ struct InputEnvelope {
 };
 
 struct Command {
-  CommandType type{CommandType::DisplayRender};
+  CommandType type{CommandType::MotionDisable};
+  std::string event_key;
+  std::int32_t position_mm{0};
+  std::uint64_t deadline_ms{0};
+};
+
+struct CoreEvent {
+  EventType type{EventType::CelebrationStarted};
   std::string event_key;
   CelebrationKind celebration{CelebrationKind::HomeRun};
   std::string subject;
-  std::int32_t position_mm{0};
-  std::uint64_t deadline_ms{0};
 };
 
 struct TraceEntry {
@@ -112,11 +120,12 @@ struct TraceEntry {
 };
 
 struct EngineOutput {
+  std::vector<CoreEvent> events;
   std::vector<Command> commands;
   std::vector<TraceEntry> traces;
 };
 
-const char* command_type_name(CommandType type) noexcept;
-const char* sequence_state_name(SequenceState state) noexcept;
+const char *command_type_name(CommandType type) noexcept;
+const char *sequence_state_name(SequenceState state) noexcept;
 
-}  // namespace apple::core
+} // namespace apple::core

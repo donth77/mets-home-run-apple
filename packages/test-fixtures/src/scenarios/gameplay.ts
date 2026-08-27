@@ -1,13 +1,25 @@
-import type { FixtureScenario } from "@apple/protocol";
+import type { AtBatState, FixtureScenario } from "@apple/protocol";
 import {
   baseSnapshot,
+  celebrationEvent,
   command,
   deviceFixture,
   frame,
   inputFrame,
+  normalizedGrandSlam,
   normalizedHomeRun,
   normalizedInput,
 } from "../builders";
+
+const grandSlamAtBat: AtBatState = {
+  balls: 1,
+  strikes: 1,
+  bases: { first: true, second: true, third: true },
+  batter: "Pete Alonso",
+  batterLine: "1–3",
+  pitcher: "Strider",
+  pitchCount: 20,
+};
 
 export const gameplayScenarios: readonly FixtureScenario[] = [
   {
@@ -65,7 +77,8 @@ export const gameplayScenarios: readonly FixtureScenario[] = [
         },
         0,
         "Event 777686:play-47 persisted; display animation begins before motion.",
-        [command("DISPLAY_RENDER", "777686:play-47"), command("LED_CELEBRATE", "777686:play-47")],
+        [],
+        [celebrationEvent("HOME_RUN", "777686:play-47", "Juan Soto")],
       ),
       frame(
         2900,
@@ -124,6 +137,93 @@ export const gameplayScenarios: readonly FixtureScenario[] = [
     ),
   },
   {
+    id: "grand-slam",
+    title: "Mets grand slam",
+    shortLabel: "Grand slam",
+    description: "A completed four-RBI Mets home run uses the standard raise/lower sequence with special labeling.",
+    frames: [
+      frame(
+        0,
+        {
+          atBat: grandSlamAtBat,
+        },
+        0,
+        "Bases loaded; patch cursor 20260826_211510 accepted.",
+      ),
+      frame(
+        900,
+        {
+          phase: "CELEBRATION",
+          label: "GRAND SLAM!!",
+          atBat: grandSlamAtBat,
+          home: { ...baseSnapshot.home, runs: 6 },
+          lastEvent: "Pete Alonso hits a grand slam to left field",
+        },
+        0,
+        "Grand slam event persisted; special display animation begins before motion.",
+        [],
+        [celebrationEvent("GRAND_SLAM", "777686:play-48", "Pete Alonso")],
+      ),
+      frame(
+        2900,
+        {
+          phase: "CELEBRATION",
+          label: "GRAND SLAM!!",
+          atBat: grandSlamAtBat,
+          home: { ...baseSnapshot.home, runs: 6 },
+          lastEvent: "Pete Alonso grand slam · actuator extending at 15.24 mm/s",
+        },
+        50,
+        "Two-second display lead-in complete; extend command recorded.",
+        [command("MOTION_EXTEND", "777686:play-48", 50)],
+      ),
+      frame(
+        6200,
+        {
+          phase: "CELEBRATION",
+          label: "GRAND SLAM!!",
+          atBat: grandSlamAtBat,
+          home: { ...baseSnapshot.home, runs: 6 },
+          lastEvent: "Pete Alonso grand slam · celebration dwell",
+        },
+        50,
+        "Extended limit reached after the rated 3.28-second stroke.",
+      ),
+      frame(
+        36200,
+        {
+          phase: "CELEBRATION",
+          label: "GRAND SLAM!!",
+          atBat: grandSlamAtBat,
+          home: { ...baseSnapshot.home, runs: 6 },
+          lastEvent: "Pete Alonso grand slam · Apple returning home",
+        },
+        0,
+        "Thirty-second raised dwell complete; retract command recorded.",
+        [command("MOTION_RETRACT", "777686:play-48", 0)],
+      ),
+      frame(
+        39500,
+        { phase: "LIVE", label: "LIVE", home: { ...baseSnapshot.home, runs: 6 }, lastEvent: "Play resumed" },
+        0,
+        "Retracted limit reached; grand slam remains deduplicated.",
+      ),
+    ],
+    deviceFixture: deviceFixture(
+      [
+        inputFrame(0, normalizedInput("20260826_211500", { updateMode: "BOOTSTRAP" })),
+        inputFrame(
+          900,
+          normalizedInput("20260826_211510", {
+            homeRuns: 6,
+            plays: [normalizedGrandSlam("777686:play-48")],
+          }),
+        ),
+      ],
+      1,
+    ),
+  },
+  {
     id: "review-confirmed",
     title: "Review, then confirmed",
     shortLabel: "Review + confirm",
@@ -148,7 +248,8 @@ export const gameplayScenarios: readonly FixtureScenario[] = [
         },
         0,
         "Confirmed event persisted; display lead-in begins.",
-        [command("DISPLAY_RENDER", "777686:play-52"), command("LED_CELEBRATE", "777686:play-52")],
+        [],
+        [celebrationEvent("HOME_RUN", "777686:play-52", "Juan Soto")],
       ),
       frame(
         5200,

@@ -1,5 +1,5 @@
 import { METS_TEAM_ID, type UpcomingMetsGame } from "@apple/mlb-live-feed";
-import type { GameSnapshot } from "@apple/protocol";
+import type { GameSnapshot, PresentationSnapshot } from "@apple/protocol";
 import type { LiveCelebration, LiveMetsGameStatus } from "./useLiveMetsGame";
 
 const restingSnapshot: GameSnapshot = {
@@ -45,10 +45,17 @@ export function isCitiFieldVenue(venue: string | undefined) {
   return venue?.trim().replace(/\s+/g, " ").toLowerCase() === "citi field";
 }
 
-export function fanFacingMoment(scenarioId: string, snapshot: GameSnapshot, homeRunPhrase: string) {
+function grandSlamDescription(batter: string) {
+  return `${batter} clears the bases with a grand slam! The Home Run Apple is rising in center field!`;
+}
+
+export function fanFacingMoment(scenarioId: string, snapshot: PresentationSnapshot, homeRunPhrase: string) {
   const batter = snapshot.atBat?.batter ?? "A Mets hitter";
   if (scenarioId === "mets-win") {
     return { label: "METS WIN!", lastEvent: "Put it in the books! The Apple celebrates another Mets victory." };
+  }
+  if (scenarioId === "grand-slam") {
+    return { label: "GRAND SLAM!!", lastEvent: grandSlamDescription(batter) };
   }
   if (scenarioId === "home-run") return { label: "HOME RUN!", lastEvent: homeRunPhrase };
   if (scenarioId === "review-confirmed" && snapshot.review === "CONFIRMED") {
@@ -77,14 +84,20 @@ export function fanFacingMoment(scenarioId: string, snapshot: GameSnapshot, home
 
 export function liveMoment(
   status: LiveMetsGameStatus,
-  snapshot: GameSnapshot,
+  snapshot: PresentationSnapshot,
   celebration: LiveCelebration | undefined,
   homeRunPhrase: string,
 ) {
   if (celebration?.kind === "METS_WIN") {
     return { label: "METS WIN!", lastEvent: "Put it in the books! The Apple celebrates another Mets victory." };
   }
+  if (celebration?.kind === "GRAND_SLAM") {
+    return { label: "GRAND SLAM!!", lastEvent: grandSlamDescription(celebration.subject || "A Mets hitter") };
+  }
   if (celebration?.kind === "HOME_RUN") return { label: "HOME RUN!", lastEvent: homeRunPhrase };
+  if (status === "FINAL" || snapshot.phase === "FINAL") {
+    return { label: "FINAL", lastEvent: snapshot.lastEvent };
+  }
   if (status === "CHECKING") return { label: "BETWEEN GAMES", lastEvent: "Checking today’s Mets schedule…" };
   if (status === "ERROR") {
     return {

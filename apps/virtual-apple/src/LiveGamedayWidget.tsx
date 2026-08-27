@@ -1,6 +1,6 @@
-import type { GameSnapshot } from "@apple/protocol";
+import type { PresentationSnapshot } from "@apple/protocol";
 
-export function LiveGamedayWidget({ snapshot }: { snapshot: GameSnapshot }) {
+export function LiveGamedayWidget({ snapshot }: { snapshot: PresentationSnapshot }) {
   const activityLabel = snapshot.phase === "DELAYED" ? "Game delayed" : "Live game";
 
   return (

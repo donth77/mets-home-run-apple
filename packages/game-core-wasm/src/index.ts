@@ -1,5 +1,7 @@
 import type {
+  AppleCoreEvent,
   AppleCommandType,
+  CelebrationKind,
   GamePhase,
   NormalizedGameInput,
   NormalizedPlayEvidence,
@@ -12,7 +14,7 @@ import createAppleCoreModule from "./generated/apple-core.mjs";
 export type CoreUpdateMode = NormalizedUpdateMode;
 export type CoreHalf = "TOP" | "BOTTOM" | "MIDDLE" | "END";
 export type CorePlayKind = NormalizedPlayKind;
-export type CoreCelebration = "HOME_RUN" | "METS_WIN";
+export type CoreCelebration = CelebrationKind;
 export type CoreSequenceState = "IDLE" | "LEAD_IN" | "REVIEW_HOLD" | "EXTENDING" | "RAISED" | "RETRACTING" | "FAULT";
 
 export type CorePlayEvidence = NormalizedPlayEvidence;
@@ -21,11 +23,11 @@ export type CoreInputEnvelope = NormalizedGameInput;
 export interface CoreCommand {
   type: AppleCommandType;
   eventKey: string;
-  celebration: CoreCelebration;
-  subject: string;
   positionMm: number;
   deadlineMs: number;
 }
+
+export type CoreEvent = AppleCoreEvent;
 
 export interface CoreTraceEntry {
   code: string;
@@ -33,6 +35,7 @@ export interface CoreTraceEntry {
 }
 
 export interface CoreResult {
+  events: readonly CoreEvent[];
   commands: readonly CoreCommand[];
   traces: readonly CoreTraceEntry[];
   sequenceState: CoreSequenceState;
@@ -48,9 +51,8 @@ const phases: Record<GamePhase, number> = {
   LIVE: 1,
   REVIEW: 2,
   DELAYED: 3,
-  CELEBRATION: 4,
-  FINAL: 5,
-  SLEEP: 6,
+  FINAL: 4,
+  SLEEP: 5,
 };
 const halves: Record<CoreHalf, number> = {
   TOP: 0,
@@ -61,6 +63,7 @@ const halves: Record<CoreHalf, number> = {
 const playKinds: Record<CorePlayKind, number> = {
   OTHER: 0,
   HOME_RUN: 1,
+  GRAND_SLAM: 2,
 };
 const reviews: Record<ReviewState, number> = {
   NONE: 0,
@@ -68,14 +71,8 @@ const reviews: Record<ReviewState, number> = {
   CONFIRMED: 2,
   OVERTURNED: 3,
 };
-const commandTypes: readonly AppleCommandType[] = [
-  "DISPLAY_RENDER",
-  "LED_CELEBRATE",
-  "MOTION_EXTEND",
-  "MOTION_RETRACT",
-  "MOTION_DISABLE",
-];
-const celebrations: readonly CoreCelebration[] = ["HOME_RUN", "METS_WIN"];
+const commandTypes: readonly AppleCommandType[] = ["MOTION_EXTEND", "MOTION_RETRACT", "MOTION_DISABLE"];
+const celebrations: readonly CoreCelebration[] = ["HOME_RUN", "METS_WIN", "GRAND_SLAM"];
 const sequenceStates: readonly CoreSequenceState[] = [
   "IDLE",
   "LEAD_IN",
@@ -201,17 +198,26 @@ export class GameCore {
   }
 
   #readResult(): CoreResult {
+    const events = Array.from({ length: this.#module._apple_core_event_count(this.#handle) }, (_, index): CoreEvent => {
+      const celebration = celebrations[this.#module._apple_core_event_celebration(this.#handle, index)];
+      if (!celebration || this.#module._apple_core_event_type(this.#handle, index) !== 0) {
+        throw new Error("Unknown event enum from WASM");
+      }
+      return {
+        type: "CELEBRATION_STARTED",
+        eventKey: this.#module.UTF8ToString(this.#module._apple_core_event_key(this.#handle, index)),
+        celebration,
+        subject: this.#module.UTF8ToString(this.#module._apple_core_event_subject(this.#handle, index)),
+      };
+    });
     const commands = Array.from(
       { length: this.#module._apple_core_command_count(this.#handle) },
       (_, index): CoreCommand => {
         const type = commandTypes[this.#module._apple_core_command_type(this.#handle, index)];
-        const celebration = celebrations[this.#module._apple_core_command_celebration(this.#handle, index)];
-        if (!type || !celebration) throw new Error("Unknown command enum from WASM");
+        if (!type) throw new Error("Unknown command enum from WASM");
         return {
           type,
           eventKey: this.#module.UTF8ToString(this.#module._apple_core_command_event_key(this.#handle, index)),
-          celebration,
-          subject: this.#module.UTF8ToString(this.#module._apple_core_command_subject(this.#handle, index)),
           positionMm: this.#module._apple_core_command_position_mm(this.#handle, index),
           deadlineMs: this.#module._apple_core_command_deadline_ms(this.#handle, index),
         };
@@ -227,6 +233,7 @@ export class GameCore {
     const sequenceState = sequenceStates[this.#module._apple_core_sequence_state(this.#handle)];
     if (!sequenceState) throw new Error("Unknown sequence state from WASM");
     return {
+      events,
       commands,
       traces,
       sequenceState,

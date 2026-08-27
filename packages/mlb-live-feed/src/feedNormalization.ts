@@ -1,4 +1,11 @@
-import type { GamePhase, GameSnapshot, NormalizedPlayEvidence, ReviewState } from "@apple/protocol";
+import type {
+  AtBatState,
+  GameHalf,
+  GamePhase,
+  GameSnapshot,
+  NormalizedPlayEvidence,
+  ReviewState,
+} from "@apple/protocol";
 import { MAXIMUM_POLL_WAIT_MS, MINIMUM_POLL_WAIT_MS, MLB_TIMECODE_PATTERN } from "./constants";
 import { MlbFeedError } from "./errors";
 import {
@@ -6,15 +13,21 @@ import {
   booleanAt,
   clampInteger,
   isObject,
+  type JsonObject,
   numberAt,
   objectAt,
   optionalNumberAt,
   stringAt,
-  type JsonObject,
 } from "./jsonValue";
 import type { FeedPayloadKind, NormalizedFeedCapture } from "./types";
+import {
+  assertFeedProjectionAgreement,
+  type CanonicalGameFrame,
+  projectCoreInput,
+  projectGameSnapshot,
+} from "./feedProjections";
 
-type CoreHalf = GameSnapshot["half"];
+type CoreHalf = GameHalf;
 type CorePlayEvidence = NormalizedPlayEvidence;
 
 export function waitMilliseconds(feed: unknown): number {
@@ -101,12 +114,13 @@ function normalizePlay(
   const battingTeamId = half === "bottom" ? homeTeamId : awayTeamId;
   const atBatIndex = numberAt(about, "atBatIndex", -1);
   if (atBatIndex < 0 || battingTeamId <= 0) return undefined;
+  const eventType = stringAt(result, "eventType");
   return {
     eventKey: playEventKey(play, gamePk),
     atBatIndex,
     battingTeamId,
     batterName: stringAt(objectAt(matchup, "batter"), "fullName"),
-    kind: stringAt(result, "eventType") === "home_run" ? "HOME_RUN" : "OTHER",
+    kind: eventType === "home_run" ? (numberAt(result, "rbi") === 4 ? "GRAND_SLAM" : "HOME_RUN") : "OTHER",
     complete: booleanAt(about, "isComplete"),
     review: reviewState(play),
   };
@@ -320,34 +334,37 @@ export function normalizeFeed(
   });
 
   const cursor = deliveryCursor ?? feedCursor(feed);
-  const snapshot: GameSnapshot = {
-    schemaVersion: 1,
+  const atBat: AtBatState | undefined = situationIsActive
+    ? {
+        balls: countIsCurrent ? (clampInteger(numberAt(currentCount, "balls"), 0, 3) as 0 | 1 | 2 | 3) : 0,
+        strikes: countIsCurrent ? (clampInteger(numberAt(currentCount, "strikes"), 0, 2) as 0 | 1 | 2) : 0,
+        bases: {
+          first: Boolean(offense?.first),
+          second: Boolean(offense?.second),
+          third: Boolean(offense?.third),
+        },
+        batter: stringAt(batter, "fullName") || undefined,
+        batterLine: batterGameLine(battingStats),
+        pitcher: stringAt(pitcher, "fullName") || undefined,
+        pitchCount: optionalNumberAt(pitchingStats, "numberOfPitches"),
+      }
+    : undefined;
+  const canonical: CanonicalGameFrame = {
     gamePk,
     gameNumber,
+    cursor,
+    updateMode,
     phase,
     label: snapshotLabel(phase, status),
     away,
     home,
     inning,
     half,
-    outs,
+    displayOuts: outs,
+    evidenceOuts: feedOuts,
     review: currentReview,
     lastEvent,
-    atBat: situationIsActive
-      ? {
-          balls: countIsCurrent ? (clampInteger(numberAt(currentCount, "balls"), 0, 3) as 0 | 1 | 2 | 3) : 0,
-          strikes: countIsCurrent ? (clampInteger(numberAt(currentCount, "strikes"), 0, 2) as 0 | 1 | 2) : 0,
-          bases: {
-            first: Boolean(offense?.first),
-            second: Boolean(offense?.second),
-            third: Boolean(offense?.third),
-          },
-          batter: stringAt(batter, "fullName") || undefined,
-          batterLine: batterGameLine(battingStats),
-          pitcher: stringAt(pitcher, "fullName") || undefined,
-          pitchCount: optionalNumberAt(pitchingStats, "numberOfPitches"),
-        }
-      : undefined,
+    atBat,
     linescore: {
       innings,
       awayHits: numberAt(objectAt(lineTeams, "away"), "hits"),
@@ -355,27 +372,16 @@ export function normalizeFeed(
       awayErrors: numberAt(objectAt(lineTeams, "away"), "errors"),
       homeErrors: numberAt(objectAt(lineTeams, "home"), "errors"),
     },
+    changedPlays,
   };
+  const gameSnapshot = projectGameSnapshot(canonical);
+  const coreInput = projectCoreInput(canonical);
+  assertFeedProjectionAgreement(gameSnapshot, coreInput);
 
   return {
     capture: {
-      input: {
-        schemaVersion: 1,
-        updateMode,
-        gamePk,
-        gameNumber,
-        cursor,
-        phase,
-        half,
-        inning,
-        outs: feedOuts,
-        awayTeamId: away.id ?? 0,
-        homeTeamId: home.id ?? 0,
-        awayRuns: away.runs,
-        homeRuns: home.runs,
-        plays: changedPlays,
-      },
-      snapshot,
+      coreInput,
+      gameSnapshot,
       cursor,
       waitMs: waitMilliseconds(feed),
       payloadKind,

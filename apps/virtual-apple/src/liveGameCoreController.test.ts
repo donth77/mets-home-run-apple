@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it } from "vitest";
 import type { NormalizedGameInput } from "@apple/protocol";
+import { afterEach, describe, expect, it } from "vitest";
 import { LiveGameCoreController } from "./liveGameCoreController";
 
 const activeControllers: LiveGameCoreController[] = [];
@@ -10,7 +10,11 @@ afterEach(() => {
   });
 });
 
-function input(cursor: string, updateMode: "BOOTSTRAP" | "INCREMENTAL"): NormalizedGameInput {
+function input(
+  cursor: string,
+  updateMode: "BOOTSTRAP" | "INCREMENTAL",
+  kind: "HOME_RUN" | "GRAND_SLAM" = "HOME_RUN",
+): NormalizedGameInput {
   return {
     schemaVersion: 1,
     updateMode,
@@ -34,7 +38,7 @@ function input(cursor: string, updateMode: "BOOTSTRAP" | "INCREMENTAL"): Normali
               atBatIndex: 42,
               battingTeamId: 121,
               batterName: "Francisco Lindor",
-              kind: "HOME_RUN",
+              kind,
               complete: true,
               review: "NONE",
             },
@@ -66,5 +70,17 @@ describe("Virtual Apple live core controller", () => {
     expect(controller.tick(33_999).targetPositionMm).toBe(50);
     expect(controller.tick(34_000).targetPositionMm).toBe(0);
     expect(controller.reportPosition(0, 35_000)?.celebration).toBeUndefined();
+  });
+
+  it("retains the grand-slam presentation kind from the core", async () => {
+    const controller = await LiveGameCoreController.create();
+    activeControllers.push(controller);
+
+    controller.ingest(input("20260827_190000", "BOOTSTRAP"), 0);
+    expect(controller.ingest(input("20260827_190010", "INCREMENTAL", "GRAND_SLAM"), 100).celebration).toEqual({
+      eventKey: "824560:play-42",
+      kind: "GRAND_SLAM",
+      subject: "Francisco Lindor",
+    });
   });
 });

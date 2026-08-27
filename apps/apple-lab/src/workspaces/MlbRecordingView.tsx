@@ -1,9 +1,12 @@
 import { Scoreboard } from "@apple/scoreboard-ui";
+import { appleLabPresentationSnapshot } from "../corePresentation";
 import type { MlbRecordingFeedState } from "../useMlbRecordingFeed";
 
 export function MlbRecordingView({ recording }: { recording: MlbRecordingFeedState }) {
   const recordingActive = recording.status === "CONNECTING" || recording.status === "POLLING";
-  const snapshot = recording.capture?.snapshot;
+  const snapshot = recording.capture
+    ? appleLabPresentationSnapshot(recording.capture.gameSnapshot, recording.decision)
+    : undefined;
 
   return (
     <>
@@ -159,6 +162,18 @@ export function MlbRecordingView({ recording }: { recording: MlbRecordingFeedSta
                 <strong>{recording.decision.sequenceState}</strong>
                 <span>Fault latch</span>
                 <strong>{recording.decision.faultLatched ? "LATCHED" : "CLEAR"}</strong>
+              </div>
+              <div>
+                <span>Events</span>
+                {recording.decision.events.length === 0 ? (
+                  <code>NO_EVENT</code>
+                ) : (
+                  recording.decision.events.map((event) => (
+                    <code key={`${event.eventKey}-${event.type}`}>
+                      {event.type} · {event.celebration} · {event.subject}
+                    </code>
+                  ))
+                )}
               </div>
               <div>
                 <span>Commands</span>

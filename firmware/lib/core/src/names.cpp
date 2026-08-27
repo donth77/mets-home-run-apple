@@ -4,10 +4,6 @@ namespace apple::core {
 
 const char* command_type_name(CommandType type) noexcept {
   switch (type) {
-    case CommandType::DisplayRender:
-      return "DISPLAY_RENDER";
-    case CommandType::LedCelebrate:
-      return "LED_CELEBRATE";
     case CommandType::MotionExtend:
       return "MOTION_EXTEND";
     case CommandType::MotionRetract:

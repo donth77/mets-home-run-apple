@@ -1,14 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from "react";
 import type { CoreResult } from "@apple/game-core-wasm";
 import { easternDate, fetchMetsSchedule, MlbRecordingClient, type MlbScheduleGame } from "@apple/mlb-live-feed";
 import type { GameSnapshot } from "@apple/protocol";
-import { LiveGameCoreController, type LiveCelebration, type LiveCorePresentation } from "./liveGameCoreController";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { type LiveCelebration, type LiveCorePresentation, LiveGameCoreController } from "./liveGameCoreController";
 
 export type { LiveCelebration } from "./liveGameCoreController";
 
 const SCHEDULE_RECHECK_NEAR_GAME_MS = 60_000;
 const SCHEDULE_RECHECK_IDLE_MS = 15 * 60_000;
 const FEED_RETRY_MS = 60_000;
+export const FINAL_SCOREBOARD_HOLD_MS = 60_000;
 
 export type LiveMetsGameStatus = "CHECKING" | "BETWEEN_GAMES" | "CONNECTING" | "POLLING" | "FINAL" | "ERROR";
 
@@ -35,6 +36,12 @@ export function selectTrackableMetsGame(games: readonly MlbScheduleGame[]) {
       )
     );
   });
+}
+
+export function liveFeedContinuation(phase: GameSnapshot["phase"], waitMs: number) {
+  return phase === "FINAL"
+    ? { kind: "DISCOVER" as const, delayMs: FINAL_SCOREBOARD_HOLD_MS }
+    : { kind: "POLL" as const, delayMs: waitMs };
 }
 
 function scheduleRecheckDelay(games: readonly MlbScheduleGame[]) {
@@ -136,11 +143,17 @@ export function useLiveMetsGame(enabled = true): LiveMetsGameState {
             const result = await client.poll(selectedGame, requestController.signal);
             if (disposed || token !== runToken) return;
             if (result.capture) {
-              setSnapshot(result.capture.snapshot);
-              acceptCorePresentation(core.ingest(result.capture.input, performance.now()));
-              const phase = result.capture.snapshot.phase;
-              setStatus(phase === "FINAL" ? "FINAL" : "POLLING");
-              if (phase === "FINAL") queueDiscovery(60_000);
+              setSnapshot(result.capture.gameSnapshot);
+              acceptCorePresentation(core.ingest(result.capture.coreInput, performance.now()));
+              const continuation = liveFeedContinuation(result.capture.gameSnapshot.phase, result.waitMs);
+              if (continuation.kind === "DISCOVER") {
+                setStatus("FINAL");
+                queueDiscovery(continuation.delayMs);
+                return;
+              }
+              setStatus("POLLING");
+              feedTimer = window.setTimeout(poll, continuation.delayMs);
+              return;
             } else {
               setStatus((current) => (current === "CONNECTING" ? "POLLING" : current));
             }

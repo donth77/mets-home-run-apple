@@ -242,6 +242,16 @@ export function SimulatorWorkspace() {
             </div>
           </dl>
           <div className="command-stack">
+            <span>Events in frame</span>
+            {playback.activeFrame.events.length === 0 ? (
+              <p className="empty-state">No event at this frame</p>
+            ) : (
+              playback.activeFrame.events.map((event) => (
+                <code key={`${event.eventKey}-${event.type}`}>
+                  {event.type} · {event.celebration} · {event.subject}
+                </code>
+              ))
+            )}
             <span>Commands in frame</span>
             {playback.activeFrame.commands.length === 0 ? (
               <p className="empty-state">No command at this frame</p>
@@ -311,6 +321,10 @@ export function SimulatorWorkspace() {
               { header: "Phase", value: (frame) => frame.snapshot.phase },
               { header: "Trace", value: (frame) => frame.trace },
               {
+                header: "Events",
+                value: (frame) => frame.events.map((event) => event.celebration).join(" | ") || "NO_EVENT",
+              },
+              {
                 header: "Commands",
                 value: (frame) => frame.commands.map((command) => command.type).join(" | ") || "NO_MOTION",
               },
@@ -329,7 +343,12 @@ export function SimulatorWorkspace() {
               <time>+{(frame.atMs / 1000).toFixed(2)}s</time>
               <span>{frame.snapshot.phase}</span>
               <p>{frame.trace}</p>
-              <code>{frame.commands.map((command) => command.type).join(" · ") || "NO_MOTION"}</code>
+              <code>
+                {[
+                  ...frame.events.map((event) => event.celebration),
+                  ...frame.commands.map((command) => command.type),
+                ].join(" · ") || "NO_EVENT_OR_MOTION"}
+              </code>
             </div>
           ))}
         </div>

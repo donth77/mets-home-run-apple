@@ -9,9 +9,11 @@
 
 namespace {
 
+using apple::core::CelebrationKind;
 using apple::core::CommandType;
 using apple::core::Engine;
 using apple::core::EngineOutput;
+using apple::core::EventType;
 using apple::core::EventLedger;
 using apple::core::Half;
 using apple::core::InputEnvelope;
@@ -24,15 +26,17 @@ using apple::core::SequenceState;
 using apple::core::UpdateMode;
 
 class MemoryLedger final : public EventLedger {
- public:
+public:
   LedgerLookup lookup(std::string_view event_key) const override {
-    if (fail_lookup) return LedgerLookup::Error;
+    if (fail_lookup)
+      return LedgerLookup::Error;
     return keys.count(std::string(event_key)) == 0 ? LedgerLookup::Missing
                                                    : LedgerLookup::Present;
   }
 
   bool persist(std::string_view event_key) override {
-    if (fail_persist) return false;
+    if (fail_persist)
+      return false;
     keys.insert(std::string(event_key));
     writes.push_back(std::string(event_key));
     return true;
@@ -44,14 +48,15 @@ class MemoryLedger final : public EventLedger {
   std::vector<std::string> writes;
 };
 
-[[noreturn]] void fail(const std::string& message, int line) {
+[[noreturn]] void fail(const std::string &message, int line) {
   std::cerr << "FAIL line " << line << ": " << message << '\n';
   std::exit(1);
 }
 
 #define EXPECT_TRUE(value)                                                     \
   do {                                                                         \
-    if (!(value)) fail("expected true: " #value, __LINE__);                   \
+    if (!(value))                                                              \
+      fail("expected true: " #value, __LINE__);                                \
   } while (false)
 
 #define EXPECT_EQ(actual, expected)                                            \
@@ -59,10 +64,11 @@ class MemoryLedger final : public EventLedger {
     const auto actual_value = (actual);                                        \
     const auto expected_value = (expected);                                    \
     if (!(actual_value == expected_value))                                     \
-      fail("values differ: " #actual " != " #expected, __LINE__);            \
+      fail("values differ: " #actual " != " #expected, __LINE__);              \
   } while (false)
 
-InputEnvelope game(std::string cursor, UpdateMode mode = UpdateMode::Incremental,
+InputEnvelope game(std::string cursor,
+                   UpdateMode mode = UpdateMode::Incremental,
                    std::int64_t game_pk = 777001, int game_number = 1) {
   InputEnvelope input;
   input.update_mode = mode;
@@ -83,30 +89,47 @@ InputEnvelope game(std::string cursor, UpdateMode mode = UpdateMode::Incremental
 PlayEvidence home_run(std::string key = "777001:play-42",
                       int batting_team = apple::core::kMetsTeamId,
                       ReviewState review = ReviewState::None) {
-  return PlayEvidence{std::move(key), 42, batting_team, "Juan Soto",
+  return PlayEvidence{std::move(key),    42,   batting_team, "Juan Soto",
                       PlayKind::HomeRun, true, review};
 }
 
-bool has_command(const EngineOutput& output, CommandType type) {
-  for (const auto& command : output.commands) {
-    if (command.type == type) return true;
+PlayEvidence grand_slam(std::string key = "777001:play-43") {
+  return PlayEvidence{
+      std::move(key),      43,   apple::core::kMetsTeamId, "Pete Alonso",
+      PlayKind::GrandSlam, true, ReviewState::None};
+}
+
+bool has_command(const EngineOutput &output, CommandType type) {
+  for (const auto &command : output.commands) {
+    if (command.type == type)
+      return true;
   }
   return false;
 }
 
-bool has_trace(const EngineOutput& output, std::string_view code) {
-  for (const auto& entry : output.traces) {
-    if (entry.code == code) return true;
+bool has_event(const EngineOutput &output, EventType type) {
+  for (const auto &event : output.events) {
+    if (event.type == type)
+      return true;
   }
   return false;
 }
 
-void bootstrap(Engine& engine, std::int64_t game_pk = 777001,
+bool has_trace(const EngineOutput &output, std::string_view code) {
+  for (const auto &entry : output.traces) {
+    if (entry.code == code)
+      return true;
+  }
+  return false;
+}
+
+void bootstrap(Engine &engine, std::int64_t game_pk = 777001,
                int game_number = 1, std::uint64_t now_ms = 0) {
   const auto output = engine.ingest(
       game("20260827_190000", UpdateMode::Bootstrap, game_pk, game_number),
       now_ms);
   EXPECT_TRUE(has_trace(output, "BOOTSTRAP_ACCEPTED"));
+  EXPECT_TRUE(output.events.empty());
   EXPECT_TRUE(output.commands.empty());
 }
 
@@ -119,9 +142,11 @@ void test_home_run_golden_trace_and_timing() {
   update.home_runs = 3;
   update.plays.push_back(home_run());
   const auto decision = engine.ingest(update, 100);
-  EXPECT_EQ(decision.commands.size(), 2U);
-  EXPECT_EQ(decision.commands[0].type, CommandType::DisplayRender);
-  EXPECT_EQ(decision.commands[1].type, CommandType::LedCelebrate);
+  EXPECT_TRUE(decision.commands.empty());
+  EXPECT_EQ(decision.events.size(), 1U);
+  EXPECT_EQ(decision.events[0].type, EventType::CelebrationStarted);
+  EXPECT_EQ(decision.events[0].celebration, CelebrationKind::HomeRun);
+  EXPECT_EQ(decision.events[0].subject, "Juan Soto");
   EXPECT_EQ(ledger.writes.size(), 1U);
   EXPECT_EQ(ledger.writes[0], "777001:play-42");
   EXPECT_EQ(engine.sequence_state(), SequenceState::LeadIn);
@@ -152,6 +177,25 @@ void test_home_run_golden_trace_and_timing() {
   EXPECT_EQ(engine.sequence_state(), SequenceState::Idle);
 }
 
+void test_grand_slam_uses_home_run_motion_with_special_presentation() {
+  MemoryLedger ledger;
+  Engine engine(ledger);
+  bootstrap(engine);
+
+  auto update = game("20260827_190010");
+  update.home_runs = 6;
+  update.plays.push_back(grand_slam());
+  const auto decision = engine.ingest(update, 100);
+
+  EXPECT_TRUE(decision.commands.empty());
+  EXPECT_EQ(decision.events.size(), 1U);
+  EXPECT_EQ(decision.events[0].type, EventType::CelebrationStarted);
+  EXPECT_EQ(decision.events[0].celebration, CelebrationKind::GrandSlam);
+  EXPECT_EQ(decision.events[0].subject, "Pete Alonso");
+  EXPECT_TRUE(ledger.keys.count("777001:play-43") == 1);
+  EXPECT_TRUE(has_command(engine.tick(2'100), CommandType::MotionExtend));
+}
+
 void test_duplicate_opponent_and_historical_are_still() {
   MemoryLedger ledger;
   Engine engine(ledger);
@@ -177,8 +221,8 @@ void test_duplicate_opponent_and_historical_are_still() {
   EXPECT_TRUE(has_trace(same_cursor, "INPUT_DUPLICATE"));
   auto regressed = duplicate;
   regressed.cursor = "20260827_190015";
-  EXPECT_TRUE(has_trace(engine.ingest(regressed, 22),
-                        "INPUT_CURSOR_REGRESSION"));
+  EXPECT_TRUE(
+      has_trace(engine.ingest(regressed, 22), "INPUT_CURSOR_REGRESSION"));
 }
 
 void test_review_pending_confirmed_and_overturned() {
@@ -188,27 +232,24 @@ void test_review_pending_confirmed_and_overturned() {
 
   auto pending = game("20260827_190010");
   pending.phase = Phase::Review;
-  pending.plays.push_back(
-      home_run("777001:reviewed", apple::core::kMetsTeamId,
-               ReviewState::Pending));
+  pending.plays.push_back(home_run("777001:reviewed", apple::core::kMetsTeamId,
+                                   ReviewState::Pending));
   const auto held = engine.ingest(pending, 100);
   EXPECT_TRUE(held.commands.empty());
   EXPECT_TRUE(has_trace(held, "HOME_RUN_REVIEW_HOLD"));
 
   auto confirmed = game("20260827_190020");
-  confirmed.plays.push_back(
-      home_run("777001:reviewed", apple::core::kMetsTeamId,
-               ReviewState::Confirmed));
+  confirmed.plays.push_back(home_run(
+      "777001:reviewed", apple::core::kMetsTeamId, ReviewState::Confirmed));
   const auto accepted = engine.ingest(confirmed, 200);
-  EXPECT_TRUE(has_command(accepted, CommandType::DisplayRender));
+  EXPECT_TRUE(has_event(accepted, EventType::CelebrationStarted));
 
   MemoryLedger other_ledger;
   Engine other_engine(other_ledger);
   bootstrap(other_engine);
   auto overturned = game("20260827_190010");
-  overturned.plays.push_back(
-      home_run("777001:overturned", apple::core::kMetsTeamId,
-               ReviewState::Overturned));
+  overturned.plays.push_back(home_run(
+      "777001:overturned", apple::core::kMetsTeamId, ReviewState::Overturned));
   const auto rejected = other_engine.ingest(overturned, 10);
   EXPECT_TRUE(rejected.commands.empty());
   EXPECT_TRUE(has_trace(rejected, "HOME_RUN_OVERTURNED"));
@@ -224,17 +265,15 @@ void test_review_can_pause_and_cancel_lead_in() {
 
   auto pending = game("20260827_190020");
   pending.phase = Phase::Review;
-  pending.plays.push_back(
-      home_run("777001:late-review", apple::core::kMetsTeamId,
-               ReviewState::Pending));
+  pending.plays.push_back(home_run(
+      "777001:late-review", apple::core::kMetsTeamId, ReviewState::Pending));
   EXPECT_TRUE(has_trace(engine.ingest(pending, 500), "ACTIVE_REVIEW_HOLD"));
   EXPECT_EQ(engine.sequence_state(), SequenceState::ReviewHold);
   EXPECT_TRUE(engine.tick(5'000).commands.empty());
 
   auto confirmed = game("20260827_190030");
-  confirmed.plays.push_back(
-      home_run("777001:late-review", apple::core::kMetsTeamId,
-               ReviewState::Confirmed));
+  confirmed.plays.push_back(home_run(
+      "777001:late-review", apple::core::kMetsTeamId, ReviewState::Confirmed));
   EXPECT_TRUE(
       has_trace(engine.ingest(confirmed, 5'100), "ACTIVE_REVIEW_RESUMED"));
   EXPECT_TRUE(engine.tick(6'699).commands.empty());
@@ -248,11 +287,10 @@ void test_review_can_pause_and_cancel_lead_in() {
   cancel_engine.ingest(first, 100);
   auto cancel = game("20260827_190020");
   cancel.phase = Phase::Review;
-  cancel.plays.push_back(
-      home_run("777001:cancel", apple::core::kMetsTeamId,
-               ReviewState::Overturned));
-  EXPECT_TRUE(has_trace(cancel_engine.ingest(cancel, 500),
-                        "ACTIVE_REVIEW_OVERTURNED"));
+  cancel.plays.push_back(home_run("777001:cancel", apple::core::kMetsTeamId,
+                                  ReviewState::Overturned));
+  EXPECT_TRUE(
+      has_trace(cancel_engine.ingest(cancel, 500), "ACTIVE_REVIEW_OVERTURNED"));
   EXPECT_EQ(cancel_engine.sequence_state(), SequenceState::Idle);
 }
 
@@ -265,8 +303,8 @@ void test_mets_win_and_bootstrap_final() {
   final.home_runs = 5;
   final.away_runs = 4;
   const auto win = engine.ingest(final, 1'000);
-  EXPECT_TRUE(has_command(win, CommandType::DisplayRender));
-  EXPECT_EQ(win.commands[0].subject, "Mets Win!");
+  EXPECT_TRUE(has_event(win, EventType::CelebrationStarted));
+  EXPECT_EQ(win.events[0].subject, "Mets Win!");
   EXPECT_TRUE(ledger.keys.count("777001:final") == 1);
 
   MemoryLedger boot_ledger;
@@ -308,8 +346,8 @@ void test_doubleheader_contexts_are_independent() {
 
   auto game_one = game("20260827_190010", UpdateMode::Incremental, 777101, 1);
   game_one.plays.push_back(home_run("777101:play-8"));
-  EXPECT_TRUE(has_command(engine.ingest(game_one, 100),
-                          CommandType::DisplayRender));
+  EXPECT_TRUE(has_event(engine.ingest(game_one, 100),
+                        EventType::CelebrationStarted));
 
   auto game_two = game("20260827_190020", UpdateMode::Incremental, 777102, 2);
   game_two.plays.push_back(home_run("777102:play-8"));
@@ -332,10 +370,11 @@ void test_wrong_game_and_monotonic_regression() {
   EXPECT_TRUE(engine.fault_latched());
 }
 
-}  // namespace
+} // namespace
 
 int main() {
   test_home_run_golden_trace_and_timing();
+  test_grand_slam_uses_home_run_motion_with_special_presentation();
   test_duplicate_opponent_and_historical_are_still();
   test_review_pending_confirmed_and_overturned();
   test_review_can_pause_and_cancel_lead_in();
@@ -343,6 +382,6 @@ int main() {
   test_storage_and_motion_fail_closed();
   test_doubleheader_contexts_are_independent();
   test_wrong_game_and_monotonic_regression();
-  std::cout << "PASS apple_core_tests (8 scenarios)\n";
+  std::cout << "PASS apple_core_tests (9 scenarios)\n";
   return 0;
 }

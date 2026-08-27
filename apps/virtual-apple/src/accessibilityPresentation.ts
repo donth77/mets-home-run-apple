@@ -1,7 +1,7 @@
-import { inningLabel, type GameSnapshot } from "@apple/protocol";
+import { inningLabel, type PresentationSnapshot } from "@apple/protocol";
 
 export function gameStatusAnnouncement(
-  snapshot: GameSnapshot,
+  snapshot: PresentationSnapshot,
   options: {
     betweenGames: boolean;
     offseason: boolean;

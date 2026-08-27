@@ -1,6 +1,6 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { GameCore, type CoreInputEnvelope } from "./index";
 import { fixtureScenarios } from "@apple/test-fixtures";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { type CoreInputEnvelope, GameCore } from "./index";
 
 const activeCores: GameCore[] = [];
 
@@ -63,7 +63,15 @@ describe("canonical core WASM boundary", () => {
     ];
 
     const decision = instance.ingest(update, 100);
-    expect(decision.commands.map(({ type }) => type)).toEqual(["DISPLAY_RENDER", "LED_CELEBRATE"]);
+    expect(decision.events).toEqual([
+      {
+        type: "CELEBRATION_STARTED",
+        eventKey: "777001:play-42",
+        celebration: "HOME_RUN",
+        subject: "Juan Soto",
+      },
+    ]);
+    expect(decision.commands).toHaveLength(0);
     expect(decision.traces.map(({ code }) => code)).toEqual([
       "EVENT_PERSISTED",
       "SEQUENCE_QUEUED",
@@ -85,6 +93,29 @@ describe("canonical core WASM boundary", () => {
       deadlineMs: 39_000,
     });
     expect(instance.reportPosition(0, 35_000).sequenceState).toBe("IDLE");
+  });
+
+  it("maps a grand slam to the home-run motion sequence with a distinct presentation kind", async () => {
+    const instance = await core();
+    const update = game("20260827_190010", "INCREMENTAL");
+    update.homeRuns = 6;
+    update.plays = [
+      {
+        eventKey: "777001:play-43",
+        atBatIndex: 43,
+        battingTeamId: 121,
+        batterName: "Pete Alonso",
+        kind: "GRAND_SLAM",
+        complete: true,
+        review: "NONE",
+      },
+    ];
+
+    const decision = instance.ingest(update, 100);
+    expect(decision.events).toMatchObject([
+      { type: "CELEBRATION_STARTED", celebration: "GRAND_SLAM", subject: "Pete Alonso" },
+    ]);
+    expect(instance.tick(2_100).commands[0]).toMatchObject({ type: "MOTION_EXTEND", positionMm: 50 });
   });
 
   it("fails closed when the browser ledger adapter reports a write failure", async () => {
