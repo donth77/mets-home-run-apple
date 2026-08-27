@@ -29,6 +29,14 @@ const soundTestState = vi.hoisted(() => ({
   toggle: vi.fn(),
   winTrackPlaying: false,
 }));
+const NEXT_GAME_DATE = "2026-08-28T23:10:00Z";
+const SCHEDULE_TEST_NOW = new Date("2026-08-27T12:00:00Z");
+
+function expectedNextGameTime() {
+  return new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" }).format(
+    new Date(NEXT_GAME_DATE),
+  );
+}
 
 vi.mock("canvas-confetti", () => ({
   default: {
@@ -90,7 +98,6 @@ vi.mock("@apple/apple-3d", () => ({
     );
   },
   getTrademarkFreeTeamLogoUrl: async () => null,
-  METS_DECAL_URL: "/mets-logo.svg",
   useActuatorSimulation: (positionMm: number) => ({
     positionMm: actuatorTestState.positionMm ?? positionMm,
   }),
@@ -139,7 +146,7 @@ vi.mock("./useMetsSchedule", () => ({
     enabled
       ? [
           {
-            gameDate: "2026-08-28T23:10:00Z",
+            gameDate: NEXT_GAME_DATE,
             gameNumber: 1,
             gamePk: 800001,
             location: scheduleTestState.location,
@@ -167,6 +174,7 @@ function enableDemo() {
 }
 
 afterEach(() => {
+  vi.useRealTimers();
   cleanup();
   playbackTestState.frameIndex = 0;
   playbackTestState.scenarioId = "sleep";
@@ -327,6 +335,8 @@ describe("Virtual Apple accessibility", () => {
   });
 
   it("presents the next-game day and time as one headline", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(SCHEDULE_TEST_NOW);
     const { container } = render(<App />);
     const nextGame = container.querySelector(".moment-card__next");
     const headline = container.querySelector(".moment-card__next-game");
@@ -334,19 +344,21 @@ describe("Virtual Apple accessibility", () => {
     expect(nextGame?.querySelector(":scope > span")?.textContent).toBe("NEXT GAME");
     expect(headline?.children).toHaveLength(2);
     expect(headline?.querySelector(":scope > strong")).not.toBeNull();
-    expect(headline?.querySelector(":scope > time")?.textContent).toBe("7:10 PM");
+    expect(headline?.querySelector(":scope > time")?.textContent).toBe(expectedNextGameTime());
     expect(container.querySelector(".moment-card > p")).toBeNull();
     expect(nextGame?.textContent).not.toContain("The Apple is resting");
   });
 
   it("uses the upcoming live matchup and hides the between-games scorebug", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(SCHEDULE_TEST_NOW);
     const { container, getByRole } = render(<App />);
     const stage = getByRole("img", { name: "Virtual Home Run Apple behind the center-field wall" });
 
     expect(stage.getAttribute("data-away")).toBe("PHI");
     expect(stage.getAttribute("data-home")).toBe("NYM");
     expect(stage.getAttribute("data-at-citi-field")).toBe("true");
-    expect(stage.getAttribute("data-next-game")).toMatch(/^(Tonight|Tomorrow)\|7:10 PM$/);
+    expect(stage.getAttribute("data-next-game")).toBe(`Tomorrow|${expectedNextGameTime()}`);
     expect(container.querySelector(".apple-scorebug")).toBeNull();
     expect(container.textContent).not.toContain("OFF");
     expect(container.textContent).not.toContain("MIA");

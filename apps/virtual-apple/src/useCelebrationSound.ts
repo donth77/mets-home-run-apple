@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createRainAmbience, rainAmbienceSupported, type RainAmbienceController } from "./rainAmbience";
+import { createRainAmbience, type RainAmbienceController, rainAmbienceSupported } from "./rainAmbience";
 
 export type CelebrationSoundKind = "HOME_RUN" | "METS_WIN";
 
@@ -8,8 +8,16 @@ export interface CelebrationSoundCue {
   kind: CelebrationSoundKind;
 }
 
-export const HOME_RUN_TRACK_URLS = ["/audio/hr1.mp3", "/audio/hr2.mp3", "/audio/hr3.mp3", "/audio/hr4.mp3"] as const;
-export const WIN_TRACK_URLS = ["/audio/win.mp3", "/audio/win2.mp3"] as const;
+export const HOME_RUN_TRACK_URLS = [
+  new URL("../public/audio/hr1.mp3", import.meta.url).href,
+  new URL("../public/audio/hr2.mp3", import.meta.url).href,
+  new URL("../public/audio/hr3.mp3", import.meta.url).href,
+  new URL("../public/audio/hr4.mp3", import.meta.url).href,
+] as const;
+export const WIN_TRACK_URLS = [
+  new URL("../public/audio/win.mp3", import.meta.url).href,
+  new URL("../public/audio/win2.mp3", import.meta.url).href,
+] as const;
 
 export function selectHomeRunTrackUrl(randomValue = Math.random()) {
   const boundedValue = Number.isFinite(randomValue) ? Math.min(0.999_999, Math.max(0, randomValue)) : 0;
@@ -22,6 +30,26 @@ export function selectWinTrackUrl(randomValue = Math.random()) {
 }
 
 type AudioTrack = { audio: HTMLAudioElement; url: string };
+
+async function primeAudioTrack({ audio }: AudioTrack) {
+  const volume = audio.volume;
+  audio.volume = 0;
+  try {
+    audio.load();
+    await audio.play();
+    return true;
+  } catch {
+    return false;
+  } finally {
+    audio.pause();
+    try {
+      audio.currentTime = 0;
+    } catch {
+      // Metadata may not be ready yet, so there may be no seekable range.
+    }
+    audio.volume = volume;
+  }
+}
 
 export function useCelebrationSound(cue: CelebrationSoundCue | undefined, rainActive = false) {
   const [enabled, setEnabled] = useState(false);
@@ -222,8 +250,13 @@ export function useCelebrationSound(cue: CelebrationSoundCue | undefined, rainAc
   );
 
   const enable = useCallback(async () => {
+    if (enabled) return true;
     const htmlAudioSupported = typeof Audio !== "undefined";
-    const rainReady = await ensureRainAmbience().prepare();
+    const rainPreparation = ensureRainAmbience().prepare();
+    const htmlAudioPreparation = htmlAudioSupported
+      ? Promise.all([...ensureHomeRunAudioTracks(), ...ensureWinAudioTracks()].map(primeAudioTrack))
+      : Promise.resolve([]);
+    const [rainReady] = await Promise.all([rainPreparation, htmlAudioPreparation]);
     if (!htmlAudioSupported && !rainReady) {
       setError("Scene audio is not supported in this browser.");
       return false;
@@ -231,12 +264,8 @@ export function useCelebrationSound(cue: CelebrationSoundCue | undefined, rainAc
 
     try {
       if (htmlAudioSupported) {
-        ensureHomeRunAudioTracks().forEach(({ audio }) => {
-          audio.load();
-        });
-        ensureWinAudioTracks().forEach(({ audio }) => {
-          audio.load();
-        });
+        ensureHomeRunAudioTracks();
+        ensureWinAudioTracks();
       }
       setError("");
       setEnabled(true);
@@ -245,7 +274,7 @@ export function useCelebrationSound(cue: CelebrationSoundCue | undefined, rainAc
       setError("The browser blocked audio. Try turning sound on again.");
       return false;
     }
-  }, [ensureHomeRunAudioTracks, ensureRainAmbience, ensureWinAudioTracks]);
+  }, [enabled, ensureHomeRunAudioTracks, ensureRainAmbience, ensureWinAudioTracks]);
 
   const toggle = useCallback(async () => {
     if (!enabled) {

@@ -1,4 +1,4 @@
-import { AppleStage, METS_DECAL_URL, type StadiumScoreboardData, useActuatorSimulation } from "@apple/apple-3d";
+import { AppleStage, type StadiumScoreboardData, useActuatorSimulation } from "@apple/apple-3d";
 import { METS_TEAM_ID } from "@apple/mlb-live-feed";
 import { type GameSnapshot, MAX_STROKE_MM } from "@apple/protocol";
 import { Scoreboard } from "@apple/scoreboard-ui";
@@ -219,7 +219,7 @@ export function App() {
 
       <header className="virtual-header">
         <div className="virtual-brand">
-          <img className="brand-apple" src={METS_DECAL_URL} alt="" />
+          <img className="brand-logo" src="/favicon.png" alt="" />
           <div>
             <strong>Virtual Apple</strong>
             <small>Citi Field · center field</small>

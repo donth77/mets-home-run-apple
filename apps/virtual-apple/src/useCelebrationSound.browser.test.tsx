@@ -3,10 +3,10 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  type CelebrationSoundCue,
   HOME_RUN_TRACK_URLS,
   useCelebrationSound,
   WIN_TRACK_URLS,
-  type CelebrationSoundCue,
 } from "./useCelebrationSound";
 
 const rainAmbienceTestState = vi.hoisted(() => ({
@@ -96,7 +96,11 @@ describe("celebration recording playback", () => {
 
     await act(async () => result.current.toggle());
     expect(audioInstances.map(({ src }) => src)).toEqual([...HOME_RUN_TRACK_URLS, ...WIN_TRACK_URLS]);
-    const homeRunAudio = audioInstances.find(({ src }) => src === "/audio/hr4.mp3");
+    expect(audioInstances.every(({ play }) => play.mock.calls.length === 1)).toBe(true);
+    audioInstances.forEach(({ play }) => {
+      play.mockClear();
+    });
+    const homeRunAudio = audioInstances.find(({ src }) => src === HOME_RUN_TRACK_URLS[3]);
     expect(homeRunAudio).toBeDefined();
     if (!homeRunAudio) throw new Error("Expected the fourth home-run audio track.");
     expect(homeRunAudio.volume).toBe(0.82);
@@ -112,7 +116,7 @@ describe("celebration recording playback", () => {
     vi.mocked(Math.random).mockReturnValue(0);
     rerender({ cue: { id: "777686:home-run", kind: "HOME_RUN" } });
     expect(homeRunAudio.play).toHaveBeenCalledOnce();
-    const firstHomeRunAudio = audioInstances.find(({ src }) => src === "/audio/hr1.mp3");
+    const firstHomeRunAudio = audioInstances.find(({ src }) => src === HOME_RUN_TRACK_URLS[0]);
     expect(firstHomeRunAudio).toBeDefined();
     if (!firstHomeRunAudio) throw new Error("Expected the first home-run audio track.");
     expect(firstHomeRunAudio.play).not.toHaveBeenCalled();
@@ -133,8 +137,12 @@ describe("celebration recording playback", () => {
 
     await act(async () => result.current.toggle());
     expect(audioInstances.map(({ src }) => src)).toEqual([...HOME_RUN_TRACK_URLS, ...WIN_TRACK_URLS]);
-    const firstWinAudio = audioInstances.find(({ src }) => src === "/audio/win.mp3");
-    const secondWinAudio = audioInstances.find(({ src }) => src === "/audio/win2.mp3");
+    expect(audioInstances.every(({ play }) => play.mock.calls.length === 1)).toBe(true);
+    audioInstances.forEach(({ play }) => {
+      play.mockClear();
+    });
+    const firstWinAudio = audioInstances.find(({ src }) => src === WIN_TRACK_URLS[0]);
+    const secondWinAudio = audioInstances.find(({ src }) => src === WIN_TRACK_URLS[1]);
     expect(firstWinAudio).toBeDefined();
     expect(secondWinAudio).toBeDefined();
     if (!firstWinAudio || !secondWinAudio) throw new Error("Expected both Mets-win audio tracks.");

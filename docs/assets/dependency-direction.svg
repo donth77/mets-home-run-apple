@@ -1,0 +1,156 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="700" viewBox="0 0 1200 700" role="img" aria-labelledby="title description">
+  <title id="title">Mets Home Run Apple dependency direction</title>
+  <desc id="description">Applications and test targets compose browser packages or firmware adapters. Those layers depend inward on versioned protocol contracts and the canonical C++ core. The optional edge worker is transport only and has no path to the decision core.</desc>
+
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#061326" />
+      <stop offset="1" stop-color="#0a1b31" />
+    </linearGradient>
+    <linearGradient id="foundation" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#123b70" />
+      <stop offset="1" stop-color="#0b274c" />
+    </linearGradient>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M32 0H0V32" fill="none" stroke="#8ab2da" stroke-opacity="0.05" />
+    </pattern>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="160%">
+      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#000814" flood-opacity="0.42" />
+    </filter>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M1 1L9 5L1 9Z" fill="#65a5e8" />
+    </marker>
+    <marker id="arrowMint" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M1 1L9 5L1 9Z" fill="#55d6bb" />
+    </marker>
+    <marker id="arrowOrange" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M1 1L9 5L1 9Z" fill="#ff7130" />
+    </marker>
+    <style>
+      text { font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .title { fill: #ffffff; font-size: 29px; font-weight: 820; }
+      .subtitle { fill: #a9c0da; font-size: 16px; font-weight: 500; }
+      .section { fill: #8fb4dc; font-size: 13px; font-weight: 850; letter-spacing: 2px; }
+      .card-title { fill: #ffffff; font-size: 19px; font-weight: 800; }
+      .body { fill: #c8d8e8; font-size: 14px; font-weight: 520; }
+      .small { fill: #8eabc7; font-size: 12px; font-weight: 650; }
+      .package { fill: #dbeaff; font-size: 13px; font-weight: 720; }
+    </style>
+  </defs>
+
+  <rect width="1200" height="700" rx="28" fill="url(#background)" />
+  <rect width="1200" height="700" rx="28" fill="url(#grid)" />
+  <rect x="1.5" y="1.5" width="1197" height="697" rx="26.5" fill="none" stroke="#23466d" stroke-width="3" />
+
+  <text x="56" y="57" class="title">Dependencies flow inward</text>
+  <text x="56" y="82" class="subtitle">Products compose adapters; the core never imports a framework, network, or device layer.</text>
+
+  <text x="56" y="124" class="section">PRODUCTS + TEST TARGETS</text>
+  <g filter="url(#shadow)">
+    <rect x="56" y="140" width="244" height="82" rx="15" fill="#0d2543" stroke="#3879b7" />
+    <circle cx="84" cy="168" r="11" fill="#1675d1" />
+    <path d="M78 164h12M78 168h8M78 172h10" fill="none" stroke="#ffffff" stroke-width="1.6" stroke-linecap="round" />
+    <text x="105" y="174" class="card-title">Apple Lab</text>
+    <text x="80" y="201" class="small">local manager + simulator</text>
+
+    <rect x="320" y="140" width="244" height="82" rx="15" fill="#0d2543" stroke="#ff6b22" />
+    <circle cx="348" cy="168" r="11" fill="#ff5910" />
+    <rect x="342" y="163" width="12" height="10" rx="1.5" fill="none" stroke="#ffffff" stroke-width="1.5" />
+    <path d="M342 166h12" stroke="#ffffff" stroke-width="1.5" />
+    <text x="369" y="174" class="card-title">Virtual Apple</text>
+    <text x="344" y="201" class="small">public static game-day site</text>
+
+    <rect x="584" y="140" width="244" height="82" rx="15" fill="#0d2543" stroke="#3879b7" />
+    <circle cx="612" cy="168" r="11" fill="#1675d1" />
+    <rect x="606" y="163" width="12" height="10" rx="1.5" fill="none" stroke="#ffffff" stroke-width="1.5" />
+    <path d="M609 167l2 1.5-2 1.5M613 171h3" fill="none" stroke="#ffffff" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
+    <text x="633" y="174" class="card-title">Native tests</text>
+    <text x="608" y="201" class="small">host compiler + golden traces</text>
+
+    <rect x="848" y="140" width="296" height="82" rx="15" fill="#0d2b33" stroke="#42bfa6" />
+    <circle cx="876" cy="168" r="11" fill="#208c7b" />
+    <rect x="872" y="164" width="8" height="8" rx="1" fill="none" stroke="#ffffff" stroke-width="1.4" />
+    <path d="M870 165h2M870 169h2M880 165h2M880 169h2M873 162v2M877 162v2M873 172v2M877 172v2" stroke="#ffffff" stroke-width="1.2" stroke-linecap="round" />
+    <text x="897" y="174" class="card-title">Nano ESP32 firmware</text>
+    <text x="872" y="201" class="small">autonomous physical device</text>
+  </g>
+
+  <g fill="none" stroke="#65a5e8" stroke-width="2.5" stroke-linecap="round" marker-end="url(#arrow)">
+    <path d="M178 222V263" />
+    <path d="M442 222V263" />
+    <path d="M706 222V522H770V542" />
+  </g>
+  <path d="M996 222V263" fill="none" stroke="#55d6bb" stroke-width="2.5" stroke-linecap="round" marker-end="url(#arrowMint)" />
+
+  <text x="56" y="270" class="section">COMPOSITION + ADAPTER LAYERS</text>
+  <g filter="url(#shadow)">
+    <rect x="56" y="286" width="620" height="200" rx="19" fill="#0b1e36" stroke="#356d9f" stroke-width="1.5" />
+    <text x="82" y="321" class="card-title">Shared browser packages</text>
+    <text x="82" y="344" class="small">Imported by one or both browser applications</text>
+
+    <g transform="translate(82 365)">
+      <rect width="158" height="38" rx="10" fill="#12345b" stroke="#ff6b22" />
+      <text x="79" y="24" text-anchor="middle" class="package">game-core-wasm</text>
+      <rect x="170" width="158" height="38" rx="10" fill="#12345b" stroke="#356d9f" />
+      <text x="249" y="24" text-anchor="middle" class="package">mlb-live-feed</text>
+      <rect x="340" width="126" height="38" rx="10" fill="#12345b" stroke="#356d9f" />
+      <text x="403" y="24" text-anchor="middle" class="package">apple-3d</text>
+      <rect x="478" width="116" height="38" rx="10" fill="#12345b" stroke="#356d9f" />
+      <text x="536" y="24" text-anchor="middle" class="package">scoreboard-ui</text>
+
+      <rect y="52" width="158" height="38" rx="10" fill="#12345b" stroke="#356d9f" />
+      <text x="79" y="76" text-anchor="middle" class="package">test-fixtures</text>
+      <rect x="170" y="52" width="158" height="38" rx="10" fill="#1f2c42" stroke="#6a7890" />
+      <text x="249" y="76" text-anchor="middle" class="package">web-debug</text>
+      <text x="342" y="77" class="small">Virtual-only local demo gate</text>
+    </g>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="710" y="286" width="226" height="200" rx="19" fill="#0c2a32" stroke="#318f80" stroke-width="1.5" />
+    <text x="736" y="321" class="card-title">Firmware adapters</text>
+    <text x="736" y="349" class="body">HTTPS + Wi-Fi</text>
+    <text x="736" y="378" class="body">NVS persistence</text>
+    <text x="736" y="407" class="body">Display + sleep</text>
+    <text x="736" y="436" class="body">Motion + watchdog</text>
+    <text x="736" y="466" class="small">Hardware policy stays here.</text>
+  </g>
+
+  <g>
+    <rect x="970" y="286" width="174" height="200" rx="19" fill="#251b1a" stroke="#ff7130" stroke-width="1.5" stroke-dasharray="7 6" />
+    <rect x="990" y="307" width="74" height="21" rx="10.5" fill="#ff5910" />
+    <text x="1027" y="322" text-anchor="middle" fill="#ffffff" font-size="10.5" font-weight="850" letter-spacing=".8">OPTIONAL</text>
+    <text x="990" y="359" class="card-title">Edge cache</text>
+    <text x="990" y="387" class="body">Allowlist</text>
+    <text x="990" y="414" class="body">Size limits</text>
+    <text x="990" y="441" class="body">Response cache</text>
+    <text x="990" y="467" class="small">Transport only</text>
+  </g>
+  <path d="M970 385H681" fill="none" stroke="#ff7130" stroke-width="2.5" stroke-dasharray="7 7" stroke-linecap="round" marker-end="url(#arrowOrange)" />
+
+  <g fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M366 486V518H330V542" stroke="#65a5e8" marker-end="url(#arrow)" />
+    <path d="M160 486V507H770V542" stroke="#ff7130" marker-end="url(#arrowOrange)" />
+    <path d="M823 486V518H770V542" stroke="#55d6bb" marker-end="url(#arrowMint)" />
+  </g>
+
+  <text x="56" y="549" class="section">AUTHORITATIVE FOUNDATIONS</text>
+  <g filter="url(#shadow)">
+    <rect x="140" y="565" width="380" height="94" rx="18" fill="url(#foundation)" stroke="#4b8ac7" stroke-width="2" />
+    <text x="166" y="602" class="card-title">@apple/protocol</text>
+    <text x="166" y="629" class="body">Versioned inputs, snapshots, commands, and IDs</text>
+    <text x="166" y="649" class="small">The stable contract across target boundaries</text>
+
+    <rect x="580" y="565" width="380" height="94" rx="18" fill="url(#foundation)" stroke="#ff6b22" stroke-width="2" />
+    <text x="606" y="602" class="card-title">firmware/lib/core</text>
+    <text x="606" y="629" class="body">Canonical game decisions + sequence safety</text>
+    <text x="606" y="649" class="small">No framework, network, storage, or GPIO imports</text>
+  </g>
+
+  <g transform="translate(969 581)">
+    <line x1="0" y1="0" x2="42" y2="0" stroke="#65a5e8" stroke-width="2.5" />
+    <text x="52" y="5" class="small">dependency</text>
+    <line x1="0" y1="31" x2="42" y2="31" stroke="#ff7130" stroke-width="2.5" stroke-dasharray="7 6" />
+    <text x="52" y="36" class="small">data only</text>
+  </g>
+</svg>

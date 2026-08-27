@@ -1,3 +1,5 @@
-# MLB Feed Cache
+# MLB feed cache
 
-Optional stateless Worker for the public site. It allowlists narrow request patterns, imposes time/size limits and caches confirmed upstream responses. It never detects events, stores device credentials or proxies arbitrary URLs.
+An optional stateless Worker for Virtual Apple. It accepts only a small set of MLB request shapes, applies time and size limits, and caches successful upstream responses.
+
+It does not detect game events, hold device credentials, or proxy arbitrary URLs.

@@ -45,7 +45,7 @@ async function core() {
   return instance;
 }
 
-describe("canonical game core WASM boundary", () => {
+describe("canonical core WASM boundary", () => {
   it("matches the native confirmed-home-run golden trace and timing", async () => {
     const instance = await core();
     const update = game("20260827_190010", "INCREMENTAL");

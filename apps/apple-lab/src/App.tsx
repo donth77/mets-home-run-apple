@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { METS_DECAL_URL } from "@apple/apple-3d";
 import {
   createRecordedDiagnosticEvent,
   fakeDeviceTimeline,
@@ -58,7 +57,7 @@ export function App() {
       </a>
       <aside className="manager-sidebar">
         <div className="manager-brand">
-          <img src={METS_DECAL_URL} alt="" />
+          <img src="/favicon.png" alt="" />
           <div>
             <strong>Apple Lab</strong>
             <small>Local device manager</small>

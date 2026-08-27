@@ -1,22 +1,24 @@
-# MLB live-feed transport
+# MLB live feed
 
-Shared read-only MLB schedule, live-feed, and historical-replay adapter for Apple Lab and Virtual Apple. This package does not decide whether an event is a Mets home run or win; it emits versioned normalized evidence for the canonical compiled C++ core.
+The read-only schedule, live-game, and replay adapter shared by Apple Lab and Virtual Apple. It turns MLB responses into versioned evidence for the C++ core; it does not decide whether the Mets hit a home run or won.
 
-## Modules
+## Main modules
 
-- `client.ts` — stateful bootstrap/diff client and cursor delivery;
-- `transport.ts` — status validation, abort/deadline handling, streaming byte caps, and JSON decoding;
-- `jsonPatch.ts` — defensive RFC 6902 application;
-- `feedPayload.ts` — full-feed and patch-envelope shape checks;
-- `feedNormalization.ts` — snapshots and normalized play evidence;
-- `schedule.ts` — Mets schedule and season-boundary reads;
-- `historical.ts` — bounded archive index and event bookmarks;
-- `timecode.ts` — MLB UTC timecode parsing/formatting;
-- `index.ts` — stable public exports only.
+| Module | Responsibility |
+| --- | --- |
+| `client.ts` | Bootstrap, patch polling, and cursor delivery |
+| `transport.ts` | Status checks, deadlines, cancellation, byte limits, and JSON parsing |
+| `jsonPatch.ts` | Defensive RFC 6902 patching |
+| `feedPayload.ts` | Full-feed and patch-envelope checks |
+| `feedNormalization.ts` | Snapshots and play evidence |
+| `schedule.ts` | Mets schedule and season dates |
+| `historical.ts` | Bounded replay indexes and bookmarks |
+| `timecode.ts` | MLB UTC timecodes |
+| `index.ts` | Stable public exports |
 
-The client bootstraps once, seeds historical plays, then requests `diffPatch` updates using the accepted upstream cursor. Unknown or rejected patch shapes trigger a full-feed fallback. State-changing responses that reuse an upstream timestamp receive a stable delivery revision so the C++ core can accept the new evidence without weakening cursor regression checks.
+The client loads one full feed, seeds earlier plays as history, and then asks for `diffPatch` updates from the last accepted cursor. An unknown or rejected patch shape triggers a bounded full-feed refresh.
 
-All network behavior is tested with synthetic `fetch` implementations. CI must remain network-free.
+All network tests use fake `fetch` implementations. CI must remain offline.
 
 ```bash
 pnpm --filter @apple/mlb-live-feed typecheck
