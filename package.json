@@ -9,16 +9,25 @@
     "node": ">=22.13.0"
   },
   "scripts": {
-    "dev:lab": "pnpm --filter @apple/apple-lab dev",
+    "dev:lab": "pnpm run wasm:build && pnpm --filter @apple/apple-lab dev",
     "dev:virtual": "pnpm --filter @apple/virtual-apple dev",
-    "build": "pnpm --filter @apple/apple-lab --filter @apple/virtual-apple run build",
-    "typecheck": "pnpm --filter @apple/apple-lab --filter @apple/virtual-apple run typecheck",
+    "native:configure": "cmake -S firmware -B .cache/native -DCMAKE_BUILD_TYPE=Debug",
+    "native:build": "pnpm run native:configure && cmake --build .cache/native --parallel",
+    "test:native": "pnpm run native:build && ctest --test-dir .cache/native --output-on-failure",
+    "wasm:build": "pnpm --filter @apple/game-core-wasm build",
+    "build": "pnpm run wasm:build && pnpm --filter @apple/apple-lab --filter @apple/virtual-apple run build",
+    "typecheck": "pnpm -r --if-present run typecheck",
+    "lint": "biome lint .",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
     "check:public": "node scripts/check-public-boundary.mjs",
     "check:assets": "node scripts/check-3d-assets.mjs",
-    "test:unit": "pnpm --filter @apple/protocol --filter @apple/test-fixtures run test",
-    "test": "pnpm run check:public && pnpm run check:assets && pnpm run test:unit"
+    "check:constants": "node scripts/check-core-constants.mjs",
+    "test:unit": "pnpm --filter @apple/protocol --filter @apple/test-fixtures --filter @apple/game-core-wasm --filter @apple/mlb-live-feed --filter @apple/apple-3d --filter @apple/scoreboard-ui --filter @apple/web-debug --filter @apple/apple-lab --filter @apple/virtual-apple run test",
+    "test": "pnpm run check:public && pnpm run check:assets && pnpm run check:constants && pnpm run test:native && pnpm run wasm:build && pnpm run test:unit"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.10",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@types/three": "^0.185.0",

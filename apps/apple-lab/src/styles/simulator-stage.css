@@ -1,0 +1,226 @@
+.simulator-stage-panel {
+  display: grid;
+  grid-template-rows: 54px auto minmax(430px, 1fr) 82px;
+  min-height: 690px;
+  overflow: hidden;
+}
+.stage-toolbar {
+  align-items: center;
+  background: #0b1823;
+  border-bottom: 1px solid #203441;
+  display: flex;
+  justify-content: space-between;
+  padding: 0 15px;
+}
+.stage-toolbar > div:first-child {
+  display: grid;
+  gap: 3px;
+}
+.stage-toolbar strong {
+  color: #d5e1e9;
+  font-size: 0.69rem;
+  letter-spacing: 0.06em;
+}
+.view-toggles {
+  display: flex;
+  gap: 11px;
+}
+.view-toggles label {
+  align-items: center;
+  color: #9bafbd;
+  display: flex;
+  font-size: 0.66rem;
+  gap: 5px;
+}
+.view-toggles input {
+  accent-color: #f26b2f;
+}
+.stage-game-strip {
+  align-items: center;
+  background: #0b1620;
+  border-bottom: 1px solid #203441;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(280px, 350px) minmax(0, 1fr);
+  min-width: 0;
+  padding: 8px 11px;
+}
+.stage-game-strip .apple-scoreboard {
+  max-width: 350px;
+}
+.game-context {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+.game-context strong {
+  color: #c8d6df;
+  font-size: 0.69rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.game-context small {
+  color: #6a8091;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.57rem;
+}
+.lab-stage-wrap {
+  min-height: 430px;
+  position: relative;
+}
+.lab-stage-wrap .apple-stage {
+  height: 100%;
+}
+.stage-badges {
+  bottom: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  left: 11px;
+  position: absolute;
+}
+.stage-badges span {
+  backdrop-filter: blur(7px);
+  background: rgba(7, 16, 24, 0.86);
+  border: 1px solid #2d4f66;
+  border-radius: 5px;
+  color: #91a8b9;
+  font-size: 0.56rem;
+  padding: 5px 7px;
+}
+.motion-control {
+  align-items: center;
+  background: #0b1620;
+  border-top: 1px solid #203441;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: 130px minmax(160px, 1fr) auto;
+  padding: 10px 14px;
+}
+.motion-readout {
+  display: grid;
+  gap: 2px;
+}
+.motion-readout > span,
+.motion-control label {
+  color: #748b9d;
+  font-size: 0.62rem;
+}
+.motion-readout strong {
+  color: #f28a50;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 1.15rem;
+}
+.motion-readout small {
+  color: #718697;
+  font-size: 0.6rem;
+}
+.motion-control label {
+  display: grid;
+  gap: 7px;
+}
+.motion-control input {
+  accent-color: #f26b2f;
+  width: 100%;
+}
+
+.secondary-button,
+.primary-button,
+.transport-controls button,
+.transport-controls select,
+.arm-button {
+  border: 1px solid #30495c;
+  border-radius: 7px;
+  min-height: 38px;
+  padding: 8px 11px;
+}
+
+.secondary-button,
+.transport-controls button,
+.transport-controls select {
+  background: #152534;
+  color: #bed0dc;
+  font-size: 0.66rem;
+}
+.secondary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+.primary-button {
+  background: #1f659a !important;
+  border-color: #438bc0 !important;
+  color: #fff !important;
+  font-weight: 800;
+}
+
+.position-card {
+  background: linear-gradient(145deg, #102c42, #0e2131);
+  border: 1px solid #2c5875;
+  border-radius: 10px;
+  display: grid;
+  gap: 5px;
+  margin: 13px 0;
+  padding: 13px;
+}
+.position-card > strong {
+  color: #f18b51;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 1.55rem;
+}
+.position-card > strong small {
+  font-size: 0.7rem;
+}
+.position-card p {
+  color: #95aaba;
+  font-size: 0.66rem;
+  line-height: 1.45;
+  margin: 0;
+}
+.telemetry-list {
+  display: grid;
+  margin: 0;
+}
+.telemetry-list div {
+  align-items: center;
+  border-bottom: 1px solid #1d303d;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 1fr auto;
+  padding: 8px 1px;
+}
+.telemetry-list dt {
+  color: #778d9f;
+  font-size: 0.66rem;
+}
+.telemetry-list dd {
+  color: #c3d1db;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.63rem;
+  margin: 0;
+}
+.telemetry-list dd[data-phase="CELEBRATION"] {
+  color: #ff9861;
+}
+.telemetry-list dd[data-phase="REVIEW"] {
+  color: #f0ce65;
+}
+.command-stack {
+  display: grid;
+  gap: 7px;
+  padding-top: 13px;
+}
+.command-stack code {
+  background: #102536;
+  border-left: 3px solid #f16a2d;
+  border-radius: 0 5px 5px 0;
+  color: #b9d6e9;
+  font-size: 0.61rem;
+  padding: 8px;
+}
+.empty-state {
+  color: #6e8495;
+  font-size: 0.68rem;
+  line-height: 1.5;
+  margin: 11px 0;
+}

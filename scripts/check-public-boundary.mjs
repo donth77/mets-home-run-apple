@@ -4,7 +4,26 @@ import { fileURLToPath } from "node:url";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const ignoredDirectories = new Set([".git", "node_modules", "dist", "coverage", ".pio", ".wrangler"]);
-const textExtensions = new Set(["", ".c", ".cc", ".cpp", ".css", ".h", ".hpp", ".html", ".ini", ".js", ".json", ".md", ".mjs", ".ts", ".tsx", ".txt", ".yaml", ".yml"]);
+const textExtensions = new Set([
+  "",
+  ".c",
+  ".cc",
+  ".cpp",
+  ".css",
+  ".h",
+  ".hpp",
+  ".html",
+  ".ini",
+  ".js",
+  ".json",
+  ".md",
+  ".mjs",
+  ".ts",
+  ".tsx",
+  ".txt",
+  ".yaml",
+  ".yml",
+]);
 
 const forbiddenPaths = [
   /^\.openai(?:\/|$)/,
@@ -28,7 +47,7 @@ async function walk(directory) {
   for (const entry of entries) {
     if (entry.isDirectory() && ignoredDirectories.has(entry.name)) continue;
     const absolute = resolve(directory, entry.name);
-    if (entry.isDirectory()) files.push(...await walk(absolute));
+    if (entry.isDirectory()) files.push(...(await walk(absolute)));
     else if (entry.isFile()) files.push(absolute);
   }
   return files;
@@ -51,7 +70,7 @@ for (const absolute of await walk(root)) {
 }
 
 if (violations.length > 0) {
-  console.error("Public-boundary check failed:\n" + violations.map((line) => `- ${line}`).join("\n"));
+  console.error(`Public-boundary check failed:\n${violations.map((line) => `- ${line}`).join("\n")}`);
   process.exitCode = 1;
 } else {
   console.log("Public-boundary check passed.");

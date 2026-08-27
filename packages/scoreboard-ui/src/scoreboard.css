@@ -1,137 +1,339 @@
-.apple-scoreboard {
-  --board-blue: #123b72;
-  --board-orange: #ff5a1f;
-  align-items: stretch;
-  background: rgba(4, 13, 26, 0.9);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 14px;
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.3);
-  color: #fff;
-  display: grid;
+.apple-scoreboard,
+.apple-scorebug {
+  --board-blue: #0b4380;
+  --board-orange: #f5672c;
+  color: #f8fbff;
   font-family: Inter, ui-sans-serif, system-ui, sans-serif;
-  grid-template-columns: minmax(126px, auto) minmax(112px, 1fr) auto;
-  min-width: min(420px, calc(100vw - 32px));
   overflow: hidden;
-  position: relative;
 }
 
+.apple-scorebug {
+  background: #071626;
+  border: 1px solid rgba(210, 228, 241, 0.46);
+  border-radius: 4px;
+  box-shadow: 0 14px 38px rgba(0, 0, 0, 0.42);
+  width: min(276px, calc(100vw - 24px));
+}
+
+.apple-scorebug__main {
+  display: grid;
+  grid-template-columns: 53.3% 46.7%;
+  min-height: 90px;
+}
+.apple-scorebug__teams {
+  display: grid;
+}
+
+.apple-scorebug__team {
+  align-items: center;
+  background: linear-gradient(90deg, var(--team-primary, #47586a), var(--team-primary-dark, #303c48));
+  display: grid;
+  gap: 6px;
+  grid-template-columns: minmax(0, 1fr) 28px;
+  min-height: 45px;
+  padding: 4px 9px;
+}
+
+.apple-scorebug__team + .apple-scorebug__team {
+  border-top: 1px solid rgba(255, 255, 255, 0.52);
+}
+.apple-scorebug__team.is-mets {
+  background: linear-gradient(90deg, #0c4f91, #083966);
+}
+.apple-scorebug__team > strong {
+  font-size: 0.92rem;
+  letter-spacing: 0.055em;
+}
+.apple-scorebug__team > b {
+  font-size: 1.48rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  text-align: right;
+}
+
+.apple-scorebug__situation {
+  background: linear-gradient(140deg, #0b2747, #061a30);
+  border-left: 1px solid rgba(255, 255, 255, 0.3);
+  display: grid;
+  grid-template-rows: 1fr 34px;
+}
+
+.apple-scorebug__situation.is-final {
+  align-items: center;
+  grid-template-rows: 1fr;
+  justify-items: center;
+}
+
+.apple-scorebug__final {
+  font-size: 0.95rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+}
+
+.apple-scorebug__upper {
+  align-items: center;
+  display: grid;
+  grid-template-columns: 1fr 43px;
+  padding: 6px 9px 3px 11px;
+}
+.apple-scorebug__upper > strong {
+  font-size: 0.95rem;
+  letter-spacing: -0.02em;
+  text-align: center;
+}
+.apple-base-diamond {
+  height: 31px;
+  position: relative;
+  width: 49px;
+}
+
+.apple-base-diamond i {
+  background: transparent;
+  border: 2px solid #dce8ef;
+  height: 14px;
+  position: absolute;
+  transform: rotate(45deg);
+  width: 14px;
+}
+
+.apple-base-diamond i.is-on {
+  background: #e9c56b;
+  border-color: #ffe08f;
+}
+.apple-base-diamond .second {
+  left: 18px;
+  top: 0;
+}
+.apple-base-diamond .third {
+  left: 6px;
+  top: 12px;
+}
+.apple-base-diamond .first {
+  left: 30px;
+  top: 12px;
+}
+
+.apple-scorebug__lower {
+  align-items: center;
+  border-top: 1px solid rgba(255, 255, 255, 0.18);
+  display: flex;
+  gap: 8px;
+  padding: 0 10px;
+}
+.apple-scorebug__lower > strong {
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+.apple-scorebug__lower > span {
+  display: flex;
+  gap: 4px;
+}
+
+.apple-scorebug__lower i {
+  background: #1d3953;
+  border: 1px solid #567088;
+  border-radius: 50%;
+  height: 9px;
+  width: 9px;
+}
+
+.apple-scorebug__lower i.is-on {
+  background: #e9c56b;
+  border-color: #ffe08f;
+}
+.apple-scorebug__lower em {
+  color: #b8c8d5;
+  font-size: 0.64rem;
+  font-style: normal;
+  font-weight: 900;
+  margin-left: auto;
+}
+
+.apple-scorebug__event {
+  align-items: center;
+  background: #e8edf0;
+  color: #14202a;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-height: 31px;
+  padding: 5px 10px;
+}
+
+.apple-scorebug__event strong {
+  color: #073f73;
+  font-size: 0.69rem;
+  letter-spacing: 0.035em;
+  line-height: 1.1;
+  text-transform: uppercase;
+}
+.apple-scorebug__event b {
+  font-size: 0.69rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 900;
+}
+
+.apple-scoreboard {
+  background: rgba(5, 15, 28, 0.96);
+  border: 1px solid #2a455c;
+  border-radius: 10px;
+  box-shadow: none;
+  max-width: 100%;
+  min-width: 0;
+  width: 100%;
+}
+
+.apple-scoreboard__header {
+  align-items: center;
+  background: linear-gradient(90deg, #071526, #0c223b);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(76px, auto) minmax(0, 1fr) auto;
+  min-height: 27px;
+  padding: 0 9px;
+}
+
+.apple-scoreboard__header > span,
+.apple-scoreboard__inning span,
+.apple-scoreboard__outs > span {
+  color: #9fb2c6;
+  font-size: 0.57rem;
+  font-weight: 850;
+  letter-spacing: 0.1em;
+}
+
+.apple-scoreboard__header > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.apple-scoreboard__header > strong {
+  color: #ffad7d;
+  font-size: 0.64rem;
+  letter-spacing: 0.065em;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.apple-scoreboard__signal {
+  align-items: center;
+  display: flex;
+  gap: 7px;
+}
+.apple-scoreboard__signal i {
+  background: var(--board-orange);
+  border-radius: 50%;
+  box-shadow: 0 0 10px rgba(245, 103, 44, 0.75);
+  display: block;
+  height: 7px;
+  width: 7px;
+}
+.apple-scoreboard__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 104px;
+  min-width: 0;
+}
 .apple-scoreboard__teams {
   display: grid;
 }
 
 .apple-scoreboard__team {
   align-items: center;
-  background: #1e3550;
+  background: linear-gradient(90deg, #182f48, #13273c);
   display: grid;
-  gap: 18px;
-  grid-template-columns: 1fr auto;
-  min-height: 38px;
-  padding: 0 13px;
+  gap: 9px;
+  grid-template-columns: 42px minmax(0, 1fr) 28px;
+  min-height: 34px;
+  min-width: 0;
+  padding: 0 10px;
 }
 
 .apple-scoreboard__team + .apple-scoreboard__team {
-  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  border-top: 1px solid rgba(255, 255, 255, 0.13);
 }
-
 .apple-scoreboard__team--mets {
-  background: var(--board-blue);
+  background: linear-gradient(90deg, #0d4d8b, #0a3b6c);
   box-shadow: inset 4px 0 0 var(--board-orange);
 }
-
-.apple-scoreboard__team span,
-.apple-scoreboard__state span,
-.apple-scoreboard__outs > span,
-.apple-scoreboard__game {
-  font-size: 0.68rem;
-  font-weight: 800;
-  letter-spacing: 0.11em;
-}
-
-.apple-scoreboard__team strong {
-  font-size: 1.22rem;
-  font-variant-numeric: tabular-nums;
-}
-
-.apple-scoreboard__state {
-  align-content: center;
-  display: grid;
-  gap: 5px;
-  justify-items: center;
-  padding: 9px 14px;
-  text-align: center;
-}
-
-.apple-scoreboard__state strong {
-  color: #ffb080;
+.apple-scoreboard__abbr {
   font-size: 0.74rem;
-  letter-spacing: 0.08em;
+  font-weight: 900;
+  letter-spacing: 0.055em;
+}
+.apple-scoreboard__name {
+  color: #b9c9d7;
+  font-size: 0.64rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.apple-scoreboard__team > strong {
+  font-size: 1.12rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  text-align: right;
 }
 
-.apple-scoreboard__state span {
-  color: #d6e2f1;
-}
-
-.apple-scoreboard__outs {
-  align-content: center;
-  border-left: 1px solid rgba(255, 255, 255, 0.12);
+.apple-scoreboard__game-state {
+  border-left: 1px solid rgba(255, 255, 255, 0.13);
   display: grid;
-  gap: 8px;
-  justify-items: center;
-  padding: 10px 14px;
+  grid-template-rows: 1fr 1fr;
 }
-
-.apple-scoreboard__outs > span {
-  color: #91a5bd;
-  font-size: 0.58rem;
+.apple-scoreboard__inning,
+.apple-scoreboard__outs {
+  align-items: center;
+  display: grid;
+  gap: 4px;
+  grid-template-columns: 1fr auto;
+  min-width: 0;
+  padding: 0 8px;
 }
-
+.apple-scoreboard__inning {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.13);
+}
+.apple-scoreboard__inning strong {
+  font-size: 0.68rem;
+  white-space: nowrap;
+}
 .apple-scoreboard__outs div {
   display: flex;
-  gap: 5px;
+  gap: 4px;
 }
-
 .apple-scoreboard__outs i {
-  background: #28384b;
+  background: #273a4e;
+  border: 1px solid #42566a;
   border-radius: 50%;
-  display: block;
   height: 8px;
   width: 8px;
 }
-
 .apple-scoreboard__outs i.is-on {
-  background: #ffad28;
-  box-shadow: 0 0 9px rgba(255, 173, 40, 0.72);
+  background: #ffb329;
+  border-color: #ffd270;
 }
 
-.apple-scoreboard__game {
-  background: var(--board-orange);
-  border-radius: 999px;
-  color: #fff;
-  padding: 4px 8px;
-  position: absolute;
-  right: 8px;
-  top: 6px;
+.apple-scoreboard__event {
+  background: rgba(2, 10, 19, 0.8);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  color: #c3d1dc;
+  font-size: 0.62rem;
+  line-height: 1.25;
+  min-height: 26px;
+  overflow: hidden;
+  padding: 6px 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.apple-scoreboard--lab {
-  border-radius: 8px;
-  box-shadow: none;
-  min-width: 0;
-  width: 100%;
-}
-
-@media (max-width: 560px) {
-  .apple-scoreboard {
-    grid-template-columns: minmax(110px, auto) minmax(92px, 1fr) auto;
+@media (max-width: 520px) {
+  .apple-scorebug {
+    width: min(276px, calc(100vw - 20px));
   }
-
-  .apple-scoreboard__team {
-    gap: 10px;
-    padding-inline: 10px;
-  }
-
-  .apple-scoreboard__state,
-  .apple-scoreboard__outs {
-    padding-inline: 9px;
+  .apple-scorebug__main {
+    grid-template-columns: 53.3% 46.7%;
   }
 }

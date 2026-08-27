@@ -1,0 +1,17 @@
+{
+  "name": "@apple/mlb-live-feed",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "scripts": {
+    "test": "vitest run --config ../../vitest.config.ts src/index.test.ts src/jsonPatch.test.ts src/schedule.test.ts src/transport.test.ts",
+    "typecheck": "tsc --noEmit --project tsconfig.json"
+  },
+  "dependencies": {
+    "@apple/protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "@apple/game-core-wasm": "workspace:*"
+  }
+}

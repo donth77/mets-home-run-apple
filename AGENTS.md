@@ -26,25 +26,26 @@ These rules apply to the complete public monorepo.
 - Add a golden trace for every rule or protocol change and compare native, WASM and embedded outputs where practical.
 - Use integer milliseconds, millimeters and stable identifiers across target boundaries.
 
-## Assets and branding
+## Module ownership
 
-- Keep the bundled Mets SVG as a separate replaceable decal; do not bake it into the apple geometry or duplicate it across apps.
-- Keep alternate personal decals and local models under ignored `user-assets/` paths.
-- Every distributable model or texture needs source, date, checksum, modifications and role in its asset manifest.
-- A generic neutral primitive is acceptable for automated renderer tests. The public-facing apple must use the calibrated modern Citi-style custom model.
+- Keep package barrels small. Stateful transport, normalization, rendering, and React orchestration belong in separate modules with package-owned tests.
+- Web app shells own navigation and composition only. Reusable widgets, workspaces, presentation rules, and scene drawing helpers belong in focused files.
+- Keep the Apple geometry and the Mets decal separate. The runtime decal must remain replaceable without modifying the 3D mesh.
+- Add or update source metadata when introducing externally sourced binary assets. Never silently replace a checked-in model or audio file.
 
-## Public-repository hygiene
+## Repository hygiene
 
-- This repository contains public implementation material only. Do not import private sourcing notes, auction research, private deployment metadata or internal planning pages.
+- Keep credentials, device tokens, local hostnames, raw diagnostic exports, and machine-local artifacts out of the repository.
 - Run `pnpm check:public` before every commit and push.
 - Do not add `CONTRIBUTING.md` until the maintainer asks for a contributor workflow.
-- Do not publish a release until explicit software, hardware, documentation and asset licenses are present.
 
 ## Verification
 
 For every change, run the narrowest relevant tests plus:
 
 ```bash
+pnpm lint
+pnpm typecheck
 pnpm check:public
 ```
 

@@ -5,6 +5,6 @@ export default defineConfig({
   plugins: [react()],
   build: {
     target: "es2022",
-    sourcemap: true,
+    sourcemap: false,
   },
 });

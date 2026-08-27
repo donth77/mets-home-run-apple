@@ -1,0 +1,319 @@
+@media (max-width: 1320px) {
+  .overview-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .overview-game {
+    grid-column: 1 / -1;
+  }
+  .recent-events {
+    grid-column: auto;
+  }
+  .simulator-grid {
+    grid-template-columns: 230px minmax(500px, 1fr);
+  }
+  .telemetry-panel {
+    grid-column: 1 / -1;
+    max-height: none;
+  }
+  .telemetry-list {
+    grid-template-columns: repeat(4, 1fr);
+  }
+  .telemetry-list div {
+    padding-inline: 10px;
+  }
+  .test-control-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 1040px) {
+  .manager-shell {
+    grid-template-columns: 218px minmax(0, 1fr);
+  }
+  .sidebar-device {
+    display: none;
+  }
+  .overview-grid,
+  .live-grid,
+  .recording-grid,
+  .historical-grid,
+  .diagnostics-grid {
+    grid-template-columns: 1fr;
+  }
+  .recent-events,
+  .diagnostic-timeline {
+    grid-column: auto;
+  }
+  .interlock-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .simulator-grid {
+    grid-template-columns: 1fr;
+  }
+  .scenario-panel {
+    max-height: none;
+  }
+  .scenario-list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .recording-controls,
+  .archive-controls {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 780px) {
+  .manager-shell {
+    display: block;
+  }
+  .manager-sidebar {
+    border-bottom: 1px solid #20303e;
+    border-right: 0;
+    height: auto;
+    padding: 12px;
+    position: relative;
+  }
+  .manager-brand {
+    padding-bottom: 11px;
+  }
+  .workspace-nav {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: thin;
+  }
+  .workspace-nav button {
+    flex: 0 0 156px;
+    min-height: 50px;
+  }
+  .workspace-nav button small {
+    display: none;
+  }
+  .sidebar-footer {
+    display: none;
+  }
+  .manager-topbar {
+    height: 60px;
+    padding-inline: 15px;
+  }
+  .topbar-status > span:not(.transport-pill) {
+    display: none;
+  }
+  .manager-content {
+    padding: 22px 13px 38px;
+  }
+  .workspace-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 13px;
+  }
+  .workspace-heading__actions {
+    width: 100%;
+  }
+  .mode-pill {
+    justify-content: center;
+    width: 100%;
+  }
+  .overview-game__body {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+  .current-play {
+    border-left: 0;
+    border-top: 1px solid #29404f;
+    padding: 16px 0 0;
+  }
+  .health-list,
+  .settings-grid {
+    grid-template-columns: 1fr;
+  }
+  .live-game-detail {
+    grid-template-columns: 1fr;
+  }
+  .recording-controls,
+  .archive-controls {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+  .replay-buttons label {
+    margin-left: 0;
+  }
+  .replay-receipts li {
+    grid-template-columns: 90px 80px 1fr;
+  }
+  .replay-receipts li code,
+  .replay-receipts li > span:last-child {
+    grid-column: 1 / -1;
+  }
+  .scenario-list {
+    grid-template-columns: 1fr 1fr;
+  }
+  .stage-game-strip {
+    grid-template-columns: 1fr;
+  }
+  .simulator-stage-panel {
+    grid-template-rows: 72px auto minmax(450px, 1fr) auto;
+  }
+  .motion-control {
+    grid-template-columns: 1fr;
+  }
+  .transport-controls {
+    grid-template-columns: repeat(3, auto);
+  }
+  .timeline-control {
+    grid-column: 1 / -1;
+  }
+  .trace-row {
+    grid-template-columns: 58px 78px 1fr;
+  }
+  .trace-row code {
+    grid-column: 2 / -1;
+    text-align: left;
+  }
+  .service-safety {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .service-safety button {
+    width: 100%;
+  }
+  .detail-list--wide {
+    grid-template-columns: 1fr;
+  }
+  .core-receipt__summary {
+    grid-template-columns: auto 1fr;
+  }
+}
+
+@media (max-width: 520px) {
+  .manager-topbar > div:first-child strong {
+    max-width: 165px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .transport-pill {
+    font-size: 0.52rem;
+  }
+  .overview-grid {
+    grid-template-columns: 1fr;
+  }
+  .live-source-switch {
+    grid-template-columns: 1fr;
+  }
+  .bookmark-list li {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+  .bookmark-actions button {
+    flex: 1;
+  }
+  .historical-score-panel .live-game-detail {
+    grid-template-columns: 1fr;
+  }
+  .overview-game,
+  .apple-state-card,
+  .device-health,
+  .recent-events,
+  .autonomy-card {
+    grid-column: auto;
+  }
+  .overview-game__body {
+    padding-top: 15px;
+  }
+  .health-list,
+  .scenario-list,
+  .interlock-grid,
+  .test-control-grid {
+    grid-template-columns: 1fr;
+  }
+  .panel-title--timeline {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .timeline-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .timeline-filters {
+    overflow-x: auto;
+  }
+  .timeline-data-actions {
+    justify-content: space-between;
+  }
+  .timeline-pagination {
+    grid-template-columns: 1fr auto;
+  }
+  .timeline-pagination > div {
+    grid-column: 1 / -1;
+    justify-content: space-between;
+  }
+  .timeline-event {
+    grid-template-columns: 10px 52px minmax(0, 1fr);
+  }
+  .timeline-event__content p {
+    font-size: 0.65rem;
+  }
+  .stage-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .stage-badges {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .telemetry-list {
+    grid-template-columns: 1fr;
+  }
+  .transport-controls {
+    grid-template-columns: 1fr 1fr;
+  }
+  .transport-controls .timeline-control {
+    grid-column: 1 / -1;
+  }
+  .trace-row {
+    grid-template-columns: 54px 1fr;
+  }
+  .trace-row p,
+  .trace-row code {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition: none !important;
+  }
+}
+
+@media (prefers-contrast: more) {
+  .manager-panel,
+  .manager-sidebar,
+  .manager-topbar {
+    border-color: #7690a3;
+  }
+  .workspace-heading p,
+  .timeline-event__content p,
+  .health-item small {
+    color: #b9cad6;
+  }
+}
+
+@media (forced-colors: active) {
+  .manager-panel,
+  .sidebar-device,
+  .workspace-nav button,
+  .health-item {
+    border: 1px solid CanvasText;
+  }
+  .mode-pill,
+  .state-badge,
+  .event-result {
+    border: 1px solid CanvasText;
+  }
+}

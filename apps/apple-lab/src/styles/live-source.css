@@ -1,0 +1,143 @@
+.live-notice,
+.settings-notice {
+  align-items: center;
+  background: #102a40;
+  border: 1px solid #2c5f83;
+  border-radius: 9px;
+  display: flex;
+  gap: 13px;
+  margin-bottom: 17px;
+  padding: 11px 14px;
+}
+
+.live-notice strong,
+.settings-notice strong {
+  color: #b9def5;
+  font-size: 0.7rem;
+}
+.live-notice span,
+.settings-notice span {
+  color: #87a5ba;
+  font-size: 0.68rem;
+}
+
+.live-source-switch {
+  background: #091720;
+  border: 1px solid #223746;
+  border-radius: 11px;
+  display: grid;
+  gap: 7px;
+  grid-template-columns: 1fr 1fr;
+  margin-bottom: 15px;
+  padding: 7px;
+}
+
+fieldset.live-source-switch {
+  min-width: 0;
+}
+
+.live-source-switch button {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: #8095a5;
+  display: grid;
+  gap: 3px;
+  min-height: 54px;
+  padding: 8px 11px;
+  text-align: left;
+}
+
+.live-source-switch button:hover {
+  background: #10212e;
+  color: #c7d7e2;
+}
+.live-source-switch button.is-active {
+  background: #12314a;
+  border-color: #326789;
+  color: #eef7fc;
+}
+.live-source-switch span {
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+.live-source-switch small {
+  color: #71889a;
+  font-size: 0.62rem;
+}
+.live-source-switch button.is-active small {
+  color: #9bb8cb;
+}
+
+.live-notice--recording {
+  background: #142820;
+  border-color: #315a47;
+}
+.live-notice--recording strong {
+  color: #aee1c1;
+}
+.live-notice--recording span {
+  color: #8eac9b;
+}
+
+.recording-controls {
+  align-items: end;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(160px, 0.65fr) auto minmax(260px, 1.35fr) auto;
+  margin-bottom: 16px;
+  padding: 13px;
+}
+
+.recording-controls label {
+  color: #8298a9;
+  display: grid;
+  font-size: 0.65rem;
+  gap: 6px;
+}
+
+.recording-controls input,
+.recording-controls select {
+  background: #08141e;
+  border: 1px solid #2a4354;
+  border-radius: 7px;
+  color: #c5d4de;
+  min-height: 40px;
+  padding: 8px 10px;
+  width: 100%;
+}
+
+.recording-controls button {
+  min-height: 40px;
+}
+.primary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+.stop-button {
+  background: #4b241d;
+  border: 1px solid #8d4937;
+  border-radius: 7px;
+  color: #ffc2ad;
+  font-size: 0.67rem;
+  font-weight: 800;
+  min-height: 38px;
+  padding: 8px 11px;
+}
+
+.recording-error {
+  align-items: center;
+  background: #3a1d1d;
+  border: 1px solid #7c3a3a;
+  border-radius: 8px;
+  color: #e8a9a9;
+  display: flex;
+  font-size: 0.68rem;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 11px 13px;
+}
+
+.recording-error strong {
+  color: #ffd0c9;
+}

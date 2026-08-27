@@ -1,0 +1,111 @@
+.service-safety {
+  align-items: center;
+  background: #111e28;
+  border: 1px solid #344959;
+  border-radius: 11px;
+  display: flex;
+  gap: 20px;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  padding: 16px 18px;
+}
+.service-safety.is-armed {
+  background: #312311;
+  border-color: #855b27;
+}
+.service-safety > div {
+  display: grid;
+  gap: 5px;
+}
+.service-safety strong {
+  color: #e8f0f5;
+  font-size: 0.82rem;
+}
+.service-safety p {
+  color: #8499a9;
+  font-size: 0.67rem;
+  line-height: 1.45;
+  margin: 0;
+  max-width: 760px;
+}
+.service-safety.is-armed span {
+  color: #e7ad5b;
+}
+.arm-button {
+  background: #b95827;
+  border-color: #ee814c;
+  color: #fff;
+  flex: 0 0 auto;
+  font-size: 0.68rem;
+  font-weight: 850;
+}
+.interlock-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 16px;
+}
+.test-control-panel,
+.service-log {
+  padding: 18px;
+}
+.test-control-grid {
+  display: grid;
+  gap: 11px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  padding-top: 15px;
+}
+.test-control-card {
+  background: #0a1823;
+  border: 1px solid #223b4c;
+  border-radius: 9px;
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  padding: 13px;
+}
+.test-control-card__icon {
+  background: #173a55;
+  border: 1px solid #34709a;
+  border-radius: 5px;
+  height: 25px;
+  position: relative;
+  width: 25px;
+}
+.test-control-card__icon::after {
+  background: #f17b40;
+  content: "";
+  height: 7px;
+  inset: 8px;
+  position: absolute;
+  width: 7px;
+}
+.test-control-card h3 {
+  color: #dce7ef;
+  font-size: 0.75rem;
+  margin: 2px 0 0;
+}
+.test-control-card p {
+  color: #7f94a4;
+  font-size: 0.65rem;
+  line-height: 1.45;
+  margin: 0;
+  min-height: 38px;
+}
+.test-control-card button {
+  background: #1d5e8c;
+  border: 1px solid #367cae;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 0.64rem;
+  min-height: 37px;
+}
+.test-control-card button:disabled {
+  background: #14222d;
+  border-color: #293d4b;
+  color: #617584;
+  cursor: not-allowed;
+}
+.service-log {
+  margin-top: 16px;
+}

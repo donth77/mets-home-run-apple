@@ -8,6 +8,7 @@
     "@apple/protocol": "workspace:*"
   },
   "scripts": {
-    "test": "vitest run --config ../../vitest.config.ts src/index.test.ts"
+    "test": "vitest run --config ../../vitest.config.ts src/index.test.ts",
+    "typecheck": "tsc --noEmit --project tsconfig.json"
   }
 }

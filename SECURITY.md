@@ -1,10 +1,10 @@
 # Security Policy
 
-This project controls moving low-voltage hardware. Treat motion authorization, firmware updates and credentials as security-sensitive even when the device is used only at home.
+This project controls moving low-voltage hardware. Treat motion authorization, firmware updates and credentials as security-sensitive even when the device is used only at home. See the [detailed security model](docs/SECURITY.md) for browser, device, and deployment boundaries.
 
 ## Reporting
 
-Do not open a public issue for a vulnerability that could expose Wi-Fi credentials, bypass local motion controls, enable arbitrary proxying or permit an unsafe firmware update. Contact the repository owner privately through the security-reporting method configured on the Git hosting service. A dedicated address will be added before the first public release.
+Do not open a public issue for a vulnerability that could expose Wi-Fi credentials, bypass local motion controls, enable arbitrary proxying, or permit an unsafe firmware update. Contact the repository owner privately through the security-reporting method configured on the Git hosting service. A dedicated address will be added before the first public release.
 
 ## Baseline requirements
 

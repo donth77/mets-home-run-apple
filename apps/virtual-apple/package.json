@@ -6,13 +6,25 @@
   "scripts": {
     "dev": "vite --port 4174",
     "build": "tsc --noEmit && vite build",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@apple/apple-3d": "workspace:*",
+    "@apple/game-core-wasm": "workspace:*",
+    "@apple/mlb-live-feed": "workspace:*",
+    "@apple/protocol": "workspace:*",
     "@apple/scoreboard-ui": "workspace:*",
     "@apple/test-fixtures": "workspace:*",
+    "@apple/web-debug": "workspace:*",
+    "canvas-confetti": "1.9.4",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@testing-library/react": "^16.3.2",
+    "@types/canvas-confetti": "1.9.0",
+    "axe-core": "^4.13.0",
+    "happy-dom": "^20.11.8"
   }
 }

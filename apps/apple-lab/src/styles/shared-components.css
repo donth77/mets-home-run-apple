@@ -1,0 +1,143 @@
+.workspace-heading {
+  align-items: flex-end;
+  display: flex;
+  gap: 24px;
+  justify-content: space-between;
+  margin: 0 0 25px;
+}
+
+.workspace-heading > div:first-child {
+  max-width: 760px;
+}
+.eyebrow,
+.panel-title span,
+.current-play > span,
+.compact-facts dt,
+.health-item > span,
+.live-game-detail span,
+.context-callout > span,
+.selected-fixture > span,
+.stage-toolbar span,
+.game-context span,
+.command-stack > span,
+.position-card > span,
+.service-safety span {
+  color: #7890a3;
+  font-size: 0.62rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.workspace-heading h1 {
+  color: #f2f7fb;
+  font-size: clamp(1.72rem, 2.6vw, 2.55rem);
+  letter-spacing: -0.035em;
+  line-height: 1.08;
+  margin: 7px 0 8px;
+}
+
+.workspace-heading p {
+  color: #91a5b6;
+  font-size: 0.81rem;
+  line-height: 1.55;
+  margin: 0;
+}
+.workspace-heading__actions {
+  flex: 0 0 auto;
+}
+
+.mode-pill {
+  align-items: center;
+  background: #112535;
+  border: 1px solid #2c536c;
+  color: #a7c1d4;
+  display: inline-flex;
+  gap: 7px;
+  min-height: 34px;
+  padding: 8px 11px;
+}
+
+.mode-pill--live {
+  background: #0f2a20;
+  border-color: #285c43;
+  color: #9de0bb;
+}
+.mode-pill--read {
+  background: #102a43;
+  border-color: #2e638a;
+  color: #a6d4f3;
+}
+.mode-pill--safe {
+  background: #15242f;
+  border-color: #344b5c;
+  color: #b0c1ce;
+}
+.mode-pill--safe i {
+  background: #7c9bb2;
+  box-shadow: none;
+}
+.mode-pill--warning {
+  background: #3a2813;
+  border-color: #8a5d26;
+  color: #ffd190;
+}
+.mode-pill--warning i {
+  background: #f3aa45;
+  box-shadow: 0 0 8px #f3aa45;
+}
+
+.manager-panel {
+  background: linear-gradient(150deg, rgba(14, 28, 41, 0.98), rgba(10, 21, 31, 0.98));
+  border: 1px solid #223746;
+  border-radius: 13px;
+  box-shadow: 0 17px 34px rgba(0, 0, 0, 0.12);
+  min-width: 0;
+}
+
+.panel-title {
+  align-items: center;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.panel-title > div {
+  display: grid;
+  gap: 4px;
+}
+.panel-title h2 {
+  color: #edf4f9;
+  font-size: 0.91rem;
+  margin: 0;
+}
+.panel-title > small {
+  color: #73899b;
+  font-size: 0.65rem;
+}
+
+.read-only-badge {
+  background: #132d45;
+  border: 1px solid #2e648e;
+  color: #a8d6f5;
+  padding: 5px 8px;
+}
+.state-badge {
+  padding: 5px 8px;
+}
+.state-badge--safe {
+  background: #102b20;
+  border: 1px solid #2b6146;
+  color: #93d7af;
+}
+.state-badge--live {
+  background: #193354;
+  border: 1px solid #396b99;
+  color: #afd9f6;
+}
+.health-score {
+  background: #122c21;
+  border: 1px solid #2a5a43;
+  color: #8dd2aa;
+  padding: 5px 8px;
+}

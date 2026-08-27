@@ -1,0 +1,283 @@
+.live-notice--replay {
+  background: #2b2412;
+  border-color: #745d27;
+}
+.live-notice--replay strong {
+  color: #ffe09a;
+}
+.live-notice--replay span {
+  color: #c6b68f;
+  line-height: 1.45;
+}
+
+.archive-controls {
+  align-items: end;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(160px, 0.65fr) auto minmax(260px, 1.35fr) auto;
+  margin-bottom: 16px;
+  padding: 13px;
+}
+
+.archive-controls label,
+.replay-buttons label {
+  color: #8298a9;
+  display: grid;
+  font-size: 0.68rem;
+  gap: 6px;
+}
+
+.archive-controls input,
+.archive-controls select,
+.replay-buttons select {
+  background: #08141e;
+  border: 1px solid #2a4354;
+  border-radius: 7px;
+  color: #c5d4de;
+  min-height: 40px;
+  padding: 8px 10px;
+  width: 100%;
+}
+
+.archive-controls button {
+  min-height: 40px;
+}
+
+.replay-transport {
+  display: grid;
+  gap: 13px;
+  margin-bottom: 16px;
+  overflow: hidden;
+  padding: 15px 16px 12px;
+}
+
+.replay-transport__status {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 13px;
+}
+.replay-transport__status > span {
+  color: #7890a3;
+  font-size: 0.62rem;
+  font-weight: 900;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+.replay-transport__status strong {
+  color: #edf4f9;
+  font-size: 0.83rem;
+}
+.replay-transport__status small {
+  color: #7890a3;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.66rem;
+  margin-left: auto;
+}
+
+.replay-buttons {
+  align-items: end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.replay-buttons button {
+  background: #152534;
+  border: 1px solid #30495b;
+  border-radius: 7px;
+  color: #b9cad5;
+  font-size: 0.7rem;
+  font-weight: 800;
+  min-height: 40px;
+  padding: 8px 12px;
+}
+.replay-buttons button:hover:not(:disabled) {
+  background: #1c3448;
+  border-color: #47708d;
+  color: #fff;
+}
+.replay-buttons label {
+  margin-left: auto;
+  min-width: 135px;
+}
+.replay-buttons button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.replay-progress {
+  background: #08131c;
+  border-radius: 999px;
+  height: 5px;
+  overflow: hidden;
+}
+.replay-progress span {
+  background: linear-gradient(90deg, #f06a2c, #ff9b62);
+  display: block;
+  height: 100%;
+  transition: width 180ms ease;
+}
+
+.historical-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) 330px;
+}
+.historical-score-panel,
+.archive-summary-panel,
+.historical-core-panel {
+  padding: 18px;
+}
+.historical-score-panel .apple-scoreboard {
+  margin-top: 18px;
+  max-width: 520px;
+}
+.historical-score-panel .live-game-detail {
+  grid-template-columns: 1fr 1fr;
+}
+.historical-score-panel .live-game-detail code {
+  overflow-wrap: anywhere;
+}
+
+.bookmark-panel {
+  overflow: hidden;
+}
+.bookmark-panel > .panel-title {
+  padding: 18px 18px 0;
+}
+.bookmark-panel > .empty-state {
+  padding: 8px 18px 18px;
+}
+.bookmark-list {
+  display: grid;
+  list-style: none;
+  margin: 0;
+  padding: 12px 0 4px;
+}
+.bookmark-list li {
+  align-items: center;
+  border-top: 1px solid #203442;
+  display: grid;
+  gap: 15px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 14px 18px;
+}
+.bookmark-list li:first-child {
+  border-top: 0;
+}
+.bookmark-list li:hover {
+  background: #0c1d29;
+}
+.bookmark-list li > div:first-child {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.bookmark-list li > div:first-child > span {
+  color: #f2935f;
+  font-size: 0.61rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.bookmark-list strong {
+  color: #e4edf4;
+  font-size: 0.76rem;
+}
+.bookmark-list p {
+  color: #8ea2b1;
+  font-size: 0.69rem;
+  line-height: 1.45;
+  margin: 0;
+}
+.bookmark-list small {
+  color: #6e8596;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.62rem;
+}
+.bookmark-actions {
+  display: flex;
+  gap: 7px;
+}
+.bookmark-actions button {
+  background: #152534;
+  border: 1px solid #30495b;
+  border-radius: 7px;
+  color: #b8c9d4;
+  font-size: 0.67rem;
+  font-weight: 800;
+  min-height: 38px;
+  padding: 8px 10px;
+}
+.bookmark-actions button:hover:not(:disabled) {
+  background: #1c3448;
+  color: #fff;
+}
+.bookmark-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.historical-core-receipt {
+  padding: 16px 0 0;
+}
+.historical-core-panel > .empty-state {
+  padding-top: 6px;
+}
+
+.replay-receipts {
+  margin-top: 16px;
+  overflow: hidden;
+}
+.replay-receipts > .panel-title {
+  padding: 18px 18px 0;
+}
+.replay-receipts > .empty-state {
+  padding: 8px 18px 18px;
+}
+.replay-receipts > ol {
+  list-style: none;
+  margin: 0;
+  padding: 12px 0 4px;
+}
+.replay-receipts li {
+  align-items: center;
+  border-top: 1px solid #203442;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 90px 85px 70px minmax(130px, 0.65fr) minmax(150px, 1fr);
+  padding: 10px 18px;
+}
+.replay-receipts time,
+.replay-receipts code {
+  color: #93b2c6;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.63rem;
+}
+.replay-receipts li > span {
+  color: #8399aa;
+  font-size: 0.65rem;
+}
+.replay-receipts li > strong {
+  color: #cad9e3;
+  font-size: 0.66rem;
+}
+
+.historical-empty {
+  display: grid;
+  min-height: 230px;
+  place-content: center;
+  padding: 30px;
+  text-align: center;
+}
+.historical-empty strong {
+  color: #e0eaf1;
+  font-size: 0.9rem;
+}
+.historical-empty p {
+  color: #8297a7;
+  font-size: 0.72rem;
+  line-height: 1.55;
+  margin: 8px auto 0;
+  max-width: 520px;
+}
