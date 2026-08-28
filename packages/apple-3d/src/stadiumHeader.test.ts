@@ -16,9 +16,9 @@ describe("stadium scoreboard header", () => {
         half: "TOP",
         inning: 1,
         outs: 0,
-        nextGame: { day: "Tonight", time: "7:10 PM" },
+        nextGame: { day: "Tonight", time: "7:10 PM EDT" },
       }),
-    ).toEqual({ center: "NEXT GAME · TONIGHT - 7:10 PM", right: "" });
+    ).toEqual({ center: "NEXT GAME · TONIGHT - 7:10 PM EDT", right: "" });
   });
 
   it("does not show stale inning information while waiting for a schedule", () => {

@@ -39,6 +39,12 @@ function expectedNextGameTime() {
   return new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" }).format(new Date(NEXT_GAME_DATE));
 }
 
+function expectedNextGameTimeZone() {
+  return new Intl.DateTimeFormat("en-US", { timeZoneName: "short" })
+    .formatToParts(new Date(NEXT_GAME_DATE))
+    .find((part) => part.type === "timeZoneName")?.value;
+}
+
 vi.mock("canvas-confetti", () => ({
   default: {
     create: () => Object.assign(vi.fn(), { reset: vi.fn() }),
@@ -572,7 +578,9 @@ describe("Virtual Apple accessibility", () => {
     expect(stage.getAttribute("data-away")).toBe("PHI");
     expect(stage.getAttribute("data-home")).toBe("NYM");
     expect(stage.getAttribute("data-at-citi-field")).toBe("true");
-    expect(stage.getAttribute("data-next-game")).toBe(`Tomorrow|${expectedNextGameTime()}`);
+    expect(stage.getAttribute("data-next-game")).toBe(
+      `Tomorrow|${expectedNextGameTime()} ${expectedNextGameTimeZone()}`,
+    );
     expect(container.querySelector(".apple-scorebug")).toBeNull();
     expect(container.textContent).not.toContain("OFF");
     expect(container.textContent).not.toContain("MIA");
