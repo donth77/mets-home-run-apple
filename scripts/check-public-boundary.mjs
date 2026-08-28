@@ -29,7 +29,7 @@ const forbiddenPaths = [
   /^\.openai(?:\/|$)/,
   /(?:^|\/)internal-assets(?:\/|$)/,
   /(?:^|\/)private-planning(?:\/|$)/,
-  /(?:^|\/)(?:BUILD_PLAN|HARDWARE_PLAN|IMPLEMENTATION_PLAN|SIMULATOR_PLAN)\.md$/,
+  /(?:^|\/)(?:3D_PRINTING|BUILD_PLAN|HARDWARE_PLAN|IMPLEMENTATION_PLAN|PHYSICAL_BUILD|SIMULATOR_PLAN)\.md$/,
   /(?:^|\/)social-preview\.png$/,
 ];
 

@@ -20,8 +20,9 @@ These rules apply to the whole public monorepo.
 
 ## Build repeatable devices
 
-- Follow `docs/PHYSICAL_BUILD.md` for the BOM, assembly, calibration, testing, and build record.
-- Follow `docs/3D_PRINTING.md` for printable replacement parts. Browser GLB assets are visual references, not manufacturing CAD.
+- Do not publish physical assembly or printable-part instructions until they
+  have been validated on real hardware.
+- Browser GLB assets are visual references, not manufacturing CAD.
 - Give every physical Apple unique credentials. Never reuse a claim code, setup secret, or device key across units.
 - Keep remote services optional. The device must follow games and remain safe without Apple Lab or a hosted service.
 - Do not expose raw motor commands through local or remote management.
