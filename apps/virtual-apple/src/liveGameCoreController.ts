@@ -13,6 +13,17 @@ export interface LiveCorePresentation {
   targetPositionMm: number;
 }
 
+const TIMER_DRIVEN_SEQUENCE_STATES = new Set<CoreResult["sequenceState"]>([
+  "LEAD_IN",
+  "EXTENDING",
+  "RAISED",
+  "RETRACTING",
+]);
+
+export function coreSequenceNeedsTicking(sequenceState: CoreResult["sequenceState"] | undefined) {
+  return sequenceState !== undefined && TIMER_DRIVEN_SEQUENCE_STATES.has(sequenceState);
+}
+
 export class LiveGameCoreController {
   readonly #core: GameCore;
   #expectedPositionMm: number | undefined;

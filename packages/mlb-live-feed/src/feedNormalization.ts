@@ -278,7 +278,11 @@ export function normalizeFeed(
       ? inningState
       : stringAt(linescore, "inningHalf", stringAt(currentAbout, "halfInning", "top")),
   );
-  const half = phase === "FINAL" ? "END" : feedHalf;
+  // MLB uses `inningState: "End"` for the brief changeover after the bottom
+  // half. That means the inning ended, not the game. Reserve END for an
+  // actually final game so presentation clients cannot mistake a live
+  // pitching changeover for the final out.
+  const half = phase === "FINAL" ? "END" : feedHalf === "END" ? "MIDDLE" : feedHalf;
   const feedOuts = clampInteger(numberAt(linescore, "outs"), 0, 3) as 0 | 1 | 2 | 3;
   const currentCount = objectAt(currentPlay, "count");
   const currentMatchup = objectAt(currentPlay, "matchup");

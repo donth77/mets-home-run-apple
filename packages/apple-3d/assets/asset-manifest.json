@@ -10,7 +10,9 @@
       "retrieved": "2026-08-26",
       "format": "image/svg+xml",
       "viewBox": "0 0 150 149.99792",
-      "sha256": "d2a917d7fa95cc01574c0b2b46659e4fd6eec1980210dbe43a5c0f25f3912b63"
+      "intrinsicSize": 512,
+      "modifications": "Intrinsic dimensions increased to 512 by 512 for a sharper WebGL decal; viewBox and artwork unchanged",
+      "sha256": "7663f0525da91cbb6c20136ccedab7088c4dbc29ef8aa5673050176518cf6036"
     },
     {
       "id": "citi-apple-model",

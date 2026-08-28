@@ -35,4 +35,17 @@ describe("gameStatusAnnouncement", () => {
     ).toBe("Next Mets game: Tomorrow at 7:10 PM.");
     expect(gameStatusAnnouncement(snapshot, { betweenGames: false, offseason: true })).toContain("offseason");
   });
+
+  it("announces standby without describing a stale snapshot as final or between games", () => {
+    const announcement = gameStatusAnnouncement(
+      { ...snapshot, phase: "FINAL", label: "FINAL", half: "END", inning: 9 },
+      { betweenGames: false, offseason: false, standby: true },
+    );
+
+    expect(announcement).toBe(
+      "Live updates are temporarily unavailable. Standby. ATL 2, NYM 3. Last update: INNING 9.",
+    );
+    expect(announcement).not.toContain("Final");
+    expect(announcement).not.toContain("between games");
+  });
 });

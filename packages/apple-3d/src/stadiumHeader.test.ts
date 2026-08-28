@@ -32,4 +32,45 @@ describe("stadium scoreboard header", () => {
       }),
     ).toEqual({ center: "NEXT GAME · SCHEDULE TBD", right: "" });
   });
+
+  it("shows standby and the retained inning instead of a stale final", () => {
+    const header = stadiumHeaderText({
+      phase: "FINAL",
+      label: "FINAL",
+      half: "END",
+      inning: 9,
+      outs: 3,
+      standby: true,
+    });
+
+    expect(header).toEqual({ center: "STANDBY", right: "INNING 9  ·  LAST UPDATE" });
+    expect(JSON.stringify(header)).not.toContain("FINAL");
+    expect(JSON.stringify(header)).not.toContain("BETWEEN GAMES");
+  });
+
+  it("does not turn MLB's live end-of-inning state into a final game", () => {
+    const header = stadiumHeaderText({
+      phase: "LIVE",
+      label: "LIVE",
+      half: "END",
+      inning: 2,
+      outs: 3,
+    });
+
+    expect(header).toEqual({ center: "LIVE", right: "MID 2  ·  3 OUTS" });
+    expect(JSON.stringify(header)).not.toContain("FINAL");
+  });
+
+  it("does not trust a stale final label when the game phase is live", () => {
+    const header = stadiumHeaderText({
+      phase: "LIVE",
+      label: "FINAL",
+      half: "END",
+      inning: 2,
+      outs: 3,
+    });
+
+    expect(header.center).toBe("LIVE");
+    expect(JSON.stringify(header)).not.toContain("FINAL");
+  });
 });

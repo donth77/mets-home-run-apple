@@ -7,6 +7,7 @@ export interface StadiumMatchupData {
   away: StadiumMatchupTeam;
   home: StadiumMatchupTeam;
   phase?: "PREGAME" | "LIVE" | "REVIEW" | "DELAYED" | "CELEBRATION" | "FINAL" | "SLEEP";
+  standby?: boolean;
   half: "TOP" | "BOTTOM" | "MIDDLE" | "END";
   batter?: string;
   batterLine?: string;
@@ -26,6 +27,7 @@ function isMets(team: StadiumMatchupTeam) {
 }
 
 export function stadiumMatchupFooter(data: StadiumMatchupData): StadiumMatchupFooter | null {
+  if (data.standby) return null;
   if (data.phase && !["LIVE", "REVIEW", "DELAYED"].includes(data.phase)) return null;
 
   const metsAreHome = isMets(data.home);

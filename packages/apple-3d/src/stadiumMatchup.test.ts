@@ -48,5 +48,6 @@ describe("stadium matchup footer", () => {
     expect(stadiumMatchupFooter({ ...matchup, phase: "PREGAME", half: "TOP" })).toBeNull();
     expect(stadiumMatchupFooter({ ...matchup, phase: "CELEBRATION", half: "BOTTOM" })).toBeNull();
     expect(stadiumMatchupFooter({ ...matchup, phase: "FINAL", half: "BOTTOM" })).toBeNull();
+    expect(stadiumMatchupFooter({ ...matchup, phase: "LIVE", half: "BOTTOM", standby: true })).toBeNull();
   });
 });

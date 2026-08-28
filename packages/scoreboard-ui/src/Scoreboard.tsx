@@ -6,6 +6,7 @@ export interface ScoreboardProps {
   snapshot: PresentationSnapshot;
   variant?: "lab" | "broadcast";
   announceUpdates?: boolean;
+  standby?: boolean;
 }
 
 function BaseDiamond({ bases }: { bases?: AtBatState["bases"] }) {
@@ -43,19 +44,29 @@ function compactBatterLine(line: string | undefined) {
   return match ? `${match[1]} FOR ${match[2]}${match[3]}` : line;
 }
 
+function compactInningLabel(snapshot: Pick<PresentationSnapshot, "half" | "inning">) {
+  if (snapshot.inning < 1 || !["TOP", "BOTTOM", "MIDDLE"].includes(snapshot.half)) return null;
+  if (snapshot.half === "TOP") return `▲${snapshot.inning}`;
+  if (snapshot.half === "BOTTOM") return `▼${snapshot.inning}`;
+  return `INN ${snapshot.inning}`;
+}
+
 function BroadcastScorebug({
   snapshot,
   announceUpdates,
+  standby,
 }: {
   snapshot: PresentationSnapshot;
   announceUpdates: boolean;
+  standby: boolean;
 }) {
   const teams = [
     { side: "away", team: snapshot.away },
     { side: "home", team: snapshot.home },
   ] as const;
-  const isFinal = snapshot.phase === "FINAL" || snapshot.half === "END";
+  const isFinal = !standby && snapshot.phase === "FINAL";
   const showSituation =
+    !standby &&
     !isFinal &&
     ["LIVE", "REVIEW", "DELAYED", "CELEBRATION"].includes(snapshot.phase) &&
     (snapshot.half === "TOP" || snapshot.half === "BOTTOM");
@@ -64,18 +75,24 @@ function BroadcastScorebug({
   const strikes = atBat?.strikes ?? 0;
   const outs = showSituation ? snapshot.outs : 0;
   const isLiveInning = !["FINAL", "DELAYED", "SLEEP", "PREGAME"].includes(snapshot.phase);
-  const inning = isLiveInning
-    ? `${snapshot.half === "TOP" ? "▲" : snapshot.half === "BOTTOM" ? "▼" : ""}${snapshot.inning}`
-    : inningLabel(snapshot);
+  const inning = standby
+    ? compactInningLabel(snapshot)
+    : isLiveInning
+      ? `${snapshot.half === "TOP" ? "▲" : snapshot.half === "BOTTOM" ? "▼" : ""}${snapshot.inning}`
+      : inningLabel(snapshot);
   const matchupRole = metsMatchupRole(snapshot);
-  const showMatchup = ["LIVE", "REVIEW", "DELAYED"].includes(snapshot.phase) && matchupRole !== null;
-  const footerLabel = isFinal
-    ? snapshot.label
-    : showMatchup && matchupRole === "BATTING"
-      ? (snapshot.atBat?.batter?.toUpperCase() ?? "METS AT BAT")
-      : showMatchup && matchupRole === "PITCHING"
-        ? (snapshot.atBat?.pitcher?.toUpperCase() ?? "METS PITCHING")
-        : snapshot.label;
+  const showMatchup = !standby && ["LIVE", "REVIEW", "DELAYED"].includes(snapshot.phase) && matchupRole !== null;
+  const snapshotLabel =
+    snapshot.phase !== "FINAL" && snapshot.label.trim().toUpperCase() === "FINAL" ? snapshot.phase : snapshot.label;
+  const footerLabel = standby
+    ? "STANDBY"
+    : isFinal
+      ? snapshotLabel
+      : showMatchup && matchupRole === "BATTING"
+        ? (snapshot.atBat?.batter?.toUpperCase() ?? "METS AT BAT")
+        : showMatchup && matchupRole === "PITCHING"
+          ? (snapshot.atBat?.pitcher?.toUpperCase() ?? "METS PITCHING")
+          : snapshotLabel;
   const footerDetail =
     showMatchup && matchupRole === "BATTING"
       ? compactBatterLine(snapshot.atBat?.batterLine)
@@ -108,9 +125,26 @@ function BroadcastScorebug({
             );
           })}
         </div>
-        <div className={isFinal ? "apple-scorebug__situation is-final" : "apple-scorebug__situation"}>
+        <div
+          className={
+            standby
+              ? "apple-scorebug__situation is-standby"
+              : isFinal
+                ? "apple-scorebug__situation is-final"
+                : "apple-scorebug__situation"
+          }
+        >
           {isFinal ? (
             <strong className="apple-scorebug__final">FINAL</strong>
+          ) : standby ? (
+            <div className="apple-scorebug__standby">
+              {inning && (
+                <>
+                  <span>INNING</span>
+                  <strong>{inning}</strong>
+                </>
+              )}
+            </div>
           ) : (
             <>
               <div className="apple-scorebug__upper">
@@ -196,9 +230,14 @@ function LabScoreboard({ snapshot, announceUpdates }: { snapshot: PresentationSn
   );
 }
 
-export function Scoreboard({ snapshot, variant = "broadcast", announceUpdates = true }: ScoreboardProps) {
+export function Scoreboard({
+  snapshot,
+  variant = "broadcast",
+  announceUpdates = true,
+  standby = false,
+}: ScoreboardProps) {
   return variant === "broadcast" ? (
-    <BroadcastScorebug snapshot={snapshot} announceUpdates={announceUpdates} />
+    <BroadcastScorebug snapshot={snapshot} announceUpdates={announceUpdates} standby={standby} />
   ) : (
     <LabScoreboard snapshot={snapshot} announceUpdates={announceUpdates} />
   );

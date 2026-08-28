@@ -45,4 +45,44 @@ describe("Scoreboard", () => {
       expect(contrast).toBeGreaterThanOrEqual(4.5);
     },
   );
+
+  it("leaves the inning slot empty instead of showing final when standby has no current inning", () => {
+    const html = renderToStaticMarkup(
+      <Scoreboard
+        snapshot={{ ...awayMetsSnapshot, phase: "FINAL", label: "FINAL", half: "END", inning: 9 }}
+        announceUpdates={false}
+        standby
+      />,
+    );
+
+    expect(html).toContain("STANDBY");
+    expect(html).toContain('class="apple-scorebug__standby"></div>');
+    expect(html).not.toContain("INN 9");
+    expect(html).not.toContain("FINAL");
+    expect(html).not.toContain("BETWEEN GAMES");
+  });
+
+  it("never labels an end-of-inning live game as final", () => {
+    const html = renderToStaticMarkup(
+      <Scoreboard
+        snapshot={{ ...awayMetsSnapshot, phase: "LIVE", label: "LIVE", half: "END", inning: 2, outs: 3 }}
+        announceUpdates={false}
+      />,
+    );
+
+    expect(html).toContain("LIVE");
+    expect(html).not.toContain("FINAL");
+  });
+
+  it("does not trust a stale final label when the game phase is live", () => {
+    const html = renderToStaticMarkup(
+      <Scoreboard
+        snapshot={{ ...awayMetsSnapshot, phase: "LIVE", label: "FINAL", half: "END", inning: 2, outs: 3 }}
+        announceUpdates={false}
+      />,
+    );
+
+    expect(html).toContain("LIVE");
+    expect(html).not.toContain("FINAL");
+  });
 });

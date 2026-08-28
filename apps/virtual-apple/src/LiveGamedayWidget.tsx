@@ -1,7 +1,13 @@
 import type { PresentationSnapshot } from "@apple/protocol";
 
-export function LiveGamedayWidget({ snapshot }: { snapshot: PresentationSnapshot }) {
-  const activityLabel = snapshot.phase === "DELAYED" ? "Game delayed" : "Live game";
+export function LiveGamedayWidget({
+  snapshot,
+  standby = false,
+}: {
+  snapshot: PresentationSnapshot;
+  standby?: boolean;
+}) {
+  const activityLabel = standby ? "Updates paused" : snapshot.phase === "DELAYED" ? "Game delayed" : "Live game";
 
   return (
     <aside className="gameday-card" aria-label="Current game on MLB Gameday">
@@ -22,7 +28,7 @@ export function LiveGamedayWidget({ snapshot }: { snapshot: PresentationSnapshot
             <strong>
               {snapshot.away.abbreviation} at {snapshot.home.abbreviation}
             </strong>
-            <span>Pitch-by-pitch, box score &amp; Statcast</span>
+            <span>{standby ? "Check MLB Gameday for the latest score" : "Pitch-by-pitch, box score & Statcast"}</span>
           </div>
           <b className="gameday-card__action">
             Open <i aria-hidden="true">↗</i>

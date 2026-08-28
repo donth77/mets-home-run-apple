@@ -1,9 +1,10 @@
-import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
-import { createPortal, useFrame } from "@react-three/fiber";
 import { Decal, Html, useGLTF, useTexture } from "@react-three/drei";
-import { Box3, type Group, Mesh, SRGBColorSpace, type Texture, Vector3 } from "three";
-import { APPLE_MODEL_URL, CITI_BASE_MODEL_URL, METS_DECAL_URL } from "./assets";
+import { createPortal, useFrame } from "@react-three/fiber";
+import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import { Box3, type Group, Mesh, type Texture, Vector3 } from "three";
 import { ACTUATOR_STROKE_MM, clampActuatorPosition } from "./actuatorPhysics";
+import { prioritizeAppleLogoTexture } from "./appleLogoTexture";
+import { APPLE_MODEL_URL, CITI_BASE_MODEL_URL, METS_DECAL_URL } from "./assets";
 import { setModelWireframe } from "./modelWireframe";
 import type { AppleAssemblyProps } from "./types";
 
@@ -137,8 +138,7 @@ export function AppleAssembly({
   const rodHeight = 0.72 + travelSceneUnits;
 
   useEffect(() => {
-    logoTexture.colorSpace = SRGBColorSpace;
-    logoTexture.needsUpdate = true;
+    prioritizeAppleLogoTexture(logoTexture);
   }, [logoTexture]);
 
   return (

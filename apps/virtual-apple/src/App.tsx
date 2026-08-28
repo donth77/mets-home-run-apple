@@ -49,14 +49,17 @@ export function App() {
   );
   const [demoOverride, setDemoOverride] = useState(() => showDemoControls && playback.scenarioId !== "sleep");
   const offseason = demoOverride ? playback.scenarioId === "offseason" : seasonPhase.isOffseason;
+  const liveStandby = !demoOverride && !offseason && live.status === "ERROR" && !live.celebration;
   const displayPhase = demoOverride
     ? playback.activeFrame.snapshot.phase
     : offseason
       ? "SLEEP"
-      : live.celebration
-        ? "CELEBRATION"
-        : (live.snapshot?.phase ?? "SLEEP");
-  const gameIsActive = ["LIVE", "REVIEW", "DELAYED", "CELEBRATION"].includes(displayPhase);
+      : liveStandby
+        ? "LIVE"
+        : live.celebration
+          ? "CELEBRATION"
+          : (live.snapshot?.phase ?? "SLEEP");
+  const gameIsActive = liveStandby || ["LIVE", "REVIEW", "DELAYED", "CELEBRATION"].includes(displayPhase);
   const upcomingGames = useMetsSchedule(seasonPhase.status !== "CHECKING" && !gameIsActive && !offseason);
   const liveRestingSnapshot = useMemo(() => liveBetweenGamesSnapshot(upcomingGames[0]), [upcomingGames]);
   const sourceSnapshot = demoOverride
@@ -84,10 +87,16 @@ export function App() {
   const rawPublicSnapshot = useMemo<PresentationSnapshot>(
     () => ({
       ...sourceSnapshot,
-      ...(demoOverride || !live.celebration ? {} : { phase: "CELEBRATION" as const }),
+      ...(liveStandby
+        ? {
+            phase: "LIVE" as const,
+          }
+        : demoOverride || !live.celebration
+          ? {}
+          : { phase: "CELEBRATION" as const }),
       ...moment,
     }),
-    [demoOverride, live.celebration, moment, sourceSnapshot],
+    [demoOverride, live.celebration, liveStandby, moment, sourceSnapshot],
   );
   const liveActuator = useActuatorSimulation(live.targetPositionMm, { reducedMotion });
   useEffect(() => {
@@ -139,7 +148,7 @@ export function App() {
       setWinAppleReachedTop(true);
     }
   }, [appleFullyRaised, winCelebration]);
-  const betweenGames = publicSnapshot.phase === "SLEEP" && !offseason;
+  const betweenGames = !liveStandby && publicSnapshot.phase === "SLEEP" && !offseason;
   const atCitiField = demoOverride
     ? sourceSnapshot.home.id === METS_TEAM_ID
     : offseason
@@ -156,24 +165,26 @@ export function App() {
     () => ({
       ...publicSnapshot,
       atCitiField,
-      label: publicSnapshot.phase === "FINAL" ? "FINAL" : publicSnapshot.label,
+      standby: liveStandby,
+      label: liveStandby ? "STANDBY" : publicSnapshot.phase === "FINAL" ? "FINAL" : publicSnapshot.label,
       batter: publicSnapshot.phase === "CELEBRATION" ? homeRunSubject : publicSnapshot.atBat?.batter,
       batterLine: publicSnapshot.atBat?.batterLine,
       pitcher: publicSnapshot.atBat?.pitcher,
       pitchCount: publicSnapshot.atBat?.pitchCount,
       nextGame: betweenGames && nextGame.time ? { day: nextGame.day, time: nextGame.time } : undefined,
     }),
-    [atCitiField, betweenGames, homeRunSubject, nextGame.day, nextGame.time, publicSnapshot],
+    [atCitiField, betweenGames, homeRunSubject, liveStandby, nextGame.day, nextGame.time, publicSnapshot],
   );
   const liveInningMoment = publicSnapshot.phase === "LIVE" && publicSnapshot.label.trim().toUpperCase() === "LIVE";
-  const momentEyebrow = offseason ? "SEE YOU NEXT SEASON" : publicSnapshot.phase;
-  const momentHeadline = delayWidgetLabel(publicSnapshot);
+  const momentEyebrow = offseason ? "SEE YOU NEXT SEASON" : liveStandby ? "LIVE UPDATES" : publicSnapshot.phase;
+  const momentHeadline = liveStandby ? "STANDBY" : delayWidgetLabel(publicSnapshot);
   const showMomentEyebrow =
     liveInningMoment ||
     (publicSnapshot.phase !== "DELAYED" && momentEyebrow.trim().toUpperCase() !== momentHeadline.trim().toUpperCase());
   const statusAnnouncement = gameStatusAnnouncement(publicSnapshot, {
     betweenGames,
     offseason,
+    standby: liveStandby,
     nextGameDay: nextGame.day,
     nextGameTime: nextGame.time,
   });
@@ -198,7 +209,8 @@ export function App() {
     <main
       className="virtual-shell"
       data-demo-controls={showDemoControls}
-      data-phase={publicSnapshot.phase}
+      data-feed-status={liveStandby ? "standby" : "current"}
+      data-phase={liveStandby ? "STANDBY" : publicSnapshot.phase}
       data-scene-ready={sceneReady}
       data-weather={rainDelay ? "rain" : "clear"}
     >
@@ -247,21 +259,23 @@ export function App() {
         <RadioCompanion />
       </header>
 
-      {!offseason && !betweenGames && (
+      {!offseason && !betweenGames && (!liveStandby || publicSnapshot.gamePk > 0) && (
         <div className="virtual-hud">
           <div className="virtual-scoreboard">
-            <Scoreboard snapshot={publicSnapshot} announceUpdates={false} />
+            <Scoreboard snapshot={publicSnapshot} announceUpdates={false} standby={liveStandby} />
           </div>
         </div>
       )}
 
-      {gameIsActive && !winCelebration && <LiveGamedayWidget snapshot={publicSnapshot} />}
+      {gameIsActive && publicSnapshot.gamePk > 0 && !winCelebration && (
+        <LiveGamedayWidget snapshot={publicSnapshot} standby={liveStandby} />
+      )}
       {!winCelebration && <UpcomingGames games={upcomingGames} />}
 
       {!offseason && (
         <section
           id="game-status"
-          className={`moment-card${liveInningMoment ? " moment-card--live" : ""}`}
+          className={`moment-card${liveInningMoment ? " moment-card--live" : ""}${liveStandby ? " moment-card--standby" : ""}`}
           tabIndex={-1}
         >
           {betweenGames ? (

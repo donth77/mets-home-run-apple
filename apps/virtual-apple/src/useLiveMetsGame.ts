@@ -1,8 +1,12 @@
-import type { CoreResult } from "@apple/game-core-wasm";
 import { easternDate, fetchMetsSchedule, MlbRecordingClient, type MlbScheduleGame } from "@apple/mlb-live-feed";
 import type { GameSnapshot } from "@apple/protocol";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { type LiveCelebration, type LiveCorePresentation, LiveGameCoreController } from "./liveGameCoreController";
+import {
+  coreSequenceNeedsTicking,
+  type LiveCelebration,
+  type LiveCorePresentation,
+  LiveGameCoreController,
+} from "./liveGameCoreController";
 
 export type { LiveCelebration } from "./liveGameCoreController";
 
@@ -17,7 +21,6 @@ export interface LiveMetsGameState {
   status: LiveMetsGameStatus;
   game?: MlbScheduleGame;
   snapshot?: GameSnapshot;
-  decision?: CoreResult;
   celebration?: LiveCelebration;
   targetPositionMm: number;
   checkedAt?: string;
@@ -44,6 +47,10 @@ export function liveFeedContinuation(phase: GameSnapshot["phase"], waitMs: numbe
     : { kind: "POLL" as const, delayMs: waitMs };
 }
 
+export function remainingLivePollDelay(waitMs: number, requestElapsedMs: number) {
+  return Math.max(0, waitMs - Math.max(0, requestElapsedMs));
+}
+
 function scheduleRecheckDelay(games: readonly MlbScheduleGame[]) {
   const nextStart = games
     .map((game) => Date.parse(game.gameDate))
@@ -63,7 +70,6 @@ export function useLiveMetsGame(enabled = true): LiveMetsGameState {
   const [status, setStatus] = useState<LiveMetsGameStatus>("CHECKING");
   const [game, setGame] = useState<MlbScheduleGame>();
   const [snapshot, setSnapshot] = useState<GameSnapshot>();
-  const [decision, setDecision] = useState<CoreResult>();
   const [celebration, setCelebration] = useState<LiveCelebration>();
   const [targetPositionMm, setTargetPositionMm] = useState(0);
   const [checkedAt, setCheckedAt] = useState<string>();
@@ -71,7 +77,6 @@ export function useLiveMetsGame(enabled = true): LiveMetsGameState {
   const coreRef = useRef<LiveGameCoreController | undefined>(undefined);
 
   const acceptCorePresentation = useCallback((presentation: LiveCorePresentation) => {
-    setDecision(presentation.decision);
     setCelebration(presentation.celebration);
     setTargetPositionMm(presentation.targetPositionMm);
   }, []);
@@ -103,21 +108,20 @@ export function useLiveMetsGame(enabled = true): LiveMetsGameState {
       coreRef.current?.dispose();
       coreRef.current = undefined;
       setTargetPositionMm(0);
-      setDecision(undefined);
       setCelebration(undefined);
     };
 
-    const queueDiscovery = (delayMs: number) => {
+    const queueDiscovery = (delayMs: number, recoveringFromError = false) => {
       if (scheduleTimer !== undefined) window.clearTimeout(scheduleTimer);
-      scheduleTimer = window.setTimeout(() => void discover(), delayMs);
+      scheduleTimer = window.setTimeout(() => void discover(recoveringFromError), delayMs);
     };
 
-    const startTracking = async (selectedGame: MlbScheduleGame) => {
+    const startTracking = async (selectedGame: MlbScheduleGame, recoveringFromError = false) => {
       stopTracking();
       const token = runToken;
       setGame(selectedGame);
-      setStatus("CONNECTING");
-      setError(undefined);
+      setStatus(recoveringFromError ? "ERROR" : "CONNECTING");
+      if (!recoveringFromError) setError(undefined);
       const client = new MlbRecordingClient();
       try {
         const core = await LiveGameCoreController.create();
@@ -126,25 +130,47 @@ export function useLiveMetsGame(enabled = true): LiveMetsGameState {
           return;
         }
         coreRef.current = core;
-        tickTimer = window.setInterval(() => {
-          if (!coreRef.current) return;
-          try {
-            acceptCorePresentation(coreRef.current.tick(performance.now()));
-          } catch (reason) {
-            setError(reason instanceof Error ? reason.message : "Live game timing stopped unexpectedly.");
-            setStatus("ERROR");
+
+        const stopCoreTicking = () => {
+          if (tickTimer !== undefined) window.clearInterval(tickTimer);
+          tickTimer = undefined;
+        };
+        const syncCoreTicking = (presentation: LiveCorePresentation) => {
+          if (!coreSequenceNeedsTicking(presentation.decision?.sequenceState)) {
+            stopCoreTicking();
+            return;
           }
-        }, 100);
+          if (tickTimer !== undefined) return;
+          tickTimer = window.setInterval(() => {
+            if (!coreRef.current) {
+              stopCoreTicking();
+              return;
+            }
+            try {
+              const nextPresentation = coreRef.current.tick(performance.now());
+              acceptCorePresentation(nextPresentation);
+              if (!coreSequenceNeedsTicking(nextPresentation.decision?.sequenceState)) stopCoreTicking();
+            } catch (reason) {
+              stopCoreTicking();
+              setError(reason instanceof Error ? reason.message : "Live game timing stopped unexpectedly.");
+              setStatus("ERROR");
+            }
+          }, 100);
+        };
 
         const poll = async (): Promise<void> => {
           if (disposed || token !== runToken) return;
           requestController = new AbortController();
+          const requestStartedAt = performance.now();
           try {
             const result = await client.poll(selectedGame, requestController.signal);
             if (disposed || token !== runToken) return;
             if (result.capture) {
               setSnapshot(result.capture.gameSnapshot);
-              acceptCorePresentation(core.ingest(result.capture.coreInput, performance.now()));
+              setError(undefined);
+              const corePresentation = core.ingest(result.capture.coreInput, performance.now());
+              acceptCorePresentation(corePresentation);
+              syncCoreTicking(corePresentation);
               const continuation = liveFeedContinuation(result.capture.gameSnapshot.phase, result.waitMs);
               if (continuation.kind === "DISCOVER") {
                 setStatus("FINAL");
@@ -152,17 +178,24 @@ export function useLiveMetsGame(enabled = true): LiveMetsGameState {
                 return;
               }
               setStatus("POLLING");
-              feedTimer = window.setTimeout(poll, continuation.delayMs);
+              feedTimer = window.setTimeout(
+                poll,
+                remainingLivePollDelay(continuation.delayMs, performance.now() - requestStartedAt),
+              );
               return;
             } else {
-              setStatus((current) => (current === "CONNECTING" ? "POLLING" : current));
+              setError(undefined);
+              setStatus("POLLING");
             }
-            feedTimer = window.setTimeout(poll, result.waitMs);
+            feedTimer = window.setTimeout(
+              poll,
+              remainingLivePollDelay(result.waitMs, performance.now() - requestStartedAt),
+            );
           } catch (reason) {
             if (isAbortError(reason) || disposed || token !== runToken) return;
             setError(reason instanceof Error ? reason.message : "Live Mets data is temporarily unavailable.");
             setStatus("ERROR");
-            queueDiscovery(FEED_RETRY_MS);
+            queueDiscovery(FEED_RETRY_MS, true);
           }
         };
         await poll();
@@ -170,14 +203,14 @@ export function useLiveMetsGame(enabled = true): LiveMetsGameState {
         if (disposed || token !== runToken) return;
         setError(reason instanceof Error ? reason.message : "The live game service could not start.");
         setStatus("ERROR");
-        queueDiscovery(FEED_RETRY_MS);
+        queueDiscovery(FEED_RETRY_MS, true);
       }
     };
 
-    const discover = async () => {
+    const discover = async (recoveringFromError = false) => {
       stopTracking();
-      setStatus("CHECKING");
-      setError(undefined);
+      setStatus(recoveringFromError ? "ERROR" : "CHECKING");
+      if (!recoveringFromError) setError(undefined);
       requestController = new AbortController();
       try {
         const games = await fetchMetsSchedule(easternDate(), fetch, requestController.signal);
@@ -185,18 +218,19 @@ export function useLiveMetsGame(enabled = true): LiveMetsGameState {
         setCheckedAt(new Date().toISOString());
         const activeGame = selectTrackableMetsGame(games);
         if (activeGame) {
-          await startTracking(activeGame);
+          await startTracking(activeGame, recoveringFromError);
           return;
         }
         setGame(undefined);
         setSnapshot(undefined);
+        setError(undefined);
         setStatus("BETWEEN_GAMES");
         queueDiscovery(scheduleRecheckDelay(games));
       } catch (reason) {
         if (isAbortError(reason) || disposed) return;
         setError(reason instanceof Error ? reason.message : "The Mets schedule is temporarily unavailable.");
         setStatus("ERROR");
-        queueDiscovery(FEED_RETRY_MS);
+        queueDiscovery(FEED_RETRY_MS, true);
       }
     };
 
@@ -219,7 +253,6 @@ export function useLiveMetsGame(enabled = true): LiveMetsGameState {
     status,
     game,
     snapshot,
-    decision,
     celebration,
     targetPositionMm,
     checkedAt,

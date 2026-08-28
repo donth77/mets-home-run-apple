@@ -15,6 +15,7 @@ import {
   RingGeometry,
 } from "three";
 import { advanceRainField, createRainField, RAIN_DROP_COUNT, RAIN_RIPPLE_COUNT, type RainField } from "./rainField";
+import type { SceneRenderQuality } from "./sceneRendering";
 
 const RIPPLE_INSTANCES_PER_IMPACT = 2;
 
@@ -126,8 +127,10 @@ function syncRippleInstances(field: RainField, mesh: InstancedMesh, transform: O
   if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
 }
 
-export function RainEffect({ reducedMotion }: { reducedMotion: boolean }) {
-  const field = useMemo(() => createRainField(), []);
+export function RainEffect({ quality, reducedMotion }: { quality: SceneRenderQuality; reducedMotion: boolean }) {
+  const dropCount = quality === "conservative" ? Math.floor(RAIN_DROP_COUNT / 2) : RAIN_DROP_COUNT;
+  const rippleCount = quality === "conservative" ? Math.floor(RAIN_RIPPLE_COUNT / 2) : RAIN_RIPPLE_COUNT;
+  const field = useMemo(() => createRainField(dropCount, rippleCount), [dropCount, rippleCount]);
   const dropMesh = useRef<InstancedMesh>(null);
   const rippleMesh = useRef<InstancedMesh>(null);
   const transform = useMemo(() => new Object3D(), []);
@@ -178,12 +181,7 @@ export function RainEffect({ reducedMotion }: { reducedMotion: boolean }) {
 
   return (
     <group name="RainWithGroundImpacts">
-      <instancedMesh
-        ref={dropMesh}
-        args={[dropGeometry, undefined, RAIN_DROP_COUNT]}
-        frustumCulled={false}
-        renderOrder={5}
-      >
+      <instancedMesh ref={dropMesh} args={[dropGeometry, undefined, dropCount]} frustumCulled={false} renderOrder={5}>
         <meshBasicMaterial
           alphaTest={0.025}
           color="#dceff8"
@@ -197,7 +195,7 @@ export function RainEffect({ reducedMotion }: { reducedMotion: boolean }) {
       </instancedMesh>
       <instancedMesh
         ref={rippleMesh}
-        args={[rippleGeometry, undefined, RAIN_RIPPLE_COUNT * RIPPLE_INSTANCES_PER_IMPACT]}
+        args={[rippleGeometry, undefined, rippleCount * RIPPLE_INSTANCES_PER_IMPACT]}
         frustumCulled={false}
         renderOrder={6}
       >
