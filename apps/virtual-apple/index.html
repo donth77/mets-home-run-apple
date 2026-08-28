@@ -27,7 +27,7 @@
     <meta property="og:site_name" content="Virtual Mets Apple" />
     <meta property="og:locale" content="en_US" />
     <meta property="og:url" content="https://metsapple.com/" />
-    <meta property="og:title" content="Virtual Mets Apple | Live Scores & Home Run Celebrations" />
+    <meta property="og:title" content="Virtual Mets Apple" />
     <meta
       property="og:description"
       content="Follow the Mets with live scores, a 3D Citi Field Home Run Apple, Mets Radio, and celebrations for home runs and wins."
@@ -91,6 +91,35 @@
     </script>
 
     <style>
+      html,
+      body {
+        background: #071728;
+        margin: 0;
+      }
+      .app-shell-loader {
+        align-items: center;
+        background: radial-gradient(circle at 50% 44%, rgba(32, 87, 137, 0.5), transparent 35%), #071728;
+        color: #f5f9fc;
+        display: flex;
+        flex-direction: column;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        inset: 0;
+        justify-content: center;
+        letter-spacing: 0.03em;
+        position: fixed;
+      }
+      .app-shell-loader__spinner {
+        animation: app-shell-loading-spin 0.85s linear infinite;
+        border: 3px solid rgba(178, 209, 232, 0.2);
+        border-radius: 50%;
+        border-top-color: #f26a2d;
+        height: 34px;
+        margin-bottom: 13px;
+        width: 34px;
+      }
+      .app-shell-loader strong {
+        font-size: 0.82rem;
+      }
       .app-shell-fallback {
         align-items: center;
         background: #081827;
@@ -121,12 +150,36 @@
         color: #ffb17d;
         font-weight: 700;
       }
+      @keyframes app-shell-loading-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .app-shell-loader__spinner {
+          animation: none;
+          border-color: #f26a2d;
+        }
+      }
     </style>
+    <noscript>
+      <style>
+        .app-shell-loader {
+          display: none;
+        }
+      </style>
+    </noscript>
 
-    <title>Virtual Mets Apple | Live Scores & Home Run Celebrations</title>
+    <title>Virtual Mets Apple</title>
   </head>
   <body>
     <div id="root">
+      <main class="app-shell-loader" role="status" aria-live="polite">
+        <span class="app-shell-loader__spinner" aria-hidden="true"></span>
+        <strong>Preparing Citi Field</strong>
+      </main>
+    </div>
+    <noscript>
       <main class="app-shell-fallback">
         <img src="/favicon.png" alt="" width="88" height="88" />
         <h1>Virtual Mets Apple</h1>
@@ -139,7 +192,7 @@
           <a href="https://github.com/donth77/mets-home-run-apple">View the open-source project</a>.
         </p>
       </main>
-    </div>
+    </noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
