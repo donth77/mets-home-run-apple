@@ -3,7 +3,9 @@
 This directory contains the shared decision-making code and the first Nano ESP32
 target for the Home Run Apple. The full device firmware is still being built.
 
-The physical build is intended to be reproduced for other owners. See the [Physical build guide](../docs/PHYSICAL_BUILD.md) for the parts, assembly, calibration, and acceptance process.
+The physical build is intended to be reproduced for other owners. Assembly
+instructions will be published after the parts and completed build are measured
+and validated.
 
 ## Current status
 

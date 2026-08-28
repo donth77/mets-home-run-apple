@@ -44,7 +44,8 @@ Still to build:
 
 The browser apps cannot command physical hardware. The Nano will remain in charge once the hardware layer is added.
 
-See [Physical build guide](docs/PHYSICAL_BUILD.md) for the parts, assembly, calibration, and acceptance workflow, and [3D-printed Apple and base](docs/3D_PRINTING.md) for the replacement-part process.
+Physical assembly and printable-part instructions will be published after the
+real build has been measured and validated.
 
 ## Quick start
 
