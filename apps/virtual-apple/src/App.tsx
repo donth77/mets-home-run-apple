@@ -197,9 +197,19 @@ export function App() {
       batterLine: publicSnapshot.atBat?.batterLine,
       pitcher: publicSnapshot.atBat?.pitcher,
       pitchCount: publicSnapshot.atBat?.pitchCount,
-      nextGame: betweenGames && nextGame.time ? { day: nextGame.day, time: nextGame.time } : undefined,
+      nextGame:
+        betweenGames && nextGame.time ? { day: nextGame.day, time: `${nextGame.time} ${nextGameTimeZone}` } : undefined,
     }),
-    [atCitiField, betweenGames, homeRunSubject, liveStandby, nextGame.day, nextGame.time, publicSnapshot],
+    [
+      atCitiField,
+      betweenGames,
+      homeRunSubject,
+      liveStandby,
+      nextGame.day,
+      nextGame.time,
+      nextGameTimeZone,
+      publicSnapshot,
+    ],
   );
   const liveInningMoment = publicSnapshot.phase === "LIVE" && publicSnapshot.label.trim().toUpperCase() === "LIVE";
   const momentEyebrow = offseason ? "SEE YOU NEXT SEASON" : liveStandby ? "LIVE UPDATES" : publicSnapshot.phase;
