@@ -1,0 +1,20 @@
+{
+  "id": "/",
+  "name": "Virtual Mets Apple",
+  "short_name": "Mets Apple",
+  "description": "Follow New York Mets games with live scores and a 3D Citi Field Home Run Apple.",
+  "lang": "en-US",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#081827",
+  "theme_color": "#081827",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "256x256",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

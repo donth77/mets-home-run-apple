@@ -28,6 +28,7 @@ export function UpcomingGames({ games }: { games: readonly UpcomingMetsGame[] })
   if (games.length === 0) return null;
 
   const browserTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  const firstGameTimeZone = timeZoneAbbreviation(new Date(games[0].gameDate), browserTimeZone);
 
   return (
     <aside className="upcoming-games" aria-label="Upcoming Mets games">
@@ -36,11 +37,15 @@ export function UpcomingGames({ games }: { games: readonly UpcomingMetsGame[] })
           <span>On deck</span>
           <h2>Upcoming Mets games</h2>
         </div>
-        <small title={browserTimeZone}>{timeZoneAbbreviation(new Date(), browserTimeZone)}</small>
+        <small title={browserTimeZone}>
+          <span aria-hidden="true">{firstGameTimeZone}</span>
+          <span className="visually-hidden">Times shown in {firstGameTimeZone}</span>
+        </small>
       </header>
       <ol>
         {games.map((game) => {
           const date = gameDateParts(game.gameDate);
+          const gameTimeZone = timeZoneAbbreviation(new Date(game.gameDate), browserTimeZone);
           return (
             <li key={game.gamePk}>
               <a
@@ -48,7 +53,7 @@ export function UpcomingGames({ games }: { games: readonly UpcomingMetsGame[] })
                 href={`https://www.mlb.com/gameday/${game.gamePk}`}
                 target="_blank"
                 rel="noreferrer"
-                aria-label={`${game.location === "HOME" ? "Mets versus" : "Mets at"} ${game.opponent}, ${date.day} ${date.date} at ${date.time}; opens MLB Gameday in a new tab`}
+                aria-label={`${game.location === "HOME" ? "Mets versus" : "Mets at"} ${game.opponent}, ${date.day} ${date.date} at ${date.time} ${gameTimeZone}; opens MLB Gameday in a new tab`}
               >
                 <OpponentLogo abbreviation={game.opponentAbbreviation} teamId={game.opponentId} />
                 <time dateTime={game.gameDate}>

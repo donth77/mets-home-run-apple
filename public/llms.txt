@@ -1,0 +1,23 @@
+# Virtual Mets Apple
+
+> Virtual Mets Apple is a free, unofficial fan-made browser experience for following New York Mets games with live scores and a 3D Citi Field Home Run Apple.
+
+The site is written in English. During games it shows the score and game state, raises the virtual Apple for confirmed Mets home runs and wins, and can play optional celebration sounds and Mets Radio. Between games it shows upcoming Mets matchups. It does not control physical hardware.
+
+This project is not affiliated with, endorsed by, or sponsored by the New York Mets, Major League Baseball, Citi Field, or Audacy. Live game information comes from public MLB Stats API data and may be delayed or temporarily unavailable. MLB Gameday remains the authoritative game reference. Radio availability follows Audacy's broadcast rules.
+
+## Site
+
+- [Virtual Mets Apple](https://metsapple.com/): Canonical interactive site.
+- [Virtual Mets Apple in Markdown](https://metsapple.com/index.md): Text description of the site's purpose, features, data, and accessibility behavior.
+
+## Project information
+
+- [Virtual Apple guide](https://github.com/donth77/mets-home-run-apple/blob/main/apps/virtual-apple/README.md): How the live site works and how to run it locally.
+- [Architecture](https://github.com/donth77/mets-home-run-apple/blob/main/docs/ARCHITECTURE.md): Plain-English overview of the shared C++ rules, web presentation, and live-feed adapter.
+- [Source repository](https://github.com/donth77/mets-home-run-apple): Open-source code for Virtual Mets Apple, Apple Lab, and the physical Apple project.
+
+## Optional
+
+- [MLB Gameday](https://www.mlb.com/gameday): Official pitch-by-pitch game details.
+- [Mets Radio on Audacy](https://www.audacy.com/stations/metsradio): Official Mets Radio station page.
