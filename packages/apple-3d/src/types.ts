@@ -8,6 +8,7 @@ export interface AppleAssemblyProps {
 
 export interface AppleStageProps extends AppleAssemblyProps {
   mode: "lab" | "outfield";
+  framing?: "default" | "mini";
   weather?: "CLEAR" | "RAIN";
   scoreboardData?: StadiumScoreboardData;
   className?: string;

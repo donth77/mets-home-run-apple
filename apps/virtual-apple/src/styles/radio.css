@@ -54,34 +54,30 @@
 }
 
 .radio-card__icon {
-  align-items: flex-end;
-  background: #123d67;
-  border: 1px solid #2b6696;
+  align-items: center;
+  background: #142a3d;
+  border: 1px solid #3a5064;
   border-radius: 9px;
+  color: #8fa2b2;
+  cursor: pointer;
   display: flex;
-  gap: 2px;
   height: 34px;
   justify-content: center;
-  padding-bottom: 8px;
+  padding: 0;
   width: 34px;
 }
 
-.radio-card__icon i {
-  animation: radio-level 0.9s ease-in-out infinite alternate;
-  background: #ff7b3d;
-  border-radius: 2px;
-  display: block;
-  height: 7px;
-  width: 3px;
+.radio-card__icon:hover {
+  background: #1a3852;
+  border-color: #56728b;
+  color: #c3d0da;
 }
 
-.radio-card__icon i:nth-child(2) {
-  animation-delay: -0.35s;
-  height: 13px;
-}
-.radio-card__icon i:nth-child(3) {
-  animation-delay: -0.65s;
-  height: 9px;
+.radio-card__icon[aria-pressed="true"] {
+  background: #123d67;
+  border-color: #2b6696;
+  color: #ff7b3d;
+  box-shadow: 0 0 14px rgba(255, 123, 61, 0.24);
 }
 
 .radio-card__live {

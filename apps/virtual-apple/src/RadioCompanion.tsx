@@ -1,3 +1,4 @@
+import { Radio, RadioOff } from "lucide-react";
 import { useRef, useState } from "react";
 
 const AUDACY_METS_STREAM_URL = "https://live.amperwave.net/direct/audacy-metsradiomp3-imc";
@@ -19,6 +20,7 @@ export function RadioCompanion() {
   const audio = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
   const [error, setError] = useState("");
+  const RadioIcon = playing ? Radio : RadioOff;
 
   async function togglePlayback() {
     if (!audio.current) return;
@@ -40,11 +42,17 @@ export function RadioCompanion() {
   return (
     <aside className="radio-card" aria-label="Mets radio companion" aria-describedby="mets-radio-help">
       <div className="radio-card__station">
-        <span className="radio-card__icon" aria-hidden="true">
-          <i />
-          <i />
-          <i />
-        </span>
+        <button
+          type="button"
+          className="radio-card__icon"
+          aria-controls="mets-radio-stream"
+          aria-label={playing ? "Pause Mets radio" : "Play Mets radio"}
+          aria-pressed={playing}
+          onClick={togglePlayback}
+          title={playing ? "Pause Mets radio" : "Play Mets radio"}
+        >
+          <RadioIcon aria-hidden="true" size={20} strokeWidth={2.25} />
+        </button>
         <div>
           <span>Mets radio</span>
           <strong>Mets Radio · 880 AM</strong>
@@ -59,8 +67,13 @@ export function RadioCompanion() {
         ref={audio}
         src={streamUrl}
         preload="none"
+        onPlay={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
         onEnded={() => setPlaying(false)}
-        onError={() => setError("The live stream is unavailable here right now.")}
+        onError={() => {
+          setPlaying(false);
+          setError("The live stream is unavailable here right now.");
+        }}
       />
       <div className="radio-card__actions">
         <button

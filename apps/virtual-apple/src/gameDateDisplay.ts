@@ -49,6 +49,17 @@ export function gameDateParts(
   };
 }
 
+export function timeZoneAbbreviation(
+  date = new Date(),
+  timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+) {
+  return (
+    new Intl.DateTimeFormat("en-US", { timeZone, timeZoneName: "short" })
+      .formatToParts(date)
+      .find((part) => part.type === "timeZoneName")?.value ?? "UTC"
+  );
+}
+
 export function nextGameLabelParts(label: string) {
   const detail = label.replace(/^NEXT GAME\s*[·•-]?\s*/i, "").trim();
   const match = detail.match(/^(.*?)\s+(\d{1,2}:\d{2}\s*(?:AM|PM))$/i);

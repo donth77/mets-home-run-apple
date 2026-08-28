@@ -26,6 +26,12 @@ function isMets(team: StadiumMatchupTeam) {
   return team.id === 121 || team.abbreviation.trim().toUpperCase() === "NYM";
 }
 
+function fullBatterLine(line: string | undefined) {
+  const normalized = line?.trim();
+  const match = normalized?.match(/^(\d+)[–-](\d+)(.*)$/);
+  return match ? `${match[1]} for ${match[2]}${match[3].toUpperCase()}` : normalized?.toUpperCase() || "—";
+}
+
 export function stadiumMatchupFooter(data: StadiumMatchupData): StadiumMatchupFooter | null {
   if (data.standby) return null;
   if (data.phase && !["LIVE", "REVIEW", "DELAYED"].includes(data.phase)) return null;
@@ -50,6 +56,6 @@ export function stadiumMatchupFooter(data: StadiumMatchupData): StadiumMatchupFo
     leftLabel: "OPPOSING BATTER",
     leftValue: data.batter?.trim().toUpperCase() || "—",
     rightLabel: "BATTER LINE",
-    rightValue: data.batterLine?.trim().toUpperCase() || "—",
+    rightValue: fullBatterLine(data.batterLine),
   };
 }

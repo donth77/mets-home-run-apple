@@ -26,7 +26,7 @@ describe("stadium matchup footer", () => {
         ...matchup,
         half: "TOP",
         batter: "Ronald Acuña Jr.",
-        batterLine: "0–3",
+        batterLine: "2–3",
         pitcher: "Kodai Senga",
         pitchCount: 87,
       }),
@@ -34,7 +34,7 @@ describe("stadium matchup footer", () => {
       leftLabel: "OPPOSING BATTER",
       leftValue: "RONALD ACUÑA JR.",
       rightLabel: "BATTER LINE",
-      rightValue: "0–3",
+      rightValue: "2 for 3",
     });
   });
 

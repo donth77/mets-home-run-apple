@@ -50,13 +50,58 @@
   }
 
   .virtual-header {
+    align-items: center;
+    display: grid;
+    gap: 12px;
     grid-area: header;
+    grid-template-columns: minmax(0, 1fr) auto;
     left: auto;
     min-width: 0;
     padding: 0;
     position: relative;
     right: auto;
     top: auto;
+  }
+
+  .virtual-header.virtual-header--background {
+    display: none;
+  }
+
+  .virtual-header__right {
+    display: contents;
+  }
+
+  .virtual-view-controls .view-mode-button {
+    display: none;
+  }
+
+  .radio-companion-slot {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+  }
+
+  .virtual-header__right > .virtual-view-controls {
+    backdrop-filter: none;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+    margin-right: 0;
+    padding: 0;
+  }
+
+  .virtual-view-controls .celebration-sound-toggle {
+    backdrop-filter: blur(12px);
+    background: rgba(5, 16, 29, 0.82);
+    border: 1px solid rgba(188, 215, 237, 0.28);
+    justify-content: flex-start;
+    min-height: 44px;
+    padding: 7px 11px;
+    width: auto;
   }
 
   .virtual-hud {
@@ -68,11 +113,11 @@
     max-width: calc(100% - 24px);
     position: relative;
     top: auto;
-    width: min(276px, calc(100% - 24px));
+    width: min(260px, calc(100% - 24px));
   }
 
   .virtual-header .radio-card {
-    width: 280px;
+    width: 100%;
   }
   .radio-card__message:not(.radio-card__message--error) {
     display: none;
@@ -139,7 +184,6 @@
 @media (max-width: 560px) {
   .virtual-header {
     align-items: stretch;
-    flex-direction: column;
     gap: 12px;
   }
 
@@ -186,10 +230,6 @@
   .skip-link {
     transition: none;
   }
-  .radio-card__icon i,
-  .celebration-sound-toggle__meter i {
-    animation: none;
-  }
   .playback-progress span {
     transition: none;
   }
@@ -224,8 +264,6 @@
   .mode-list button.is-active {
     outline: 2px solid Highlight;
   }
-  .radio-card__icon i,
-  .celebration-sound-toggle__meter i,
   .playback-progress span {
     background: Highlight;
   }

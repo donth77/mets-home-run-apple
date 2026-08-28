@@ -1,3 +1,4 @@
+import { useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
 import { CanvasTexture, SRGBColorSpace } from "three";
 import type { SceneRenderQuality } from "./sceneRendering";
@@ -20,6 +21,7 @@ export function StadiumVideoBoard({
   quality: SceneRenderQuality;
   reducedMotion: boolean;
 }) {
+  const desktopHeaderRightInset = useThree((state) => (state.size.width > 690 ? 300 : 44));
   const latestData = useRef(data);
   latestData.current = data;
   const texture = useMemo(() => {
@@ -40,17 +42,17 @@ export function StadiumVideoBoard({
     const context = texture.image.getContext("2d") as CanvasRenderingContext2D | null;
     if (!context) return;
     let active = true;
-    drawStadiumScoreboard(context, data, null, null);
+    drawStadiumScoreboard(context, data, null, null, desktopHeaderRightInset);
     texture.needsUpdate = true;
     Promise.all([loadTeamLogo(data.away.id), loadTeamLogo(data.home.id)]).then(([awayLogo, homeLogo]) => {
       if (!active) return;
-      drawStadiumScoreboard(context, data, awayLogo, homeLogo);
+      drawStadiumScoreboard(context, data, awayLogo, homeLogo, desktopHeaderRightInset);
       texture.needsUpdate = true;
     });
     return () => {
       active = false;
     };
-  }, [celebrationKind, data, offseason, texture]);
+  }, [celebrationKind, data, desktopHeaderRightInset, offseason, texture]);
 
   useEffect(() => {
     if (!offseason) return;

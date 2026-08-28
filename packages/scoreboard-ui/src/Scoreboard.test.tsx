@@ -85,4 +85,17 @@ describe("Scoreboard", () => {
     expect(html).toContain("LIVE");
     expect(html).not.toContain("FINAL");
   });
+
+  it("shows the final state once without a duplicate event row", () => {
+    const html = renderToStaticMarkup(
+      <Scoreboard
+        snapshot={{ ...awayMetsSnapshot, phase: "FINAL", label: "FINAL", half: "END", inning: 9, outs: 3 }}
+        announceUpdates={false}
+      />,
+    );
+
+    expect(html).toContain('class="apple-scorebug__final">FINAL</strong>');
+    expect(html).not.toContain("apple-scorebug__event");
+    expect(html.match(/FINAL/g)).toHaveLength(1);
+  });
 });

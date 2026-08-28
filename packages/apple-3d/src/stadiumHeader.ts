@@ -38,6 +38,6 @@ export function stadiumHeaderText(data: StadiumHeaderData) {
     data.half === "TOP" ? `▲ ${data.inning}` : data.half === "BOTTOM" ? `▼ ${data.inning}` : `MID ${data.inning}`;
   return {
     center: center.toUpperCase(),
-    right: isFinal ? "FINAL" : `${inningLabel}  ·  ${Math.min(data.outs, 3)} OUT${data.outs === 1 ? "" : "S"}`,
+    right: isFinal ? "" : `${inningLabel}  ·  ${Math.min(data.outs, 3)} OUT${data.outs === 1 ? "" : "S"}`,
   };
 }

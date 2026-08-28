@@ -86,13 +86,11 @@ function BroadcastScorebug({
     snapshot.phase !== "FINAL" && snapshot.label.trim().toUpperCase() === "FINAL" ? snapshot.phase : snapshot.label;
   const footerLabel = standby
     ? "STANDBY"
-    : isFinal
-      ? snapshotLabel
-      : showMatchup && matchupRole === "BATTING"
-        ? (snapshot.atBat?.batter?.toUpperCase() ?? "METS AT BAT")
-        : showMatchup && matchupRole === "PITCHING"
-          ? (snapshot.atBat?.pitcher?.toUpperCase() ?? "METS PITCHING")
-          : snapshotLabel;
+    : showMatchup && matchupRole === "BATTING"
+      ? (snapshot.atBat?.batter?.toUpperCase() ?? "METS AT BAT")
+      : showMatchup && matchupRole === "PITCHING"
+        ? (snapshot.atBat?.pitcher?.toUpperCase() ?? "METS PITCHING")
+        : snapshotLabel;
   const footerDetail =
     showMatchup && matchupRole === "BATTING"
       ? compactBatterLine(snapshot.atBat?.batterLine)
@@ -166,10 +164,12 @@ function BroadcastScorebug({
           )}
         </div>
       </div>
-      <footer className="apple-scorebug__event">
-        <strong>{footerLabel}</strong>
-        {footerDetail && <b>{footerDetail}</b>}
-      </footer>
+      {!isFinal && (
+        <footer className="apple-scorebug__event">
+          <strong>{footerLabel}</strong>
+          {footerDetail && <b>{footerDetail}</b>}
+        </footer>
+      )}
     </section>
   );
 }

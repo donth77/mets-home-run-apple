@@ -9,6 +9,7 @@ import { demoControlsEnabled } from "./demoMode";
 import { gameDateParts, nextGameLabelParts } from "./gameDateDisplay";
 import { selectHomeRunPhrase } from "./homeRunPhrases";
 import { LiveGamedayWidget } from "./LiveGamedayWidget";
+import { MiniAppleView } from "./MiniAppleView";
 import {
   fanFacingMoment,
   isCitiFieldVenue,
@@ -19,11 +20,14 @@ import {
 import { RadioCompanion } from "./RadioCompanion";
 import { UpcomingGames } from "./UpcomingGames";
 import { type CelebrationSoundCue, useCelebrationSound } from "./useCelebrationSound";
+import { useDesktopViewModes } from "./useDesktopViewModes";
 import { useFixturePlayback } from "./useFixturePlayback";
 import { useLiveMetsGame } from "./useLiveMetsGame";
 import { useMetsSchedule } from "./useMetsSchedule";
 import { useMlbSeasonPhase } from "./useMlbSeasonPhase";
+import { useMiniAppleWindow } from "./useMiniAppleWindow";
 import { useReducedMotion } from "./useReducedMotion";
+import { ViewModeControls } from "./ViewModeControls";
 import { VictoryConfetti } from "./VictoryConfetti";
 
 const modes = [
@@ -42,7 +46,17 @@ export function App() {
   const seasonPhase = useMlbSeasonPhase();
   const live = useLiveMetsGame(seasonPhase.status !== "CHECKING" && !seasonPhase.isOffseason);
   const reducedMotion = useReducedMotion();
+  const desktopViewModes = useDesktopViewModes();
   const [sceneReady, setSceneReady] = useState(false);
+  const [focusMode, setFocusMode] = useState(false);
+  const activeFocusMode = desktopViewModes && focusMode;
+  const miniAppleWindow = useMiniAppleWindow();
+  useEffect(() => {
+    if (miniAppleWindow.isOpen) setSceneReady(false);
+  }, [miniAppleWindow.isOpen]);
+  useEffect(() => {
+    if (!desktopViewModes && focusMode) setFocusMode(false);
+  }, [desktopViewModes, focusMode]);
   const showDemoControls = useMemo(
     () => demoControlsEnabled(window.location.search, import.meta.env.DEV, window.location.hostname),
     [],
@@ -149,6 +163,7 @@ export function App() {
     }
   }, [appleFullyRaised, winCelebration]);
   const betweenGames = !liveStandby && publicSnapshot.phase === "SLEEP" && !offseason;
+  const gameIsFinal = publicSnapshot.phase === "FINAL";
   const atCitiField = demoOverride
     ? sourceSnapshot.home.id === METS_TEAM_ID
     : offseason
@@ -188,6 +203,13 @@ export function App() {
     nextGameDay: nextGame.day,
     nextGameTime: nextGame.time,
   });
+  const showBroadcastScoreboard = !offseason && !betweenGames && (!liveStandby || publicSnapshot.gamePk > 0);
+  const soundControls = {
+    enabled: celebrationSound.enabled,
+    error: celebrationSound.error,
+    onToggle: celebrationSound.toggle,
+    supported: celebrationSound.supported,
+  };
 
   async function playScenario(id: string) {
     celebrationSound.stop();
@@ -205,142 +227,212 @@ export function App() {
     setDemoOverride(false);
   }
 
+  async function openMiniApple() {
+    const opened = await miniAppleWindow.open();
+    if (!opened) setFocusMode(true);
+  }
+
   return (
-    <main
-      className="virtual-shell"
-      data-demo-controls={showDemoControls}
-      data-feed-status={liveStandby ? "standby" : "current"}
-      data-phase={liveStandby ? "STANDBY" : publicSnapshot.phase}
-      data-scene-ready={sceneReady}
-      data-weather={rainDelay ? "rain" : "clear"}
-    >
-      {!offseason && (
-        <a className="skip-link" href="#game-status">
-          Skip to game status
-        </a>
-      )}
-      <h1 className="visually-hidden">Virtual Apple</h1>
-      <p className="visually-hidden" role="status" aria-live="polite" aria-atomic="true">
-        {statusAnnouncement}
-      </p>
-      <AppleStage
-        mode="outfield"
-        positionMm={presentationActuator.positionMm}
-        reducedMotion={reducedMotion}
-        weather={rainDelay ? "RAIN" : "CLEAR"}
-        onReadyChange={setSceneReady}
-        scoreboardData={stadiumScoreboardData}
-      />
+    <>
+      <main
+        className="virtual-shell"
+        data-demo-controls={showDemoControls}
+        data-feed-status={liveStandby ? "standby" : "current"}
+        data-focus-mode={activeFocusMode}
+        data-mini-open={miniAppleWindow.isOpen}
+        data-phase={liveStandby ? "STANDBY" : publicSnapshot.phase}
+        data-scene-ready={miniAppleWindow.isOpen || sceneReady}
+        data-weather={rainDelay ? "rain" : "clear"}
+      >
+        {!offseason && !activeFocusMode && !miniAppleWindow.isOpen && (
+          <a className="skip-link" href="#game-status">
+            Skip to game status
+          </a>
+        )}
+        <h1 className="visually-hidden">Virtual Apple</h1>
+        {!miniAppleWindow.isOpen && (
+          <p className="visually-hidden" role="status" aria-live="polite" aria-atomic="true">
+            {statusAnnouncement}
+          </p>
+        )}
+        {miniAppleWindow.error && (
+          <p className="view-mode-notice" role="status">
+            {miniAppleWindow.error}
+          </p>
+        )}
 
-      <header className="virtual-header">
-        <div className="virtual-brand">
-          <img className="brand-logo" src="/favicon.png" alt="" />
-          <div>
-            <strong>Virtual Apple</strong>
-            <small>Citi Field</small>
-          </div>
-          <button
-            type="button"
-            className="celebration-sound-toggle"
-            aria-label={celebrationSound.enabled ? "Turn scene sounds off" : "Turn scene sounds on"}
-            aria-pressed={celebrationSound.enabled}
-            disabled={!celebrationSound.supported}
-            onClick={() => void celebrationSound.toggle()}
-            title={celebrationSound.error || "Home-run jingles, Mets-win songs, and rain ambience"}
-          >
-            <span className="celebration-sound-toggle__meter" aria-hidden="true">
-              <i />
-              <i />
-              <i />
-            </span>
-            <span>{celebrationSound.enabled ? "Sound on" : "Sound off"}</span>
-          </button>
-        </div>
-        <RadioCompanion />
-      </header>
-
-      {!offseason && !betweenGames && (!liveStandby || publicSnapshot.gamePk > 0) && (
-        <div className="virtual-hud">
-          <div className="virtual-scoreboard">
-            <Scoreboard snapshot={publicSnapshot} announceUpdates={false} standby={liveStandby} />
-          </div>
-        </div>
-      )}
-
-      {gameIsActive && publicSnapshot.gamePk > 0 && !winCelebration && (
-        <LiveGamedayWidget snapshot={publicSnapshot} standby={liveStandby} />
-      )}
-      {!winCelebration && <UpcomingGames games={upcomingGames} />}
-
-      {!offseason && (
-        <section
-          id="game-status"
-          className={`moment-card${liveInningMoment ? " moment-card--live" : ""}${liveStandby ? " moment-card--standby" : ""}`}
-          tabIndex={-1}
-        >
-          {betweenGames ? (
-            <div className="moment-card__next">
-              <span className="moment-card__next-label">NEXT GAME</span>
-              <h2 className="moment-card__next-game">
-                <strong>{nextGame.day}</strong>
-                {nextGame.time && <time dateTime={nextGameDateTime}>{nextGame.time}</time>}
-              </h2>
+        {miniAppleWindow.isOpen ? (
+          <section className="mini-open-placeholder" aria-label="Mini Apple window status">
+            <img src="/favicon.png" alt="" />
+            <div>
+              <strong>Mini Apple is open</strong>
             </div>
-          ) : (
-            <>
-              {showMomentEyebrow && <span>{momentEyebrow}</span>}
-              {!liveInningMoment && <h2>{momentHeadline}</h2>}
-            </>
-          )}
-          {!betweenGames && <p>{publicSnapshot.lastEvent}</p>}
-        </section>
-      )}
-
-      {showDemoControls && (
-        <nav className="virtual-controls" aria-label="Virtual Apple demo scenes">
-          <div className="control-label">
-            <span>Demo</span>
-          </div>
-          <div className="mode-list">
-            <button
-              type="button"
-              className={demoOverride ? "" : "is-active"}
-              aria-pressed={!demoOverride}
-              onClick={returnToLiveData}
-            >
-              Live data
+            <button type="button" onClick={miniAppleWindow.close}>
+              Restore
             </button>
-            {modes.map((mode) => (
+          </section>
+        ) : (
+          <AppleStage
+            mode="outfield"
+            positionMm={presentationActuator.positionMm}
+            reducedMotion={reducedMotion}
+            weather={rainDelay ? "RAIN" : "CLEAR"}
+            onReadyChange={setSceneReady}
+            scoreboardData={stadiumScoreboardData}
+          />
+        )}
+
+        <header
+          className={
+            miniAppleWindow.isOpen
+              ? "virtual-header virtual-header--background"
+              : activeFocusMode
+                ? "virtual-header virtual-header--focus"
+                : "virtual-header"
+          }
+        >
+          {!miniAppleWindow.isOpen && !activeFocusMode && (
+            <div className="virtual-brand" key="brand">
+              <img className="brand-logo" src="/favicon.png" alt="" />
+              <div className="virtual-brand__copy">
+                <strong>Virtual Apple</strong>
+                <small>Citi Field</small>
+              </div>
+            </div>
+          )}
+          <div className="virtual-header__right" key="right">
+            <div
+              key="radio"
+              className={
+                activeFocusMode || miniAppleWindow.isOpen
+                  ? "radio-companion-slot radio-companion-slot--hidden"
+                  : "radio-companion-slot"
+              }
+            >
+              <RadioCompanion />
+            </div>
+            {!miniAppleWindow.isOpen && (
+              <ViewModeControls
+                key="view-controls"
+                desktopViewModes={desktopViewModes}
+                focusMode={activeFocusMode}
+                miniWindowSupported={miniAppleWindow.supported}
+                onOpenMiniWindow={openMiniApple}
+                onToggleFocusMode={() => setFocusMode((current) => !current)}
+                sound={soundControls}
+              />
+            )}
+          </div>
+        </header>
+
+        {!miniAppleWindow.isOpen && showBroadcastScoreboard && (
+          <div className="virtual-hud">
+            <div className="virtual-scoreboard">
+              <Scoreboard snapshot={publicSnapshot} announceUpdates={false} standby={liveStandby} />
+            </div>
+          </div>
+        )}
+
+        {!activeFocusMode &&
+          !miniAppleWindow.isOpen &&
+          gameIsActive &&
+          publicSnapshot.gamePk > 0 &&
+          !winCelebration && <LiveGamedayWidget snapshot={publicSnapshot} standby={liveStandby} />}
+        {!activeFocusMode && !miniAppleWindow.isOpen && !winCelebration && !gameIsFinal && (
+          <UpcomingGames games={upcomingGames} />
+        )}
+
+        {!activeFocusMode && !miniAppleWindow.isOpen && !offseason && (
+          <section
+            id="game-status"
+            className={`moment-card${liveInningMoment ? " moment-card--live" : ""}${liveStandby ? " moment-card--standby" : ""}`}
+            tabIndex={-1}
+          >
+            {betweenGames ? (
+              <div className="moment-card__next">
+                <span className="moment-card__next-label">NEXT GAME</span>
+                <h2 className="moment-card__next-game">
+                  <strong>{nextGame.day}</strong>
+                  {nextGame.time && <time dateTime={nextGameDateTime}>{nextGame.time}</time>}
+                </h2>
+              </div>
+            ) : (
+              <>
+                {showMomentEyebrow && <span>{momentEyebrow}</span>}
+                {!liveInningMoment && <h2>{momentHeadline}</h2>}
+              </>
+            )}
+            {!betweenGames && <p>{publicSnapshot.lastEvent}</p>}
+          </section>
+        )}
+
+        {showDemoControls && !activeFocusMode && !miniAppleWindow.isOpen && (
+          <nav className="virtual-controls" aria-label="Virtual Apple demo scenes">
+            <div className="control-label">
+              <span>Demo</span>
+            </div>
+            <div className="mode-list">
               <button
                 type="button"
-                key={mode.id}
-                className={demoOverride && playback.scenarioId === mode.id ? "is-active" : ""}
-                aria-pressed={demoOverride && playback.scenarioId === mode.id}
-                onClick={() => void playScenario(mode.id)}
+                className={demoOverride ? "" : "is-active"}
+                aria-pressed={!demoOverride}
+                onClick={returnToLiveData}
               >
-                {mode.label}
+                Live data
               </button>
-            ))}
-          </div>
-          <button type="button" className="celebrate-button" onClick={() => void playScenario("home-run")}>
-            Raise the Apple
-          </button>
-          {demoOverride && (
-            <div
-              className="playback-progress"
-              role="progressbar"
-              aria-label="Demo playback progress"
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-valuenow={Math.round(progress)}
-            >
-              <span style={{ width: `${progress}%` }} />
+              {modes.map((mode) => (
+                <button
+                  type="button"
+                  key={mode.id}
+                  className={demoOverride && playback.scenarioId === mode.id ? "is-active" : ""}
+                  aria-pressed={demoOverride && playback.scenarioId === mode.id}
+                  onClick={() => void playScenario(mode.id)}
+                >
+                  {mode.label}
+                </button>
+              ))}
             </div>
-          )}
-        </nav>
-      )}
+            <button type="button" className="celebrate-button" onClick={() => void playScenario("home-run")}>
+              Raise the Apple
+            </button>
+            {demoOverride && (
+              <div
+                className="playback-progress"
+                role="progressbar"
+                aria-label="Demo playback progress"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={Math.round(progress)}
+              >
+                <span style={{ width: `${progress}%` }} />
+              </div>
+            )}
+          </nav>
+        )}
 
-      <VictoryConfetti active={winCelebration && appleFullyRaised} reducedMotion={reducedMotion} />
-    </main>
+        {!miniAppleWindow.isOpen && (
+          <VictoryConfetti active={winCelebration && appleFullyRaised} reducedMotion={reducedMotion} />
+        )}
+      </main>
+
+      {miniAppleWindow.container && (
+        <MiniAppleView
+          betweenGames={betweenGames}
+          confettiActive={winCelebration && appleFullyRaised}
+          container={miniAppleWindow.container}
+          nextGame={nextGame}
+          offseason={offseason}
+          onReturn={miniAppleWindow.close}
+          positionMm={presentationActuator.positionMm}
+          reducedMotion={reducedMotion}
+          scoreboardData={stadiumScoreboardData}
+          showScoreboard={showBroadcastScoreboard}
+          snapshot={publicSnapshot}
+          sound={soundControls}
+          standby={liveStandby}
+          weather={rainDelay ? "RAIN" : "CLEAR"}
+        />
+      )}
+    </>
   );
 }

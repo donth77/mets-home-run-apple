@@ -118,9 +118,3 @@
   height: 100%;
   width: 100%;
 }
-
-@keyframes radio-level {
-  to {
-    transform: scaleY(0.45);
-  }
-}
