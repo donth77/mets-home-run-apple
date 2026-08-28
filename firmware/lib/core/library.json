@@ -1,0 +1,10 @@
+{
+  "$schema": "https://raw.githubusercontent.com/platformio/platformio-core/develop/platformio/assets/schema/library.json",
+  "name": "apple-core",
+  "version": "0.1.0",
+  "description": "Hardware-independent game decisions and celebration sequencing.",
+  "build": {
+    "includeDir": "include",
+    "srcDir": "src"
+  }
+}
