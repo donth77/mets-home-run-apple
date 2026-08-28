@@ -79,12 +79,21 @@ describe("Virtual Apple discovery metadata", () => {
 
   it("leaves useful, equivalent content when JavaScript cannot run", () => {
     const document = parseIndex();
-    const fallback = document.querySelector("#root > main");
+    const fallback = document.querySelector("body > noscript .app-shell-fallback");
 
     expect(fallback?.querySelector("h1")?.textContent).toBe("Virtual Mets Apple");
     expect(fallback?.textContent).toContain("live scores");
     expect(fallback?.textContent).toContain("unofficial fan-made experience");
     expect(fallback?.querySelector('a[href*="github.com/donth77/mets-home-run-apple"]')).not.toBeNull();
+  });
+
+  it("uses the real loading presentation for the first browser paint", () => {
+    const document = parseIndex();
+    const loader = document.querySelector("#root > .app-shell-loader");
+
+    expect(loader?.getAttribute("role")).toBe("status");
+    expect(loader?.textContent).toContain("Preparing Citi Field");
+    expect(loader?.textContent).not.toContain("live scores");
   });
 
   it("serves standard crawler files and a concise LLM-readable alternative", () => {
