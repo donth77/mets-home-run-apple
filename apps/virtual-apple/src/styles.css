@@ -1,6 +1,7 @@
 @import "./styles/base.css";
 @import "./styles/radio.css";
 @import "./styles/game-widgets.css";
+@import "./styles/pwa-install.css";
 @import "./styles/demo-and-effects.css";
 @import "./styles/view-modes.css";
 @import "./styles/responsive.css";

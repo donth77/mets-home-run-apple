@@ -229,10 +229,14 @@ describe("Virtual Apple accessibility", () => {
     const scene = container.querySelector(".shared-apple-stage-slot");
     const gameStatus = container.querySelector(".moment-card");
     const upcomingGames = container.querySelector(".upcoming-games");
-    if (!header || !scene || !gameStatus || !upcomingGames) throw new Error("Expected the mobile page regions.");
+    const installPrompt = container.querySelector(".pwa-install");
+    if (!header || !scene || !gameStatus || !upcomingGames || !installPrompt) {
+      throw new Error("Expected the mobile page regions.");
+    }
 
     expect(header.compareDocumentPosition(scene) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(gameStatus.compareDocumentPosition(upcomingGames) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(upcomingGames.compareDocumentPosition(installPrompt) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("includes the browser time-zone code in visible and accessible schedule text", () => {
@@ -378,6 +382,7 @@ describe("Virtual Apple accessibility", () => {
     expect(queryByRole("button", { name: "Enter Focus view" })).toBeNull();
     expect(queryByRole("button", { name: "Open Mini Apple" })).toBeNull();
     expect(getByRole("complementary", { name: "Mets radio companion" })).not.toBeNull();
+    expect(getByRole("button", { name: "Add to home screen" })).not.toBeNull();
     expect(container.querySelector(".radio-companion-slot")?.classList.contains("radio-companion-slot--hidden")).toBe(
       false,
     );

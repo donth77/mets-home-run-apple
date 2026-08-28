@@ -18,6 +18,7 @@
 
 @media (max-width: 690px) {
   .virtual-shell {
+    background: #071728;
     display: grid;
     gap: 12px;
     grid-template-columns: minmax(0, 1fr);
@@ -26,13 +27,26 @@
       "scene"
       "moment"
       "upcoming"
-      "controls";
-    grid-template-rows: auto minmax(520px, 70svh) auto auto auto;
+      "controls"
+      "install";
+    grid-template-rows: auto minmax(520px, 70svh) auto auto auto auto;
     height: auto;
+    isolation: isolate;
     min-height: 100svh;
     overflow: visible;
     padding: 12px;
     width: 100%;
+  }
+
+  .virtual-shell::after {
+    background:
+      radial-gradient(circle at 50% 8%, rgba(50, 105, 148, 0.58), transparent 44%),
+      linear-gradient(180deg, #173f62 0%, #0b2945 54%, #071728 100%);
+    content: "";
+    inset: 0;
+    pointer-events: none;
+    position: fixed;
+    z-index: 0;
   }
 
   .virtual-shell::before {
@@ -47,6 +61,7 @@
     inset: auto;
     min-height: 520px;
     position: relative;
+    z-index: 1;
   }
 
   .virtual-header {
@@ -207,8 +222,8 @@
 
 @media (max-width: 430px) {
   .virtual-shell {
-    grid-template-rows: auto minmax(480px, 68svh) auto auto auto;
-    padding: 10px;
+    grid-template-rows: auto minmax(480px, 68svh) auto auto auto auto;
+    padding: 10px 10px max(10px, env(safe-area-inset-bottom));
   }
 
   .virtual-shell > .shared-apple-stage-slot {
@@ -240,6 +255,7 @@
   .celebration-sound-toggle,
   .upcoming-games,
   .gameday-card,
+  .pwa-install,
   .virtual-controls {
     background: #061422;
     border-color: #b9cfe0;
@@ -257,6 +273,7 @@
   .celebration-sound-toggle,
   .upcoming-games,
   .gameday-card,
+  .pwa-install,
   .virtual-controls,
   .upcoming-game__logo {
     border: 1px solid CanvasText;

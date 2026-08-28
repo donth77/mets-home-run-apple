@@ -17,6 +17,7 @@ import {
   liveMoment,
   liveOffseasonSnapshot,
 } from "./presentation";
+import { PwaInstallPrompt } from "./PwaInstallPrompt";
 import { RadioCompanion } from "./RadioCompanion";
 import { createSharedAppleStageHost, moveSharedAppleStage, SharedAppleStage } from "./SharedAppleStage";
 import { UpcomingGames } from "./UpcomingGames";
@@ -430,6 +431,8 @@ export function App() {
             )}
           </nav>
         )}
+
+        {!desktopViewModes && !miniAppleWindow.isOpen && <PwaInstallPrompt />}
 
         {!miniAppleWindow.isOpen && (
           <VictoryConfetti active={winCelebration && appleFullyRaised} reducedMotion={reducedMotion} />

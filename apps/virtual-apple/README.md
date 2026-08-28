@@ -39,6 +39,8 @@ On browsers with Document Picture-in-Picture support, **Mini Apple** moves that 
 
 Phones use the regular page instead of Focus or Mini Apple. The radio stacks beneath the header, the scene-sound button remains easy to reach, and the scorebug sits in the bottom-right of the field without overlapping the large stadium board. Game status, upcoming games, and local demo controls flow beneath the scene when they apply.
 
+An **Add to home screen** card sits at the end of the mobile page. Supported Android browsers open their native install prompt; other mobile browsers show the Share or browser-menu steps. The card is hidden when Virtual Apple is already running from the home screen.
+
 ## Local demo controls
 
 The **Demo** bar is available only from a Vite development build on a loopback address with an explicit flag:

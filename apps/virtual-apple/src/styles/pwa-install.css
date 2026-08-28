@@ -1,0 +1,94 @@
+.pwa-install {
+  align-items: center;
+  backdrop-filter: blur(15px);
+  background: rgba(5, 16, 29, 0.94);
+  border: 1px solid rgba(188, 215, 237, 0.28);
+  border-radius: 14px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+  color: #edf5fb;
+  display: grid;
+  gap: 12px;
+  grid-area: install;
+  grid-template-columns: minmax(0, 1fr) auto;
+  overflow: hidden;
+  padding: 12px;
+  position: relative;
+  z-index: 7;
+}
+
+.pwa-install__identity {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  min-width: 0;
+}
+
+.pwa-install__identity img {
+  flex: 0 0 auto;
+  height: 40px;
+  object-fit: contain;
+  width: 40px;
+}
+
+.pwa-install__identity div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.pwa-install__identity strong {
+  color: #fff;
+  font-size: 0.82rem;
+}
+
+.pwa-install__identity span {
+  color: #9fb4c4;
+  font-size: 0.68rem;
+  line-height: 1.35;
+}
+
+.pwa-install button {
+  align-items: center;
+  background: #f2672c;
+  border: 1px solid #ff9a63;
+  border-radius: 999px;
+  color: #fff;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 0.72rem;
+  font-weight: 850;
+  gap: 7px;
+  justify-content: center;
+  min-height: 44px;
+  padding: 8px 13px;
+  white-space: nowrap;
+}
+
+.pwa-install button:hover {
+  background: #ff7540;
+}
+
+.pwa-install button svg {
+  height: 18px;
+  width: 18px;
+}
+
+.pwa-install p {
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  color: #c8d6e1;
+  font-size: 0.72rem;
+  grid-column: 1 / -1;
+  line-height: 1.5;
+  margin: 0;
+  padding: 10px 2px 1px;
+}
+
+@media (max-width: 430px) {
+  .pwa-install {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pwa-install button {
+    width: 100%;
+  }
+}
