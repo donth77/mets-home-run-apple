@@ -64,10 +64,37 @@
   justify-items: center;
 }
 
+.apple-scorebug__situation.is-standby {
+  align-items: center;
+  grid-template-rows: 1fr;
+  justify-items: center;
+}
+
 .apple-scorebug__final {
   font-size: 0.95rem;
   font-weight: 900;
   letter-spacing: 0.1em;
+}
+
+.apple-scorebug__standby {
+  align-items: center;
+  display: grid;
+  gap: 5px;
+  justify-items: center;
+}
+
+.apple-scorebug__standby span {
+  color: #9fb5c7;
+  font-size: 0.58rem;
+  font-weight: 850;
+  letter-spacing: 0.12em;
+}
+
+.apple-scorebug__standby strong {
+  color: #ffffff;
+  font-size: 1.08rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
 }
 
 .apple-scorebug__upper {

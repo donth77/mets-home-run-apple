@@ -1,9 +1,9 @@
-import { Sky } from "@react-three/drei";
 import { useEffect, useMemo } from "react";
 import type { Texture } from "three";
 import { canvasTexture, createOutfieldTextures } from "./outfieldTextures";
 import { RainEffect } from "./RainEffect";
 import { StadiumVideoBoard } from "./StadiumVideoBoard";
+import type { SceneRenderQuality } from "./sceneRendering";
 import type { StadiumScoreboardData } from "./types";
 
 const LIGHT_PANEL_POSITIONS = Array.from({ length: 8 }, (_, index) => ({
@@ -81,16 +81,19 @@ const fallbackScoreboardData: StadiumScoreboardData = {
 };
 
 export function OutfieldEnvironment({
+  quality,
   reducedMotion,
   scoreboardData = fallbackScoreboardData,
   weather,
 }: {
+  quality: SceneRenderQuality;
   reducedMotion: boolean;
   scoreboardData?: StadiumScoreboardData;
   weather: "CLEAR" | "RAIN";
 }) {
-  const textures = useMemo(() => createOutfieldTextures(), []);
+  const textures = useMemo(() => createOutfieldTextures(quality), [quality]);
   const raining = weather === "RAIN";
+  const fullQuality = quality === "full";
 
   useEffect(
     () => () => {
@@ -105,25 +108,15 @@ export function OutfieldEnvironment({
     <>
       <color attach="background" args={[raining ? "#a8c7d8" : "#bad8eb"]} />
       <fog attach="fog" args={[raining ? "#abc4d2" : "#b4cedf", raining ? 27 : 30, raining ? 61 : 66]} />
-      {!raining && (
-        <Sky
-          distance={450000}
-          sunPosition={[-4, 2.2, 6]}
-          turbidity={7}
-          rayleigh={1.4}
-          mieCoefficient={0.004}
-          mieDirectionalG={0.78}
-        />
-      )}
       <hemisphereLight
         args={[raining ? "#d9e8ee" : "#ecf7ff", raining ? "#385149" : "#41654a", raining ? 1.95 : 2.25]}
       />
       <directionalLight
-        castShadow
+        castShadow={fullQuality}
         position={[-8, 14, 9]}
         intensity={raining ? 2.55 : 3.25}
         color={raining ? "#e8f2f6" : "#fffaf0"}
-        shadow-mapSize={[2048, 2048]}
+        shadow-mapSize={fullQuality ? [2048, 2048] : [1024, 1024]}
         shadow-bias={-0.00025}
         shadow-camera-left={-24}
         shadow-camera-right={24}
@@ -200,7 +193,7 @@ export function OutfieldEnvironment({
         <boxGeometry args={[13.2, 7.3, 1.05]} />
         <meshStandardMaterial color="#252d2e" roughness={0.9} />
       </mesh>
-      <StadiumVideoBoard data={scoreboardData} reducedMotion={reducedMotion} />
+      <StadiumVideoBoard data={scoreboardData} quality={quality} reducedMotion={reducedMotion} />
       {[-1, 1].map((side) => (
         <group key={side}>
           <mesh position={[side * 8.55, 6.65, -8.78]} castShadow receiveShadow>
@@ -230,7 +223,7 @@ export function OutfieldEnvironment({
 
       <LightTower x={-12.3} />
       <LightTower x={12.3} />
-      {raining && <RainEffect reducedMotion={reducedMotion} />}
+      {raining && <RainEffect quality={quality} reducedMotion={reducedMotion} />}
     </>
   );
 }

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { FINAL_SCOREBOARD_HOLD_MS, liveFeedContinuation, selectTrackableMetsGame } from "./useLiveMetsGame";
+import {
+  FINAL_SCOREBOARD_HOLD_MS,
+  liveFeedContinuation,
+  remainingLivePollDelay,
+  selectTrackableMetsGame,
+} from "./useLiveMetsGame";
 
 function game(gamePk: number, abstractState: string, detailedState: string) {
   return {
@@ -40,5 +45,11 @@ describe("live feed continuation", () => {
 
   it("keeps polling at the feed cadence while the game is not final", () => {
     expect(liveFeedContinuation("LIVE", 5_000)).toEqual({ kind: "POLL", delayMs: 5_000 });
+  });
+
+  it("counts request time toward the polling cadence", () => {
+    expect(remainingLivePollDelay(10_000, 275)).toBe(9_725);
+    expect(remainingLivePollDelay(10_000, 10_500)).toBe(0);
+    expect(remainingLivePollDelay(10_000, -1)).toBe(10_000);
   });
 });

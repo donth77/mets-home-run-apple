@@ -1,6 +1,6 @@
 import type { NormalizedGameInput } from "@apple/protocol";
 import { afterEach, describe, expect, it } from "vitest";
-import { LiveGameCoreController } from "./liveGameCoreController";
+import { coreSequenceNeedsTicking, LiveGameCoreController } from "./liveGameCoreController";
 
 const activeControllers: LiveGameCoreController[] = [];
 
@@ -47,6 +47,16 @@ function input(
 }
 
 describe("Virtual Apple live core controller", () => {
+  it("only runs the local timer while a sequence can advance with time", () => {
+    expect(coreSequenceNeedsTicking("IDLE")).toBe(false);
+    expect(coreSequenceNeedsTicking("REVIEW_HOLD")).toBe(false);
+    expect(coreSequenceNeedsTicking("FAULT")).toBe(false);
+    expect(coreSequenceNeedsTicking("LEAD_IN")).toBe(true);
+    expect(coreSequenceNeedsTicking("EXTENDING")).toBe(true);
+    expect(coreSequenceNeedsTicking("RAISED")).toBe(true);
+    expect(coreSequenceNeedsTicking("RETRACTING")).toBe(true);
+  });
+
   it("maps a normalized live home run through the canonical lead-in, raise, hold, and retract sequence", async () => {
     const controller = await LiveGameCoreController.create();
     activeControllers.push(controller);

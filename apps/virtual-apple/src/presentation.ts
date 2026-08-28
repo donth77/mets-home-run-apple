@@ -95,16 +95,16 @@ export function liveMoment(
     return { label: "GRAND SLAM!!", lastEvent: grandSlamDescription(celebration.subject || "A Mets hitter") };
   }
   if (celebration?.kind === "HOME_RUN") return { label: "HOME RUN!", lastEvent: homeRunPhrase };
+  if (status === "ERROR") {
+    return {
+      label: "STANDBY",
+      lastEvent: "Live updates are temporarily unavailable. The Apple will try again momentarily.",
+    };
+  }
   if (status === "FINAL" || snapshot.phase === "FINAL") {
     return { label: "FINAL", lastEvent: snapshot.lastEvent };
   }
   if (status === "CHECKING") return { label: "BETWEEN GAMES", lastEvent: "Checking today’s Mets schedule…" };
-  if (status === "ERROR") {
-    return {
-      label: "BETWEEN GAMES",
-      lastEvent: "Live updates are temporarily unavailable. The Apple will try again automatically.",
-    };
-  }
   if (status === "BETWEEN_GAMES") {
     return { label: "BETWEEN GAMES", lastEvent: "The Apple is resting until the next Mets game." };
   }

@@ -73,6 +73,7 @@ vi.mock("@apple/apple-3d", () => ({
       label?: string;
       nextGame?: { day: string; time: string };
       pitchCount?: number;
+      standby?: boolean;
     };
     weather?: "CLEAR" | "RAIN";
   }) => {
@@ -91,6 +92,7 @@ vi.mock("@apple/apple-3d", () => ({
         data-pitch-count={scoreboardData?.pitchCount}
         data-position-mm={positionMm}
         data-scoreboard-label={scoreboardData?.label}
+        data-scoreboard-standby={String(scoreboardData?.standby)}
         data-weather={weather}
       />
     );
@@ -518,6 +520,52 @@ describe("Virtual Apple accessibility", () => {
     rerender(<App />);
     expect(container.querySelector(".apple-scorebug")).toBeNull();
     expect(container.querySelector(".moment-card__next")).not.toBeNull();
+  });
+
+  it("shows a consistent standby presentation when live updates fail", () => {
+    liveTestState.game = { venue: "Citi Field" };
+    liveTestState.snapshot = getScenario("live").frames[0]?.snapshot;
+    liveTestState.status = "ERROR";
+
+    const { container, getByRole, queryByRole } = render(<App />);
+    const shell = container.querySelector(".virtual-shell");
+    const stage = getByRole("img", { name: "Virtual Home Run Apple behind the center-field wall" });
+    const scorebug = container.querySelector(".apple-scorebug");
+    const announcement = container.querySelector('.visually-hidden[role="status"]')?.textContent ?? "";
+
+    expect(shell?.getAttribute("data-feed-status")).toBe("standby");
+    expect(shell?.getAttribute("data-phase")).toBe("STANDBY");
+    expect(stage.getAttribute("data-scoreboard-label")).toBe("STANDBY");
+    expect(stage.getAttribute("data-scoreboard-standby")).toBe("true");
+    expect(scorebug?.querySelector(".apple-scorebug__standby strong")?.textContent).toBe("▼7");
+    expect(scorebug?.querySelector(".apple-scorebug__event strong")?.textContent).toBe("STANDBY");
+    expect(container.querySelector(".moment-card h2")?.textContent).toBe("STANDBY");
+    expect(container.querySelector(".moment-card p")?.textContent).toContain("try again momentarily");
+    expect(queryByRole("complementary", { name: "Upcoming Mets games" })).toBeNull();
+    expect(getByRole("complementary", { name: "Current game on MLB Gameday" }).textContent).toContain("Updates paused");
+    expect(container.textContent).not.toContain("BETWEEN GAMES");
+    expect(container.textContent).not.toContain("FINAL");
+    expect(announcement).not.toContain("Final");
+    expect(announcement).not.toContain("between games");
+  });
+
+  it("does not leak final from a retained snapshot into standby", () => {
+    const finalSnapshot = getScenario("mets-win").frames.at(-1)?.snapshot;
+    if (!finalSnapshot) throw new Error("Missing final fixture frame");
+    liveTestState.game = { venue: "Citi Field" };
+    liveTestState.snapshot = finalSnapshot;
+    liveTestState.status = "ERROR";
+
+    const { container, getByRole } = render(<App />);
+    const stage = getByRole("img", { name: "Virtual Home Run Apple behind the center-field wall" });
+
+    expect(stage.getAttribute("data-scoreboard-label")).toBe("STANDBY");
+    expect(container.querySelector(".apple-scorebug__standby")?.textContent).toBe("");
+    expect(container.querySelector(".apple-scorebug__standby strong")).toBeNull();
+    expect(container.querySelector(".apple-scorebug__final")).toBeNull();
+    expect(container.querySelector(".moment-card h2")?.textContent).toBe("STANDBY");
+    expect(container.textContent).not.toContain("BETWEEN GAMES");
+    expect(container.textContent).not.toContain("FINAL");
   });
 
   it("waits for the Mets-win Apple to be fully raised before starting confetti", () => {

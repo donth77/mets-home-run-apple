@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import { CanvasTexture, SRGBColorSpace } from "three";
+import type { SceneRenderQuality } from "./sceneRendering";
 import { stadiumCelebrationKind } from "./stadiumCelebration";
 import {
   drawCelebrationScoreboard,
@@ -7,20 +8,30 @@ import {
   drawStadiumScoreboard,
   loadTeamLogo,
 } from "./stadiumVideoBoardDrawing";
+import { stadiumVideoBoardTextureSettings } from "./stadiumVideoBoardTexture";
 import type { StadiumScoreboardData } from "./types";
 
-export function StadiumVideoBoard({ data, reducedMotion }: { data: StadiumScoreboardData; reducedMotion: boolean }) {
+export function StadiumVideoBoard({
+  data,
+  quality,
+  reducedMotion,
+}: {
+  data: StadiumScoreboardData;
+  quality: SceneRenderQuality;
+  reducedMotion: boolean;
+}) {
   const latestData = useRef(data);
   latestData.current = data;
   const texture = useMemo(() => {
+    const settings = stadiumVideoBoardTextureSettings(quality);
     const canvas = document.createElement("canvas");
-    canvas.width = 1600;
-    canvas.height = 720;
+    canvas.width = settings.width;
+    canvas.height = settings.height;
     const result = new CanvasTexture(canvas);
     result.colorSpace = SRGBColorSpace;
-    result.anisotropy = 8;
+    result.anisotropy = settings.anisotropy;
     return result;
-  }, []);
+  }, [quality]);
 
   const celebrationKind = stadiumCelebrationKind(data.label);
   const offseason = data.label.trim().toUpperCase() === "OFFSEASON";

@@ -17,6 +17,48 @@
   width: 100%;
 }
 
+.apple-stage__unavailable {
+  align-items: center;
+  background:
+    radial-gradient(circle at 50% 45%, rgba(36, 91, 136, 0.34), transparent 32%),
+    linear-gradient(180deg, #173f62 0%, #0b2945 48%, #071728 100%);
+  color: #f5f9fc;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  height: 100%;
+  inset: 0;
+  justify-content: center;
+  padding: 24px;
+  position: absolute;
+  text-align: center;
+  width: 100%;
+  z-index: 1;
+}
+
+.apple-stage__unavailable strong {
+  font-size: 0.9rem;
+}
+
+.apple-stage__unavailable span {
+  color: #b9ccdc;
+  font-size: 0.72rem;
+}
+
+.apple-stage__unavailable button {
+  background: #f36b2b;
+  border: 0;
+  border-radius: 999px;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 800;
+  margin-top: 8px;
+  min-height: 42px;
+  padding: 9px 15px;
+}
+
 .apple-stage__fallback {
   height: 1px;
   margin: -1px;

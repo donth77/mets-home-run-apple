@@ -25,6 +25,7 @@ export interface StadiumScoreboardData {
   away: StadiumScoreboardTeam;
   home: StadiumScoreboardTeam;
   atCitiField?: boolean;
+  standby?: boolean;
   phase?: "PREGAME" | "LIVE" | "REVIEW" | "DELAYED" | "CELEBRATION" | "FINAL" | "SLEEP";
   inning: number;
   half: "TOP" | "BOTTOM" | "MIDDLE" | "END";

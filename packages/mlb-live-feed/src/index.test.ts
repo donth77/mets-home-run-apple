@@ -292,6 +292,31 @@ describe("MLB recording transport", () => {
     expect(result.capture?.coreInput.outs).toBe(3);
   });
 
+  it("treats MLB's end-of-inning state as a live changeover, not a final game", async () => {
+    const completedPlay = play({
+      atBatIndex: 19,
+      halfInning: "bottom",
+      inning: 2,
+    });
+    const payload = feed("20260827_190005", [completedPlay], "In Progress", {
+      currentInning: 2,
+      inningHalf: "Bottom",
+      inningState: "End",
+      outs: 3,
+    });
+    const client = new MlbRecordingClient(vi.fn<typeof fetch>().mockResolvedValue(response(payload)));
+
+    const result = await client.poll({ gamePk: 777001, gameNumber: 1 });
+
+    expect(result.capture?.gameSnapshot).toMatchObject({
+      atBat: undefined,
+      half: "MIDDLE",
+      label: "LIVE",
+      outs: 0,
+      phase: "LIVE",
+    });
+  });
+
   it("updates the activity line from the newest pitch event", async () => {
     const firstPitch = play({
       atBatIndex: 20,

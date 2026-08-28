@@ -369,3 +369,12 @@
   line-height: 1.28;
   margin-top: 7px;
 }
+
+.moment-card--standby {
+  background: linear-gradient(90deg, rgba(19, 24, 31, 0.92), rgba(19, 24, 31, 0.56));
+  border-left-color: #ffb45f;
+}
+
+.moment-card--standby h2 {
+  color: #fff3df;
+}
