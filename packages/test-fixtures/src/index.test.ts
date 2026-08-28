@@ -15,6 +15,7 @@ describe("offline browser fixtures", () => {
     const scenario = getScenario("grand-slam");
     const commands = scenario.frames.flatMap((fixtureFrame) => fixtureFrame.commands);
     expect(scenario.frames.some((fixtureFrame) => fixtureFrame.snapshot.label === "GRAND SLAM!!")).toBe(true);
+    expect(scenario.frames[1].events[0].subject).toBe("Francisco Lindor");
     expect(scenario.deviceFixture.frames[1].input.plays[0].kind).toBe("GRAND_SLAM");
     expect(commands.filter((command) => command.type === "MOTION_EXTEND")).toHaveLength(1);
     expect(commands.filter((command) => command.type === "MOTION_RETRACT")).toHaveLength(1);

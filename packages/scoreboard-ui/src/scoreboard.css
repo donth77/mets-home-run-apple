@@ -12,7 +12,7 @@
   border: 1px solid rgba(210, 228, 241, 0.46);
   border-radius: 4px;
   box-shadow: 0 14px 38px rgba(0, 0, 0, 0.42);
-  width: min(276px, calc(100vw - 24px));
+  width: min(260px, calc(100vw - 24px));
 }
 
 .apple-scorebug__main {
@@ -110,6 +110,7 @@
 }
 .apple-base-diamond {
   height: 31px;
+  justify-self: center;
   position: relative;
   width: 49px;
 }
@@ -143,17 +144,24 @@
 .apple-scorebug__lower {
   align-items: center;
   border-top: 1px solid rgba(255, 255, 255, 0.18);
-  display: flex;
-  gap: 8px;
-  padding: 0 10px;
+  display: grid;
+  grid-template-columns: 1fr 43px;
+  padding: 0 9px 0 11px;
 }
 .apple-scorebug__lower > strong {
   font-size: 0.9rem;
   font-variant-numeric: tabular-nums;
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
+  text-align: right;
 }
 .apple-scorebug__lower > span {
   display: flex;
   gap: 4px;
+  grid-column: 1;
+  grid-row: 1;
+  justify-self: center;
 }
 
 .apple-scorebug__lower i {
@@ -173,7 +181,9 @@
   font-size: 0.64rem;
   font-style: normal;
   font-weight: 900;
-  margin-left: auto;
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: start;
 }
 
 .apple-scorebug__event {
@@ -358,7 +368,7 @@
 
 @media (max-width: 520px) {
   .apple-scorebug {
-    width: min(276px, calc(100vw - 20px));
+    width: min(260px, calc(100vw - 20px));
   }
   .apple-scorebug__main {
     grid-template-columns: 53.3% 46.7%;

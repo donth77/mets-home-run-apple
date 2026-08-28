@@ -3,6 +3,8 @@
 import { getScenario } from "@apple/test-fixtures";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import axe from "axe-core";
+import { Window as HappyDomWindow } from "happy-dom";
+import { StrictMode } from "react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 
@@ -20,6 +22,7 @@ const scheduleTestState = vi.hoisted(() => ({
   location: "HOME" as "HOME" | "AWAY",
   venue: "Citi Field",
 }));
+const viewportTestState = vi.hoisted(() => ({ desktop: true }));
 const soundTestState = vi.hoisted(() => ({
   cue: undefined as { id: string; kind: "HOME_RUN" | "METS_WIN" } | undefined,
   enable: vi.fn(),
@@ -162,7 +165,7 @@ vi.mock("./useMetsSchedule", () => ({
 beforeAll(() => {
   window.matchMedia = vi.fn().mockImplementation((query: string) => ({
     addEventListener: vi.fn(),
-    matches: false,
+    matches: query === "(min-width: 691px)" ? viewportTestState.desktop : false,
     media: query,
     onchange: null,
     removeEventListener: vi.fn(),
@@ -194,6 +197,8 @@ afterEach(() => {
   soundTestState.stop.mockReset();
   soundTestState.toggle.mockReset();
   soundTestState.winTrackPlaying = false;
+  viewportTestState.desktop = true;
+  Reflect.deleteProperty(window, "documentPictureInPicture");
   window.history.replaceState({}, "", "/");
 });
 
@@ -266,8 +271,127 @@ describe("Virtual Apple accessibility", () => {
     const toggle = getByRole("button", { name: "Turn scene sounds on" });
 
     expect(toggle.getAttribute("aria-pressed")).toBe("false");
+    expect(toggle.querySelector(".lucide-volume-off")).not.toBeNull();
     fireEvent.click(toggle);
     expect(soundTestState.toggle).toHaveBeenCalledOnce();
+  });
+
+  it("places desktop view controls beneath the upper-right radio", () => {
+    const { container } = render(<App />);
+    const rightHeader = container.querySelector(".virtual-header__right");
+
+    expect(container.querySelector(".virtual-brand .virtual-view-controls")).toBeNull();
+    expect(rightHeader?.children[0]?.classList.contains("radio-companion-slot")).toBe(true);
+    expect(rightHeader?.children[1]?.classList.contains("virtual-view-controls")).toBe(true);
+  });
+
+  it("hides secondary widgets in Focus view and restores them without changing the scene", () => {
+    const { container, getByRole } = render(
+      <StrictMode>
+        <App />
+      </StrictMode>,
+    );
+
+    const radioStream = container.querySelector("#mets-radio-stream");
+    expect(radioStream).not.toBeNull();
+    expect(container.querySelector(".radio-companion-slot")?.classList.contains("radio-companion-slot--hidden")).toBe(
+      false,
+    );
+    expect(container.querySelector(".upcoming-games")).not.toBeNull();
+    expect(container.querySelector(".moment-card")).not.toBeNull();
+
+    fireEvent.click(getByRole("button", { name: "Enter Focus view" }));
+
+    expect(container.querySelector(".virtual-shell")?.getAttribute("data-focus-mode")).toBe("true");
+    expect(container.querySelector("#mets-radio-stream")).toBe(radioStream);
+    expect(container.querySelector(".radio-companion-slot")?.classList.contains("radio-companion-slot--hidden")).toBe(
+      true,
+    );
+    expect(container.querySelector(".upcoming-games")).toBeNull();
+    expect(container.querySelector(".moment-card")).toBeNull();
+    expect(getByRole("img", { name: "Virtual Home Run Apple behind the center-field wall" })).not.toBeNull();
+
+    fireEvent.click(getByRole("button", { name: "Exit Focus view" }));
+    expect(container.querySelector("#mets-radio-stream")).toBe(radioStream);
+    expect(container.querySelector(".radio-companion-slot")?.classList.contains("radio-companion-slot--hidden")).toBe(
+      false,
+    );
+    expect(container.querySelector(".upcoming-games")).not.toBeNull();
+    expect(container.querySelector(".moment-card")).not.toBeNull();
+  });
+
+  it("keeps only the compact scorebug and Exit Focus control in Focus view", () => {
+    enableDemo();
+    playbackTestState.scenarioId = "live";
+    const { container, getByRole, queryByRole } = render(<App />);
+
+    expect(container.querySelector(".virtual-hud")).not.toBeNull();
+    fireEvent.click(getByRole("button", { name: "Enter Focus view" }));
+
+    expect(container.querySelector(".virtual-hud")).not.toBeNull();
+    expect(container.querySelectorAll(".virtual-view-controls button")).toHaveLength(1);
+    expect(container.querySelector(".virtual-view-controls--focus")).not.toBeNull();
+    expect(getByRole("button", { name: "Exit Focus view" })).not.toBeNull();
+    expect(queryByRole("button", { name: "Turn scene sounds on" })).toBeNull();
+    expect(queryByRole("button", { name: "Open Mini Apple" })).toBeNull();
+  });
+
+  it("keeps the radio visible and removes desktop view controls on mobile", () => {
+    viewportTestState.desktop = false;
+    Object.defineProperty(window, "documentPictureInPicture", {
+      configurable: true,
+      value: { requestWindow: vi.fn().mockResolvedValue(window) },
+    });
+    const { container, getByRole, queryByRole } = render(<App />);
+
+    expect(queryByRole("button", { name: "Enter Focus view" })).toBeNull();
+    expect(queryByRole("button", { name: "Open Mini Apple" })).toBeNull();
+    expect(getByRole("complementary", { name: "Mets radio companion" })).not.toBeNull();
+    expect(container.querySelector(".radio-companion-slot")?.classList.contains("radio-companion-slot--hidden")).toBe(
+      false,
+    );
+  });
+
+  it("moves the shared presentation into Mini Apple and restores it to the main page", async () => {
+    enableDemo();
+    playbackTestState.scenarioId = "live";
+    const childWindow = new HappyDomWindow({ url: "https://virtual-mets-apple.test/" });
+    const requestWindow = vi.fn().mockResolvedValue(childWindow as unknown as Window);
+    Object.defineProperty(window, "documentPictureInPicture", {
+      configurable: true,
+      value: { requestWindow },
+    });
+    const { container, getByRole } = render(
+      <StrictMode>
+        <App />
+      </StrictMode>,
+    );
+    const radioStream = container.querySelector("#mets-radio-stream");
+
+    expect(getByRole("button", { name: "Open Mini Apple" }).querySelector(".lucide-picture-in-picture")).not.toBeNull();
+    fireEvent.click(getByRole("button", { name: "Open Mini Apple" }));
+    await waitFor(() => expect(childWindow.document.querySelector(".mini-apple-shell")).not.toBeNull());
+
+    expect(requestWindow).toHaveBeenCalledWith({ height: 300, width: 420 });
+    expect(container.querySelector(".mini-open-placeholder")?.textContent).toContain("Mini Apple is open");
+    expect(container.querySelector(".mini-open-placeholder")?.textContent).not.toContain(
+      "Live game tracking and sound are still running",
+    );
+    expect(container.querySelector("#mets-radio-stream")).toBe(radioStream);
+    expect(container.querySelector('[role="img"][aria-label*="Virtual Home Run Apple"]')).toBeNull();
+    expect(childWindow.document.querySelector('[role="img"][aria-label*="Virtual Home Run Apple"]')).not.toBeNull();
+    const miniBottom = childWindow.document.querySelector(".mini-apple-bottom");
+    expect(miniBottom?.children[0]?.classList.contains("mini-apple-scoreboard")).toBe(true);
+    expect(miniBottom?.children[1]?.classList.contains("mini-apple-footer")).toBe(true);
+
+    const returnButton = childWindow.document.querySelector(".mini-apple-return");
+    if (!(returnButton instanceof childWindow.HTMLElement)) throw new Error("Missing Mini Apple return button");
+    fireEvent.click(returnButton as unknown as HTMLElement);
+
+    await waitFor(() =>
+      expect(container.querySelector('[role="img"][aria-label*="Virtual Home Run Apple"]')).not.toBeNull(),
+    );
+    expect(container.querySelector(".mini-open-placeholder")).toBeNull();
   });
 
   it.each([
@@ -504,15 +628,16 @@ describe("Virtual Apple accessibility", () => {
 
     expect(stage.getAttribute("data-scoreboard-label")).toBe("FINAL");
     expect(container.querySelector(".apple-scorebug__final")?.textContent).toBe("FINAL");
-    expect(container.querySelector(".apple-scorebug__event strong")?.textContent).toBe("FINAL");
+    expect(container.querySelector(".apple-scorebug__event")).toBeNull();
     expect(container.querySelector(".moment-card h2")?.textContent).toBe("FINAL");
     expect(container.querySelector(".moment-card__next")).toBeNull();
+    expect(container.querySelector(".upcoming-games")).toBeNull();
     expect(container.textContent).not.toContain("METS WIN!");
 
     liveTestState.status = "CHECKING";
     rerender(<App />);
     expect(stage.getAttribute("data-scoreboard-label")).toBe("FINAL");
-    expect(container.querySelector(".apple-scorebug__event strong")?.textContent).toBe("FINAL");
+    expect(container.querySelector(".apple-scorebug__event")).toBeNull();
 
     liveTestState.game = undefined;
     liveTestState.snapshot = undefined;

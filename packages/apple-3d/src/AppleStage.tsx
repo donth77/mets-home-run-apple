@@ -30,19 +30,24 @@ export type {
   StadiumScoreboardTeam,
 } from "./types";
 
-function CameraTarget({ mode }: { mode: AppleStageProps["mode"] }) {
+function CameraTarget({ framing, mode }: Pick<AppleStageProps, "framing" | "mode">) {
   const { camera, size } = useThree();
   useEffect(() => {
-    const mobileOutfield = mode === "outfield" && size.width <= 690;
+    const miniOutfield = mode === "outfield" && framing === "mini";
+    const mobileOutfield = mode === "outfield" && !miniOutfield && size.width <= 690;
     if (mode === "outfield" && camera instanceof PerspectiveCamera) {
       const aspect = Math.max(size.width / Math.max(size.height, 1), 0.4);
       const minimumHorizontalFov = 34 * (Math.PI / 180);
       const portraitFov = 2 * Math.atan(Math.tan(minimumHorizontalFov / 2) / aspect) * (180 / Math.PI);
-      camera.fov = mobileOutfield ? 38.5 : Math.min(58, Math.max(38, portraitFov));
+      camera.fov = miniOutfield ? 34 : mobileOutfield ? 38.5 : Math.min(58, Math.max(38, portraitFov));
       camera.updateProjectionMatrix();
     }
-    camera.lookAt(mode === "lab" ? new Vector3(0, 1.22, 0) : new Vector3(0, mobileOutfield ? 3.85 : 2.75, -6.35));
-  }, [camera, mode, size.height, size.width]);
+    camera.lookAt(
+      mode === "lab"
+        ? new Vector3(0, 1.22, 0)
+        : new Vector3(0, miniOutfield ? 3.05 : mobileOutfield ? 3.85 : 2.75, -6.35),
+    );
+  }, [camera, framing, mode, size.height, size.width]);
   return null;
 }
 
@@ -107,6 +112,7 @@ class SceneCanvasErrorBoundary extends Component<{ children: ReactNode; onFailur
 
 export function AppleStage({
   mode,
+  framing = "default",
   positionMm,
   wireframe = false,
   reducedMotion = false,
@@ -204,7 +210,12 @@ export function AppleStage({
               resize={renderQuality === "conservative" ? { debounce: { resize: 120, scroll: 80 } } : undefined}
               camera={
                 outfield
-                  ? { position: [0, 4.85, 14.25], fov: 38, near: 0.1, far: 90 }
+                  ? {
+                      position: framing === "mini" ? [0, 4.25, 10.65] : [0, 4.85, 14.25],
+                      fov: framing === "mini" ? 34 : 38,
+                      near: 0.1,
+                      far: 90,
+                    }
                   : { position: [5.5, 4.1, 6.9], fov: 39, near: 0.1, far: 40 }
               }
               gl={{
@@ -215,7 +226,7 @@ export function AppleStage({
               }}
             >
               <RendererLifecycle onFailure={handleRendererFailure} />
-              <CameraTarget mode={mode} />
+              <CameraTarget framing={framing} mode={mode} />
               {outfield ? (
                 <OutfieldEnvironment
                   quality={renderQuality}

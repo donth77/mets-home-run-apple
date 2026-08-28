@@ -122,7 +122,7 @@ export function normalizedGrandSlam(eventKey: string): NormalizedPlayEvidence {
     eventKey,
     atBatIndex: 48,
     battingTeamId: 121,
-    batterName: "Pete Alonso",
+    batterName: "Francisco Lindor",
     kind: "GRAND_SLAM",
     complete: true,
     review: "NONE",

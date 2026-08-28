@@ -18,7 +18,7 @@ The site checks the Mets schedule when it loads. Between games, it can show the 
 
 The initial game history seeds the core without celebrating old plays. Only a newly accepted home run or win starts the browser animation. Virtual Apple has no route to a physical device.
 
-Times use the visitor's browser timezone. Season dates come from MLB, so the site can enter a quiet offseason view and return automatically when spring games begin. Temporary network failures keep the last known season dates and fall back to the between-games view.
+Times use the visitor's browser timezone. Season dates come from MLB, so the site can enter a quiet offseason view and return automatically when spring games begin. During a live game, temporary network failures keep the last known game context on screen, switch the widgets to **STANDBY**, and retry.
 
 ## Scoreboards and celebrations
 
@@ -31,6 +31,12 @@ Times use the visitor's browser timezone. Season dates come from MLB, so the sit
 - Rain delays add overcast lighting, rain, ripples, and generated ambience. Other delays do not pretend it is raining.
 
 Active games also include a compact link to MLB Gameday for pitch-by-pitch, box score, and Statcast coverage.
+
+## Desktop views
+
+**Focus view** hides the radio, schedule, game card, and demo bar while keeping the field and compact scorebug in the tab.
+
+On browsers with Document Picture-in-Picture support, **Mini Apple** moves that same live presentation into a small always-on-top window. It does not start another feed or celebration controller, and only one 3D scene runs at a time. Closing the mini window restores the full page. Other browsers keep the Focus view option.
 
 ## Local demo controls
 

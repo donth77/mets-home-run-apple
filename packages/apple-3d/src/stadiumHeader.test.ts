@@ -33,6 +33,18 @@ describe("stadium scoreboard header", () => {
     ).toEqual({ center: "NEXT GAME · SCHEDULE TBD", right: "" });
   });
 
+  it("shows the final state once instead of duplicating it on the right", () => {
+    expect(
+      stadiumHeaderText({
+        phase: "FINAL",
+        label: "FINAL",
+        half: "END",
+        inning: 9,
+        outs: 3,
+      }),
+    ).toEqual({ center: "FINAL", right: "" });
+  });
+
   it("shows standby and the retained inning instead of a stale final", () => {
     const header = stadiumHeaderText({
       phase: "FINAL",

@@ -130,6 +130,7 @@ export function drawStadiumScoreboard(
   data: StadiumScoreboardData,
   awayLogo: HTMLImageElement | null,
   homeLogo: HTMLImageElement | null,
+  headerRightInset = 44,
 ) {
   const width = context.canvas.width;
   const height = context.canvas.height;
@@ -160,7 +161,7 @@ export function drawStadiumScoreboard(
     context.fillStyle = "#b7cadb";
     context.font = "800 25px Arial, sans-serif";
     context.textAlign = "right";
-    context.fillText(header.right, width - 44, 64);
+    context.fillText(header.right, width - headerRightInset, 64);
   }
 
   const gridStartX = 382;

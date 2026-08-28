@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { gameDateParts, nextGameLabelParts } from "./gameDateDisplay";
+import { gameDateParts, nextGameLabelParts, timeZoneAbbreviation } from "./gameDateDisplay";
 
 describe("browser-local game date labels", () => {
   const now = new Date("2026-08-27T16:00:00Z");
@@ -16,6 +16,11 @@ describe("browser-local game date labels", () => {
 
   it("keeps the weekday for games after tomorrow", () => {
     expect(gameDateParts("2026-08-30T20:10:00Z", now, timeZone)).toMatchObject({ day: "Sun", date: "Aug 30" });
+  });
+
+  it("uses the browser time zone's current abbreviation", () => {
+    expect(timeZoneAbbreviation(new Date("2026-08-27T16:00:00Z"), "America/Los_Angeles")).toBe("PDT");
+    expect(timeZoneAbbreviation(new Date("2026-12-27T16:00:00Z"), "America/Los_Angeles")).toBe("PST");
   });
 });
 

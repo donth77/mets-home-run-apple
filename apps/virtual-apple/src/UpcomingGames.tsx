@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { getTrademarkFreeTeamLogoUrl } from "@apple/apple-3d";
-import { gameDateParts } from "./gameDateDisplay";
+import { gameDateParts, timeZoneAbbreviation } from "./gameDateDisplay";
 import type { UpcomingMetsGame } from "./useMetsSchedule";
 
 function OpponentLogo({ abbreviation, teamId }: { abbreviation: string; teamId: number }) {
@@ -27,6 +27,8 @@ function OpponentLogo({ abbreviation, teamId }: { abbreviation: string; teamId: 
 export function UpcomingGames({ games }: { games: readonly UpcomingMetsGame[] }) {
   if (games.length === 0) return null;
 
+  const browserTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+
   return (
     <aside className="upcoming-games" aria-label="Upcoming Mets games">
       <header>
@@ -34,7 +36,7 @@ export function UpcomingGames({ games }: { games: readonly UpcomingMetsGame[] })
           <span>On deck</span>
           <h2>Upcoming Mets games</h2>
         </div>
-        <small>Local time</small>
+        <small title={browserTimeZone}>{timeZoneAbbreviation(new Date(), browserTimeZone)}</small>
       </header>
       <ol>
         {games.map((game) => {
