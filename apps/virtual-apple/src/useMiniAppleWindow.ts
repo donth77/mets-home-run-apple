@@ -56,7 +56,7 @@ function pictureInPictureError(error: unknown) {
   return "Mini Apple could not open, so Focus view was enabled instead.";
 }
 
-export function useMiniAppleWindow() {
+export function useMiniAppleWindow(onBeforeClose?: () => void) {
   const [container, setContainer] = useState<HTMLElement | null>(null);
   const [error, setError] = useState("");
   const [supported] = useState(() =>
@@ -65,6 +65,12 @@ export function useMiniAppleWindow() {
   const childWindowRef = useRef<Window | null>(null);
   const removeCloseListenerRef = useRef<(() => void) | null>(null);
   const mountedRef = useRef(true);
+  const onBeforeCloseRef = useRef(onBeforeClose);
+  onBeforeCloseRef.current = onBeforeClose;
+
+  const restoreContent = useCallback(() => {
+    onBeforeCloseRef.current?.();
+  }, []);
 
   const clearWindowState = useCallback(() => {
     removeCloseListenerRef.current?.();
@@ -75,9 +81,14 @@ export function useMiniAppleWindow() {
 
   const close = useCallback(() => {
     const childWindow = childWindowRef.current;
+    restoreContent();
     clearWindowState();
-    if (childWindow && !childWindow.closed) childWindow.close();
-  }, [clearWindowState]);
+    if (childWindow && !childWindow.closed) {
+      window.setTimeout(() => {
+        if (!childWindow.closed) childWindow.close();
+      }, 0);
+    }
+  }, [clearWindowState, restoreContent]);
 
   const open = useCallback(async () => {
     setError("");
@@ -101,7 +112,10 @@ export function useMiniAppleWindow() {
       }
 
       const root = prepareMiniAppleDocument(document, childWindow.document);
-      const handleClose = () => clearWindowState();
+      const handleClose = () => {
+        restoreContent();
+        clearWindowState();
+      };
       childWindow.addEventListener("pagehide", handleClose, { once: true });
       removeCloseListenerRef.current = () => childWindow.removeEventListener("pagehide", handleClose);
       childWindowRef.current = childWindow;
@@ -111,19 +125,20 @@ export function useMiniAppleWindow() {
       setError(pictureInPictureError(caughtError));
       return false;
     }
-  }, [clearWindowState]);
+  }, [clearWindowState, restoreContent]);
 
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      restoreContent();
       const childWindow = childWindowRef.current;
       removeCloseListenerRef.current?.();
       removeCloseListenerRef.current = null;
       childWindowRef.current = null;
       if (childWindow && !childWindow.closed) childWindow.close();
     };
-  }, []);
+  }, [restoreContent]);
 
   return {
     close,

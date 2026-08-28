@@ -7,9 +7,7 @@
 <p align="center"><strong>Build and test a physical Wi-Fi Home Run Apple with Apple Lab, or follow Mets games live with the Virtual Apple.</strong></p>
 
 <p align="center">
-  <a href="https://github.com/donth77/mets-home-run-apple/actions/workflows/ci.yml"><img alt="Checks" src="https://img.shields.io/github/actions/workflow/status/donth77/mets-home-run-apple/ci.yml?branch=main&style=flat-square&label=checks&logo=githubactions&logoColor=white" /></a>
   <a href="https://nodejs.org/"><img alt="Node.js 22.13 or newer" src="https://img.shields.io/badge/Node.js-22.13%2B-339933?style=flat-square&logo=nodedotjs&logoColor=white" /></a>
-  <a href="https://pnpm.io/"><img alt="pnpm 10" src="https://img.shields.io/badge/pnpm-10-F69220?style=flat-square&logo=pnpm&logoColor=white" /></a>
   <img alt="C++17" src="https://img.shields.io/badge/C%2B%2B-17-00599C?style=flat-square&logo=cplusplus&logoColor=white" />
 </p>
 
@@ -19,7 +17,7 @@ This is a fan project inspired by the Home Run Apple at Citi Field. The build is
 The repository also includes two browser apps:
 
 - **Apple Lab** is the local manager, simulator, and replay tool used for physical Apple.
-- **Virtual Apple** is a [public gameday experience](https://virtual-mets-apple.pages.dev/) with a 3D center-field scene, live scoreboards, upcoming games, radio, and celebrations.
+- **Virtual Apple** is a [public gameday experience](https://virtual-mets-apple.pages.dev/) with a 3D center-field scene, live scoreboards, radio, celebrations, and desktop Focus and Mini views. See the [Virtual Apple guide](apps/virtual-apple/README.md).
 
 <p align="center"><a href="https://virtual-mets-apple.pages.dev/"><strong>Live Virtual Mets Apple</strong></a></p>
 
@@ -31,7 +29,7 @@ Working today:
 - live schedule/feed reading and completed-game replay;
 - review, delay, doubleheader, win, duplicate-event, and between-game handling;
 - Apple Lab's simulator, diagnostics, CSV exports, and 3D preview;
-- Virtual Apple's live presentation, local demo mode, audio, rain, and accessibility features.
+- Virtual Apple's live presentation, Focus and Mini views, local demo mode, audio, rain, and accessibility features.
 
 Still to build:
 

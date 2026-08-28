@@ -16,27 +16,28 @@ Open [http://localhost:4174](http://localhost:4174).
 
 The site checks the Mets schedule when it loads. Between games, it can show the next three matchups. During a live game—including delays, challenges, and reviews—it follows MLB feed updates through `@apple/mlb-live-feed` and sends normalized evidence to the compiled C++ core.
 
-The initial game history seeds the core without celebrating old plays. Only a newly accepted home run or win starts the browser animation. Virtual Apple has no route to a physical device.
-
-Times use the visitor's browser timezone. Season dates come from MLB, so the site can enter a quiet offseason view and return automatically when spring games begin. During a live game, temporary network failures keep the last known game context on screen, switch the widgets to **STANDBY**, and retry.
+The initial game history seeds the core without celebrating old plays. Only a newly accepted home run or win starts the apple animation. Virtual Apple has no route to a physical device.
 
 ## Scoreboards and celebrations
 
 - The compact scorebug shows the Mets batter and line while New York bats, or the Mets pitcher and pitch count while New York fields.
 - The stadium line score keeps runs, hits, and errors fixed while its nine-inning window advances in extra innings.
-- Final games replace the count, bases, and outs with **FINAL**.
+- Rains in the Citi Field scene during a Mets home-game rain delay. 
 - Home runs take over the stadium board with **HOME RUN** and the hitter's name.
 - Mets wins get a separate final-score takeover and confetti after the Apple is fully raised.
 - The Apple uses the same 30-second raised hold targeted by the physical firmware.
-- Rain delays add overcast lighting, rain, ripples, and generated ambience. Other delays do not pretend it is raining.
 
-Active games also include a compact link to MLB Gameday for pitch-by-pitch, box score, and Statcast coverage.
+Active games also include a compact link to MLB Gameday.
 
 ## Desktop views
 
-**Focus view** hides the radio, schedule, game card, and demo bar while keeping the field and compact scorebug in the tab.
+**Focus view** keeps the field and compact scorebug in the current tab, hiding the rest of the UI.
 
-On browsers with Document Picture-in-Picture support, **Mini Apple** moves that same live presentation into a small always-on-top window. It does not start another feed or celebration controller, and only one 3D scene runs at a time. Closing the mini window restores the full page. Other browsers keep the Focus view option.
+On browsers with Document Picture-in-Picture support, **Mini Apple** moves that same live presentation into a small always-on-top window. It includes the compact scorebug, a short game-status area, scene-sound control, and a Return button. 
+
+## Mobile layout
+
+Phones use the regular page instead of Focus or Mini Apple. The radio stacks beneath the header, the scene-sound button remains easy to reach, and the scorebug sits in the bottom-right of the field without overlapping the large stadium board. Game status, upcoming games, and local demo controls flow beneath the scene when they apply.
 
 ## Local demo controls
 
@@ -49,7 +50,7 @@ A fixture temporarily replaces the live presentation. Choose **Live data** to re
 
 ## Radio and scene sound
 
-The radio card plays the official Mets Radio stream published by Audacy after the visitor presses **Listen live**. It also links to the Audacy station page if direct playback is unavailable. Browsers do not allow autoplay, and geographic availability still depends on Audacy.
+The radio card plays the official Mets Radio stream published by Audacy. The radio icon and **Listen live** button control the same player. It also links to the Audacy station page if direct playback is unavailable.
 
 A deployment can supply another authorized browser-playable feed:
 
@@ -59,10 +60,7 @@ VITE_METS_AUDIO_STREAM_URL=https://audio-provider.example/authorized-stream
 
 No audio proxy or application server is required.
 
-Celebration sound is also opt-in. A home run chooses one of four supplied clips; a win chooses one of two longer recordings. Each accepted event sounds once. Stopping sound, changing a local fixture, or returning to live data stops the current clip and releases any presentation-only hold. See [`THIRD_PARTY_AUDIO.md`](./THIRD_PARTY_AUDIO.md) for checksums and provenance.
+Radio playback and celebration sound are separate controls. The speaker button enables home-run and win clips; it does not mute the radio. A radio stream that is already playing continues when Focus view or Mini Apple hides the radio card.
 
-## Accessibility and deployment
+Celebration sound is opt-in. A home run chooses one of four supplied clips; a win chooses one of two longer recordings. Each accepted event sounds once. Stopping sound, changing a local fixture, or returning to live data stops the current clip and releases any presentation-only hold. See [`THIRD_PARTY_AUDIO.md`](./THIRD_PARTY_AUDIO.md) for checksums and provenance.
 
-The readable score and status live in HTML; the Three.js scoreboard is supporting artwork. A polite live region announces meaningful changes, reduced-motion users do not receive confetti, and the public views are included in the automated accessibility suite.
-
-Virtual Apple builds as static files, reads MLB data directly, and needs no always-on application server. Production source maps are off.

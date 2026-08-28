@@ -234,6 +234,7 @@ html.mini-apple-document-root {
   z-index: 2;
 }
 
+.mini-apple-stage-slot,
 .mini-apple-stage {
   height: 100%;
   inset: 0;
