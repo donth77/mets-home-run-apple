@@ -205,6 +205,7 @@ afterEach(() => {
 describe("Virtual Apple accessibility", () => {
   it("shows the Demo controls only when the local debug query flag is present", () => {
     const hidden = render(<App />);
+    expect(hidden.getByRole("heading", { level: 1, name: "Virtual Mets Apple" })).not.toBeNull();
     expect(hidden.container.querySelector(".virtual-controls")).toBeNull();
     expect(hidden.container.querySelector(".virtual-brand small")?.textContent).toBe("Citi Field");
     hidden.unmount();
@@ -213,6 +214,30 @@ describe("Virtual Apple accessibility", () => {
     const visible = render(<App />);
     expect(visible.container.querySelector(".control-label")?.textContent).toBe("Demo");
     expect(visible.container.textContent).not.toContain("Live & demo");
+  });
+
+  it("keeps document order aligned with the mobile reading and focus order", () => {
+    viewportTestState.desktop = false;
+    const { container } = render(<App />);
+    const header = container.querySelector(".virtual-header");
+    const scene = container.querySelector(".shared-apple-stage-slot");
+    const gameStatus = container.querySelector(".moment-card");
+    const upcomingGames = container.querySelector(".upcoming-games");
+    if (!header || !scene || !gameStatus || !upcomingGames) throw new Error("Expected the mobile page regions.");
+
+    expect(header.compareDocumentPosition(scene) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(gameStatus.compareDocumentPosition(upcomingGames) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("includes the browser time-zone code in visible and accessible schedule text", () => {
+    const { container, getByRole } = render(<App />);
+    const nextGameZone = container.querySelector(".moment-card__next-time-zone");
+    const upcomingZone = container.querySelector(".upcoming-games > header small");
+    const upcomingLink = getByRole("link", { name: /opens MLB Gameday in a new tab/i });
+
+    expect(nextGameZone?.querySelector(".visually-hidden")?.textContent).toMatch(/^ \S+ time zone$/);
+    expect(upcomingZone?.querySelector(".visually-hidden")?.textContent).toMatch(/^Times shown in \S+$/);
+    expect(upcomingLink.getAttribute("aria-label")).toMatch(/ at .+ \S+; opens MLB Gameday/);
   });
 
   it("has no automatically detectable semantic accessibility violations", async () => {
@@ -533,7 +558,7 @@ describe("Virtual Apple accessibility", () => {
       .formatToParts(new Date(NEXT_GAME_DATE))
       .find((part) => part.type === "timeZoneName")?.value;
     expect(time?.childNodes[0]?.textContent).toBe(expectedNextGameTime());
-    expect(time?.querySelector(".moment-card__next-time-zone")?.textContent).toBe(timeZone);
+    expect(time?.querySelector('.moment-card__next-time-zone > span[aria-hidden="true"]')?.textContent).toBe(timeZone);
     expect(container.querySelector(".moment-card > p")).toBeNull();
     expect(nextGame?.textContent).not.toContain("The Apple is resting");
   });

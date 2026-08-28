@@ -1,15 +1,145 @@
 <!doctype html>
-<html lang="en">
+<html lang="en-US" dir="ltr">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#081827" />
-    <meta name="description" content="Follow Mets games with a live score, center-field Apple, radio, and celebrations." />
+    <meta name="color-scheme" content="dark" />
+    <meta
+      name="description"
+      content="Follow New York Mets games in an unofficial fan experience with live scores, a 3D Citi Field Home Run Apple, Mets Radio, and home run and win celebrations."
+    />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+
+    <link rel="canonical" href="https://metsapple.com/" />
     <link rel="icon" type="image/png" sizes="256x256" href="/favicon.png" />
-    <title>Virtual Mets Apple</title>
+    <link rel="apple-touch-icon" sizes="256x256" href="/favicon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <link rel="describedby" href="https://metsapple.com/llms.txt" />
+    <link
+      rel="alternate"
+      type="text/markdown"
+      href="https://metsapple.com/index.md"
+      title="Virtual Mets Apple in Markdown"
+    />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Virtual Mets Apple" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:url" content="https://metsapple.com/" />
+    <meta property="og:title" content="Virtual Mets Apple | Live Scores & Home Run Celebrations" />
+    <meta
+      property="og:description"
+      content="Follow the Mets with live scores, a 3D Citi Field Home Run Apple, Mets Radio, and celebrations for home runs and wins."
+    />
+    <meta property="og:image" content="https://metsapple.com/favicon.png" />
+    <meta property="og:image:secure_url" content="https://metsapple.com/favicon.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="256" />
+    <meta property="og:image:height" content="256" />
+    <meta property="og:image:alt" content="A red apple with blue and white NY lettering" />
+
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="Virtual Mets Apple | Live Scores & Home Run Celebrations" />
+    <meta
+      name="twitter:description"
+      content="Follow the Mets with live scores, a 3D Citi Field Home Run Apple, Mets Radio, and home run and win celebrations."
+    />
+    <meta name="twitter:image" content="https://metsapple.com/favicon.png" />
+    <meta name="twitter:image:alt" content="A red apple with blue and white NY lettering" />
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebSite",
+            "@id": "https://metsapple.com/#website",
+            "url": "https://metsapple.com/",
+            "name": "Virtual Mets Apple",
+            "alternateName": "Mets Home Run Apple",
+            "description": "A free, unofficial fan-made website for following New York Mets games with live scores and a virtual Citi Field Home Run Apple.",
+            "inLanguage": "en-US",
+            "isAccessibleForFree": true
+          },
+          {
+            "@type": "WebApplication",
+            "@id": "https://metsapple.com/#app",
+            "url": "https://metsapple.com/",
+            "name": "Virtual Mets Apple",
+            "description": "Follow New York Mets games with live scores, a 3D Citi Field Home Run Apple, upcoming games, Mets Radio, and home run and win celebrations.",
+            "applicationCategory": "SportsApplication",
+            "operatingSystem": "Any",
+            "browserRequirements": "Requires a modern browser with JavaScript and WebGL.",
+            "inLanguage": "en-US",
+            "isAccessibleForFree": true,
+            "isPartOf": {
+              "@id": "https://metsapple.com/#website"
+            },
+            "image": "https://metsapple.com/favicon.png",
+            "featureList": [
+              "Live New York Mets scores and game status",
+              "3D Citi Field Home Run Apple presentation",
+              "Home run and Mets win celebrations",
+              "Upcoming Mets games",
+              "Optional Mets Radio playback",
+              "Keyboard controls, live status announcements, and reduced-motion support"
+            ]
+          }
+        ]
+      }
+    </script>
+
+    <style>
+      .app-shell-fallback {
+        align-items: center;
+        background: #081827;
+        color: #f7fbff;
+        display: flex;
+        flex-direction: column;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        gap: 12px;
+        justify-content: center;
+        min-height: 100vh;
+        padding: 32px;
+        text-align: center;
+      }
+      .app-shell-fallback img {
+        height: 88px;
+        width: 88px;
+      }
+      .app-shell-fallback h1,
+      .app-shell-fallback p {
+        margin: 0;
+      }
+      .app-shell-fallback p {
+        color: #cbd9e5;
+        line-height: 1.6;
+        max-width: 680px;
+      }
+      .app-shell-fallback a {
+        color: #ffb17d;
+        font-weight: 700;
+      }
+    </style>
+
+    <title>Virtual Mets Apple | Live Scores & Home Run Celebrations</title>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <main class="app-shell-fallback">
+        <img src="/favicon.png" alt="" width="88" height="88" />
+        <h1>Virtual Mets Apple</h1>
+        <p>
+          Follow New York Mets games with live scores, a 3D Citi Field Home Run Apple, upcoming matchups, Mets Radio,
+          and celebrations for home runs and wins.
+        </p>
+        <p>
+          This is a free, unofficial fan-made experience. The interactive version needs JavaScript and WebGL.
+          <a href="https://github.com/donth77/mets-home-run-apple">View the open-source project</a>.
+        </p>
+      </main>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

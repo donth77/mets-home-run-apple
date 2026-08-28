@@ -2,7 +2,7 @@
 
 Virtual Apple is a public, browser-based game companion: live Mets information, a Citi-inspired center-field scene, and an Apple that rises for home runs and wins.
 
-Live site: [virtual-mets-apple.pages.dev](https://virtual-mets-apple.pages.dev/).
+Live site: [metsapple.com](https://metsapple.com/).
 
 To run it locally:
 
@@ -63,4 +63,3 @@ No audio proxy or application server is required.
 Radio playback and celebration sound are separate controls. The speaker button enables home-run and win clips; it does not mute the radio. A radio stream that is already playing continues when Focus view or Mini Apple hides the radio card.
 
 Celebration sound is opt-in. A home run chooses one of four supplied clips; a win chooses one of two longer recordings. Each accepted event sounds once. Stopping sound, changing a local fixture, or returning to live data stops the current clip and releases any presentation-only hold. See [`THIRD_PARTY_AUDIO.md`](./THIRD_PARTY_AUDIO.md) for checksums and provenance.
-

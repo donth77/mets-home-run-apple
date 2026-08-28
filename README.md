@@ -17,9 +17,9 @@ This is a fan project inspired by the Home Run Apple at Citi Field. The build is
 The repository also includes two browser apps:
 
 - **Apple Lab** is the local manager, simulator, and replay tool used for physical Apple.
-- **Virtual Apple** is a [public gameday experience](https://virtual-mets-apple.pages.dev/) with a 3D center-field scene, live scoreboards, radio, celebrations, and desktop Focus and Mini views. See the [Virtual Apple guide](apps/virtual-apple/README.md).
+- **Virtual Apple** is a [public gameday experience](https://metsapple.com/) with a 3D center-field scene, live scoreboards, radio, celebrations, and desktop Focus and Mini views. See the [Virtual Apple guide](apps/virtual-apple/README.md).
 
-<p align="center"><a href="https://virtual-mets-apple.pages.dev/"><strong>Live Virtual Mets Apple</strong></a></p>
+<p align="center"><a href="https://metsapple.com/"><strong>Live Virtual Mets Apple</strong></a></p>
 
 ## Project status
 

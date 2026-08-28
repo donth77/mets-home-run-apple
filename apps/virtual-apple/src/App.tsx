@@ -260,7 +260,7 @@ export function App() {
             Skip to game status
           </a>
         )}
-        <h1 className="visually-hidden">Virtual Apple</h1>
+        <h1 className="visually-hidden">Virtual Mets Apple</h1>
         {!miniAppleWindow.isOpen && (
           <p className="visually-hidden" role="status" aria-live="polite" aria-atomic="true">
             {statusAnnouncement}
@@ -270,19 +270,6 @@ export function App() {
           <p className="view-mode-notice" role="status">
             {miniAppleWindow.error}
           </p>
-        )}
-
-        <div className="shared-apple-stage-slot" ref={mainStageSlot} />
-        {miniAppleWindow.isOpen && (
-          <section className="mini-open-placeholder" aria-label="Mini Apple window status">
-            <img src="/favicon.png" alt="" />
-            <div>
-              <strong>Mini Apple is open</strong>
-            </div>
-            <button type="button" onClick={miniAppleWindow.close}>
-              Restore
-            </button>
-          </section>
         )}
 
         <header
@@ -328,21 +315,25 @@ export function App() {
           </div>
         </header>
 
+        <div className="shared-apple-stage-slot" ref={mainStageSlot} />
+        {miniAppleWindow.isOpen && (
+          <section className="mini-open-placeholder" aria-label="Mini Apple window status">
+            <img src="/favicon.png" alt="" />
+            <div>
+              <strong>Mini Apple is open</strong>
+            </div>
+            <button type="button" onClick={miniAppleWindow.close}>
+              Restore
+            </button>
+          </section>
+        )}
+
         {!miniAppleWindow.isOpen && showBroadcastScoreboard && (
           <div className="virtual-hud">
             <div className="virtual-scoreboard">
               <Scoreboard snapshot={publicSnapshot} announceUpdates={false} standby={liveStandby} />
             </div>
           </div>
-        )}
-
-        {!activeFocusMode &&
-          !miniAppleWindow.isOpen &&
-          gameIsActive &&
-          publicSnapshot.gamePk > 0 &&
-          !winCelebration && <LiveGamedayWidget snapshot={publicSnapshot} standby={liveStandby} />}
-        {!activeFocusMode && !miniAppleWindow.isOpen && !winCelebration && !gameIsFinal && (
-          <UpcomingGames games={upcomingGames} />
         )}
 
         {!activeFocusMode && !miniAppleWindow.isOpen && !offseason && (
@@ -360,7 +351,8 @@ export function App() {
                     <time dateTime={nextGameDateTime}>
                       {nextGame.time}
                       <small className="moment-card__next-time-zone" title={browserTimeZone}>
-                        {nextGameTimeZone}
+                        <span aria-hidden="true">{nextGameTimeZone}</span>
+                        <span className="visually-hidden"> {nextGameTimeZone} time zone</span>
                       </small>
                     </time>
                   )}
@@ -374,6 +366,15 @@ export function App() {
             )}
             {!betweenGames && <p>{publicSnapshot.lastEvent}</p>}
           </section>
+        )}
+
+        {!activeFocusMode &&
+          !miniAppleWindow.isOpen &&
+          gameIsActive &&
+          publicSnapshot.gamePk > 0 &&
+          !winCelebration && <LiveGamedayWidget snapshot={publicSnapshot} standby={liveStandby} />}
+        {!activeFocusMode && !miniAppleWindow.isOpen && !winCelebration && !gameIsFinal && (
+          <UpcomingGames games={upcomingGames} />
         )}
 
         {showDemoControls && !activeFocusMode && !miniAppleWindow.isOpen && (

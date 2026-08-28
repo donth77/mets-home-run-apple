@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://metsapple.com/sitemap.xml
