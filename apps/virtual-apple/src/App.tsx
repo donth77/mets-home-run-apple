@@ -1,12 +1,12 @@
-import { AppleStage, type StadiumScoreboardData, useActuatorSimulation } from "@apple/apple-3d";
+import { type StadiumScoreboardData, useActuatorSimulation } from "@apple/apple-3d";
 import { METS_TEAM_ID } from "@apple/mlb-live-feed";
 import { MAX_STROKE_MM, type PresentationSnapshot } from "@apple/protocol";
 import { Scoreboard } from "@apple/scoreboard-ui";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { gameStatusAnnouncement } from "./accessibilityPresentation";
 import { delayWidgetLabel, isRainDelayPresentation } from "./delayPresentation";
 import { demoControlsEnabled } from "./demoMode";
-import { gameDateParts, nextGameLabelParts } from "./gameDateDisplay";
+import { gameDateParts, nextGameLabelParts, timeZoneAbbreviation } from "./gameDateDisplay";
 import { selectHomeRunPhrase } from "./homeRunPhrases";
 import { LiveGamedayWidget } from "./LiveGamedayWidget";
 import { MiniAppleView } from "./MiniAppleView";
@@ -18,17 +18,18 @@ import {
   liveOffseasonSnapshot,
 } from "./presentation";
 import { RadioCompanion } from "./RadioCompanion";
+import { createSharedAppleStageHost, moveSharedAppleStage, SharedAppleStage } from "./SharedAppleStage";
 import { UpcomingGames } from "./UpcomingGames";
 import { type CelebrationSoundCue, useCelebrationSound } from "./useCelebrationSound";
 import { useDesktopViewModes } from "./useDesktopViewModes";
 import { useFixturePlayback } from "./useFixturePlayback";
 import { useLiveMetsGame } from "./useLiveMetsGame";
 import { useMetsSchedule } from "./useMetsSchedule";
-import { useMlbSeasonPhase } from "./useMlbSeasonPhase";
 import { useMiniAppleWindow } from "./useMiniAppleWindow";
+import { useMlbSeasonPhase } from "./useMlbSeasonPhase";
 import { useReducedMotion } from "./useReducedMotion";
-import { ViewModeControls } from "./ViewModeControls";
 import { VictoryConfetti } from "./VictoryConfetti";
+import { ViewModeControls } from "./ViewModeControls";
 
 const modes = [
   { id: "live", label: "Live inning" },
@@ -50,10 +51,13 @@ export function App() {
   const [sceneReady, setSceneReady] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
   const activeFocusMode = desktopViewModes && focusMode;
-  const miniAppleWindow = useMiniAppleWindow();
-  useEffect(() => {
-    if (miniAppleWindow.isOpen) setSceneReady(false);
-  }, [miniAppleWindow.isOpen]);
+  const [stageHost] = useState(() => createSharedAppleStageHost(document));
+  const mainStageSlot = useRef<HTMLDivElement>(null);
+  const restoreStageToMain = useCallback(() => moveSharedAppleStage(stageHost, mainStageSlot.current), [stageHost]);
+  const miniAppleWindow = useMiniAppleWindow(restoreStageToMain);
+  useLayoutEffect(() => {
+    if (!miniAppleWindow.isOpen) restoreStageToMain();
+  }, [miniAppleWindow.isOpen, restoreStageToMain]);
   useEffect(() => {
     if (!desktopViewModes && focusMode) setFocusMode(false);
   }, [desktopViewModes, focusMode]);
@@ -164,18 +168,25 @@ export function App() {
   }, [appleFullyRaised, winCelebration]);
   const betweenGames = !liveStandby && publicSnapshot.phase === "SLEEP" && !offseason;
   const gameIsFinal = publicSnapshot.phase === "FINAL";
+  const metsHomeGame = sourceSnapshot.home.id === METS_TEAM_ID;
   const atCitiField = demoOverride
-    ? sourceSnapshot.home.id === METS_TEAM_ID
+    ? metsHomeGame
     : offseason
       ? true
       : live.game
         ? isCitiFieldVenue(live.game.venue)
         : isCitiFieldVenue(upcomingGames[0]?.venue);
+  const rainAtCitiField = rainDelay && metsHomeGame && atCitiField;
   const progress = playback.durationMs === 0 ? 0 : Math.min(100, (playback.elapsedMs / playback.durationMs) * 100);
   const nextGame = upcomingGames[0]
     ? gameDateParts(upcomingGames[0].gameDate)
     : nextGameLabelParts(publicSnapshot.label);
   const nextGameDateTime = upcomingGames[0]?.gameDate;
+  const browserTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  const nextGameTimeZone = timeZoneAbbreviation(
+    nextGameDateTime ? new Date(nextGameDateTime) : new Date(),
+    browserTimeZone,
+  );
   const stadiumScoreboardData = useMemo<StadiumScoreboardData>(
     () => ({
       ...publicSnapshot,
@@ -242,7 +253,7 @@ export function App() {
         data-mini-open={miniAppleWindow.isOpen}
         data-phase={liveStandby ? "STANDBY" : publicSnapshot.phase}
         data-scene-ready={miniAppleWindow.isOpen || sceneReady}
-        data-weather={rainDelay ? "rain" : "clear"}
+        data-weather={rainAtCitiField ? "rain" : "clear"}
       >
         {!offseason && !activeFocusMode && !miniAppleWindow.isOpen && (
           <a className="skip-link" href="#game-status">
@@ -261,7 +272,8 @@ export function App() {
           </p>
         )}
 
-        {miniAppleWindow.isOpen ? (
+        <div className="shared-apple-stage-slot" ref={mainStageSlot} />
+        {miniAppleWindow.isOpen && (
           <section className="mini-open-placeholder" aria-label="Mini Apple window status">
             <img src="/favicon.png" alt="" />
             <div>
@@ -271,15 +283,6 @@ export function App() {
               Restore
             </button>
           </section>
-        ) : (
-          <AppleStage
-            mode="outfield"
-            positionMm={presentationActuator.positionMm}
-            reducedMotion={reducedMotion}
-            weather={rainDelay ? "RAIN" : "CLEAR"}
-            onReadyChange={setSceneReady}
-            scoreboardData={stadiumScoreboardData}
-          />
         )}
 
         <header
@@ -353,7 +356,14 @@ export function App() {
                 <span className="moment-card__next-label">NEXT GAME</span>
                 <h2 className="moment-card__next-game">
                   <strong>{nextGame.day}</strong>
-                  {nextGame.time && <time dateTime={nextGameDateTime}>{nextGame.time}</time>}
+                  {nextGame.time && (
+                    <time dateTime={nextGameDateTime}>
+                      {nextGame.time}
+                      <small className="moment-card__next-time-zone" title={browserTimeZone}>
+                        {nextGameTimeZone}
+                      </small>
+                    </time>
+                  )}
                 </h2>
               </div>
             ) : (
@@ -415,6 +425,16 @@ export function App() {
         )}
       </main>
 
+      <SharedAppleStage
+        host={stageHost}
+        mini={miniAppleWindow.isOpen}
+        onReadyChange={setSceneReady}
+        positionMm={presentationActuator.positionMm}
+        reducedMotion={reducedMotion}
+        scoreboardData={stadiumScoreboardData}
+        weather={rainAtCitiField ? "RAIN" : "CLEAR"}
+      />
+
       {miniAppleWindow.container && (
         <MiniAppleView
           betweenGames={betweenGames}
@@ -423,14 +443,13 @@ export function App() {
           nextGame={nextGame}
           offseason={offseason}
           onReturn={miniAppleWindow.close}
-          positionMm={presentationActuator.positionMm}
           reducedMotion={reducedMotion}
-          scoreboardData={stadiumScoreboardData}
           showScoreboard={showBroadcastScoreboard}
           snapshot={publicSnapshot}
+          stageHost={stageHost}
           sound={soundControls}
           standby={liveStandby}
-          weather={rainDelay ? "RAIN" : "CLEAR"}
+          weather={rainAtCitiField ? "RAIN" : "CLEAR"}
         />
       )}
     </>

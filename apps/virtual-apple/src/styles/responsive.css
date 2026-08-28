@@ -39,7 +39,7 @@
     position: fixed;
   }
 
-  .virtual-shell > .apple-stage {
+  .virtual-shell > .shared-apple-stage-slot {
     border: 1px solid rgba(188, 215, 237, 0.2);
     border-radius: 16px;
     grid-area: scene;
@@ -211,7 +211,7 @@
     padding: 10px;
   }
 
-  .virtual-shell > .apple-stage {
+  .virtual-shell > .shared-apple-stage-slot {
     min-height: 480px;
   }
   .upcoming-game {

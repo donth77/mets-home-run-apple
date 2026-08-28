@@ -73,16 +73,22 @@ a:focus-visible {
   z-index: 2;
 }
 
-.virtual-shell[data-scene-ready="false"] > :not(.apple-stage):not(.visually-hidden) {
+.virtual-shell[data-scene-ready="false"] > :not(.shared-apple-stage-slot):not(.visually-hidden) {
   opacity: 0;
   pointer-events: none;
   visibility: hidden;
 }
 
-.virtual-shell > .apple-stage {
+.virtual-shell > .shared-apple-stage-slot {
   height: 100%;
   inset: 0;
   position: absolute;
+}
+
+.shared-apple-stage-host,
+.shared-apple-stage-host > .apple-stage {
+  height: 100%;
+  width: 100%;
 }
 
 .virtual-header {

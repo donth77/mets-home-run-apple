@@ -367,6 +367,7 @@ describe("Virtual Apple accessibility", () => {
       </StrictMode>,
     );
     const radioStream = container.querySelector("#mets-radio-stream");
+    const sharedStage = getByRole("img", { name: "Virtual Home Run Apple behind the center-field wall" });
 
     expect(getByRole("button", { name: "Open Mini Apple" }).querySelector(".lucide-picture-in-picture")).not.toBeNull();
     fireEvent.click(getByRole("button", { name: "Open Mini Apple" }));
@@ -379,7 +380,7 @@ describe("Virtual Apple accessibility", () => {
     );
     expect(container.querySelector("#mets-radio-stream")).toBe(radioStream);
     expect(container.querySelector('[role="img"][aria-label*="Virtual Home Run Apple"]')).toBeNull();
-    expect(childWindow.document.querySelector('[role="img"][aria-label*="Virtual Home Run Apple"]')).not.toBeNull();
+    expect(childWindow.document.querySelector('[role="img"][aria-label*="Virtual Home Run Apple"]')).toBe(sharedStage);
     const miniBottom = childWindow.document.querySelector(".mini-apple-bottom");
     expect(miniBottom?.children[0]?.classList.contains("mini-apple-scoreboard")).toBe(true);
     expect(miniBottom?.children[1]?.classList.contains("mini-apple-footer")).toBe(true);
@@ -389,7 +390,31 @@ describe("Virtual Apple accessibility", () => {
     fireEvent.click(returnButton as unknown as HTMLElement);
 
     await waitFor(() =>
-      expect(container.querySelector('[role="img"][aria-label*="Virtual Home Run Apple"]')).not.toBeNull(),
+      expect(container.querySelector('[role="img"][aria-label*="Virtual Home Run Apple"]')).toBe(sharedStage),
+    );
+    expect(container.querySelector(".mini-open-placeholder")).toBeNull();
+  });
+
+  it("restores the same presentation before the native Mini Apple window closes", async () => {
+    const childWindow = new HappyDomWindow({ url: "https://virtual-mets-apple.test/" });
+    Object.defineProperty(window, "documentPictureInPicture", {
+      configurable: true,
+      value: { requestWindow: vi.fn().mockResolvedValue(childWindow as unknown as Window) },
+    });
+    const { container, getByRole } = render(<App />);
+    const sharedStage = getByRole("img", { name: "Virtual Home Run Apple behind the center-field wall" });
+
+    fireEvent.click(getByRole("button", { name: "Open Mini Apple" }));
+    await waitFor(() =>
+      expect(childWindow.document.querySelector('[role="img"][aria-label*="Virtual Home Run Apple"]')).toBe(
+        sharedStage,
+      ),
+    );
+
+    childWindow.dispatchEvent(new childWindow.Event("pagehide"));
+
+    await waitFor(() =>
+      expect(container.querySelector('[role="img"][aria-label*="Virtual Home Run Apple"]')).toBe(sharedStage),
     );
     expect(container.querySelector(".mini-open-placeholder")).toBeNull();
   });
@@ -464,6 +489,19 @@ describe("Virtual Apple accessibility", () => {
     expect(soundTestState.rainActive).toBe(true);
   });
 
+  it("reports an away rain delay without making the Citi Field scene rain", () => {
+    liveTestState.game = { venue: "Citizens Bank Park" };
+    liveTestState.snapshot = getScenario("rain-delay").frames[0].snapshot;
+    liveTestState.status = "POLLING";
+    const { container, getByRole } = render(<App />);
+
+    expect(
+      getByRole("img", { name: "Virtual Home Run Apple behind the center-field wall" }).getAttribute("data-weather"),
+    ).toBe("CLEAR");
+    expect(container.querySelector(".moment-card h2")?.textContent).toBe("RAIN DELAY");
+    expect(soundTestState.rainActive).toBe(true);
+  });
+
   it("uses a plain delay widget without rain weather for other delays", () => {
     liveTestState.game = { venue: "Citi Field" };
     liveTestState.snapshot = {
@@ -490,7 +528,12 @@ describe("Virtual Apple accessibility", () => {
     expect(nextGame?.querySelector(":scope > span")?.textContent).toBe("NEXT GAME");
     expect(headline?.children).toHaveLength(2);
     expect(headline?.querySelector(":scope > strong")).not.toBeNull();
-    expect(headline?.querySelector(":scope > time")?.textContent).toBe(expectedNextGameTime());
+    const time = headline?.querySelector(":scope > time");
+    const timeZone = new Intl.DateTimeFormat("en-US", { timeZoneName: "short" })
+      .formatToParts(new Date(NEXT_GAME_DATE))
+      .find((part) => part.type === "timeZoneName")?.value;
+    expect(time?.childNodes[0]?.textContent).toBe(expectedNextGameTime());
+    expect(time?.querySelector(".moment-card__next-time-zone")?.textContent).toBe(timeZone);
     expect(container.querySelector(".moment-card > p")).toBeNull();
     expect(nextGame?.textContent).not.toContain("The Apple is resting");
   });

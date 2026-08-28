@@ -1,7 +1,17 @@
 /** @vitest-environment happy-dom */
 
-import { describe, expect, it } from "vitest";
-import { documentPictureInPictureSupported, prepareMiniAppleDocument } from "./useMiniAppleWindow";
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
+import { Window as HappyDomWindow } from "happy-dom";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { documentPictureInPictureSupported, prepareMiniAppleDocument, useMiniAppleWindow } from "./useMiniAppleWindow";
+
+afterEach(() => {
+  cleanup();
+  Object.defineProperty(window, "documentPictureInPicture", {
+    configurable: true,
+    value: undefined,
+  });
+});
 
 describe("Mini Apple document setup", () => {
   it("detects Document Picture-in-Picture without assuming every browser supports it", () => {
@@ -37,5 +47,25 @@ describe("Mini Apple document setup", () => {
       "data:text/css,.linked%7Bcolor%3Ablue%7D",
     );
     expect(target.querySelector("style")?.textContent).toContain("color: orange");
+  });
+
+  it("restores shared content before a native Mini Apple close finishes", async () => {
+    const childWindow = new HappyDomWindow({ url: "https://virtual-mets-apple.test/" });
+    Object.defineProperty(window, "documentPictureInPicture", {
+      configurable: true,
+      value: { requestWindow: vi.fn().mockResolvedValue(childWindow as unknown as Window) },
+    });
+    const restoreContent = vi.fn();
+    const { result } = renderHook(() => useMiniAppleWindow(restoreContent));
+
+    await act(async () => {
+      expect(await result.current.open()).toBe(true);
+    });
+    expect(result.current.isOpen).toBe(true);
+
+    act(() => childWindow.dispatchEvent(new childWindow.Event("pagehide")));
+
+    expect(restoreContent).toHaveBeenCalledOnce();
+    await waitFor(() => expect(result.current.isOpen).toBe(false));
   });
 });

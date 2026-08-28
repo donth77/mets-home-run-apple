@@ -1,8 +1,9 @@
-import { AppleStage, type StadiumScoreboardData } from "@apple/apple-3d";
 import type { PresentationSnapshot } from "@apple/protocol";
 import { Scoreboard } from "@apple/scoreboard-ui";
+import { useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { SceneSoundToggle } from "./SceneSoundToggle";
+import { moveSharedAppleStage } from "./SharedAppleStage";
 import { VictoryConfetti } from "./VictoryConfetti";
 
 export interface MiniAppleStatus {
@@ -40,11 +41,10 @@ interface MiniAppleViewProps {
   nextGame: { day: string; time: string };
   offseason: boolean;
   onReturn: () => void;
-  positionMm: number;
   reducedMotion: boolean;
-  scoreboardData: StadiumScoreboardData;
   showScoreboard: boolean;
   snapshot: PresentationSnapshot;
+  stageHost: HTMLElement;
   sound: {
     enabled: boolean;
     error: string;
@@ -62,29 +62,25 @@ export function MiniAppleView({
   nextGame,
   offseason,
   onReturn,
-  positionMm,
   reducedMotion,
-  scoreboardData,
   showScoreboard,
   snapshot,
+  stageHost,
   sound,
   standby,
   weather,
 }: MiniAppleViewProps) {
   const status = miniAppleStatus(snapshot, { betweenGames, nextGame, offseason, standby });
+  const stageSlot = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    moveSharedAppleStage(stageHost, stageSlot.current);
+  }, [stageHost]);
 
   return createPortal(
     <main className="mini-apple-shell" data-phase={standby ? "STANDBY" : snapshot.phase} data-weather={weather}>
       <h1 className="visually-hidden">Mini Virtual Mets Apple</h1>
-      <AppleStage
-        className="mini-apple-stage"
-        framing="mini"
-        mode="outfield"
-        positionMm={positionMm}
-        reducedMotion={reducedMotion}
-        scoreboardData={scoreboardData}
-        weather={weather}
-      />
+      <div className="mini-apple-stage-slot" ref={stageSlot} />
       <div className="mini-apple-bottom">
         {showScoreboard && (
           <div className="mini-apple-scoreboard">
