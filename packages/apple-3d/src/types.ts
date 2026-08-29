@@ -4,9 +4,10 @@ export interface AppleAssemblyProps {
   reducedMotion?: boolean;
   showDimensions?: boolean;
   sceneScale?: number;
+  restingOffsetY?: number;
 }
 
-export interface AppleStageProps extends AppleAssemblyProps {
+export interface AppleStageProps extends Omit<AppleAssemblyProps, "restingOffsetY"> {
   mode: "lab" | "outfield";
   framing?: "default" | "mini";
   weather?: "CLEAR" | "RAIN";

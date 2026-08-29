@@ -21,6 +21,7 @@ import type { AppleStageProps } from "./types";
 const PAGE_SCENE_STARTUP_ID = sceneStartupPageId(
   typeof window === "undefined" ? undefined : (window as unknown as Record<string, unknown>),
 );
+const OUTFIELD_RESTING_OFFSET_Y = -0.28;
 
 export { AppleAssembly } from "./AppleAssembly";
 export type {
@@ -244,6 +245,7 @@ export function AppleStage({
                     wireframe={wireframe}
                     showDimensions={showDimensions}
                     sceneScale={outfield ? sceneScale * 0.95 : sceneScale}
+                    restingOffsetY={outfield ? OUTFIELD_RESTING_OFFSET_Y : 0}
                   />
                 </group>
                 <SceneReadySignal onReady={handleAssetsReady} />

@@ -19,6 +19,12 @@ export const WIN_TRACK_URLS = [
   new URL("../public/audio/win2.mp3", import.meta.url).href,
 ] as const;
 
+// Unlock delayed playback with silence, never with one of the celebration recordings.
+// Otherwise a browser can briefly expose the priming recording before the randomly
+// selected event recording replaces it.
+const AUDIO_UNLOCK_URL =
+  "data:audio/wav;base64,UklGRnQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YVAAAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgA==";
+
 export function selectHomeRunTrackUrl(randomValue = Math.random()) {
   const boundedValue = Number.isFinite(randomValue) ? Math.min(0.999_999, Math.max(0, randomValue)) : 0;
   return HOME_RUN_TRACK_URLS[Math.floor(boundedValue * HOME_RUN_TRACK_URLS.length)];
@@ -29,12 +35,13 @@ export function selectWinTrackUrl(randomValue = Math.random()) {
   return WIN_TRACK_URLS[Math.floor(boundedValue * WIN_TRACK_URLS.length)];
 }
 
-type AudioTrack = { audio: HTMLAudioElement; url: string };
-
-async function primeAudioTrack({ audio }: AudioTrack) {
+async function primeCelebrationAudio(audio: HTMLAudioElement) {
   const volume = audio.volume;
+  const muted = audio.muted;
+  audio.muted = true;
   audio.volume = 0;
   try {
+    audio.src = AUDIO_UNLOCK_URL;
     audio.load();
     await audio.play();
     return true;
@@ -48,6 +55,7 @@ async function primeAudioTrack({ audio }: AudioTrack) {
       // Metadata may not be ready yet, so there may be no seekable range.
     }
     audio.volume = volume;
+    audio.muted = muted;
   }
 }
 
@@ -56,12 +64,12 @@ export function useCelebrationSound(cue: CelebrationSoundCue | undefined, rainAc
   const [error, setError] = useState("");
   const [rainPlaying, setRainPlaying] = useState(false);
   const [winTrackPlaying, setWinTrackPlaying] = useState(false);
-  const homeRunAudioTracksRef = useRef<AudioTrack[]>([]);
-  const activeHomeRunAudioRef = useRef<AudioTrack | undefined>(undefined);
-  const activeHomeRunCueRef = useRef<string | undefined>(undefined);
-  const winAudioTracksRef = useRef<AudioTrack[]>([]);
-  const activeWinAudioRef = useRef<AudioTrack | undefined>(undefined);
-  const activeWinCueRef = useRef<string | undefined>(undefined);
+  const celebrationAudioRef = useRef<HTMLAudioElement | undefined>(undefined);
+  const audioPreparedRef = useRef(false);
+  const audioPreparationRef = useRef<Promise<boolean> | undefined>(undefined);
+  const activeCueRef = useRef<string | undefined>(undefined);
+  const activeKindRef = useRef<CelebrationSoundKind | undefined>(undefined);
+  const playbackRequestRef = useRef(0);
   const lastCueRef = useRef<string | undefined>(undefined);
   const rainAmbienceRef = useRef<RainAmbienceController | undefined>(undefined);
   const rainRequestRef = useRef(0);
@@ -72,66 +80,50 @@ export function useCelebrationSound(cue: CelebrationSoundCue | undefined, rainAc
     return rainAmbienceRef.current;
   }, []);
 
-  const ensureHomeRunAudioTracks = useCallback(() => {
-    if (homeRunAudioTracksRef.current.length > 0) return homeRunAudioTracksRef.current;
-    if (typeof Audio === "undefined") return [];
-    homeRunAudioTracksRef.current = HOME_RUN_TRACK_URLS.map((url) => {
-      const audio = new Audio(url);
-      const track = { audio, url };
-      audio.preload = "auto";
-      audio.volume = 0.82;
-      audio.onended = () => {
-        if (activeHomeRunAudioRef.current !== track) return;
-        activeHomeRunAudioRef.current = undefined;
-        activeHomeRunCueRef.current = undefined;
-      };
-      audio.onerror = () => {
-        if (activeHomeRunAudioRef.current !== track) return;
-        activeHomeRunAudioRef.current = undefined;
-        activeHomeRunCueRef.current = undefined;
-        setError("The selected home-run celebration could not be loaded.");
-      };
-      return track;
-    });
-    return homeRunAudioTracksRef.current;
-  }, []);
-
-  const ensureWinAudioTracks = useCallback(() => {
-    if (winAudioTracksRef.current.length > 0) return winAudioTracksRef.current;
-    if (typeof Audio === "undefined") return [];
-    winAudioTracksRef.current = WIN_TRACK_URLS.map((url) => {
-      const audio = new Audio(url);
-      const track = { audio, url };
-      audio.preload = "auto";
-      audio.volume = 0.82;
-      audio.onended = () => {
-        if (activeWinAudioRef.current !== track) return;
-        activeWinAudioRef.current = undefined;
-        activeWinCueRef.current = undefined;
+  const ensureCelebrationAudio = useCallback(() => {
+    if (celebrationAudioRef.current) return celebrationAudioRef.current;
+    if (typeof Audio === "undefined") return undefined;
+    const audio = new Audio();
+    audio.preload = "metadata";
+    audio.volume = 0.82;
+    audio.onended = () => {
+      const finishedKind = activeKindRef.current;
+      if (!activeCueRef.current) return;
+      activeCueRef.current = undefined;
+      activeKindRef.current = undefined;
+      if (finishedKind === "METS_WIN") {
         lastCueRef.current = undefined;
         setWinTrackPlaying(false);
-      };
-      audio.onerror = () => {
-        if (activeWinAudioRef.current !== track) return;
-        activeWinAudioRef.current = undefined;
-        activeWinCueRef.current = undefined;
+      }
+    };
+    audio.onerror = () => {
+      const failedKind = activeKindRef.current;
+      if (!activeCueRef.current || !failedKind) return;
+      activeCueRef.current = undefined;
+      activeKindRef.current = undefined;
+      if (failedKind === "METS_WIN") {
         lastCueRef.current = undefined;
         setWinTrackPlaying(false);
-        setError("The selected Mets-win song could not be loaded.");
-      };
-      return track;
-    });
-    return winAudioTracksRef.current;
+      }
+      setError(
+        failedKind === "METS_WIN"
+          ? "The selected Mets-win song could not be loaded."
+          : "The selected home-run celebration could not be loaded.",
+      );
+    };
+    celebrationAudioRef.current = audio;
+    return audio;
   }, []);
 
-  const stopWinTrack = useCallback(() => {
-    activeWinCueRef.current = undefined;
-    const track = activeWinAudioRef.current;
-    activeWinAudioRef.current = undefined;
-    if (track) {
-      track.audio.pause();
+  const stopCelebrationTrack = useCallback(() => {
+    playbackRequestRef.current += 1;
+    activeCueRef.current = undefined;
+    activeKindRef.current = undefined;
+    const audio = celebrationAudioRef.current;
+    if (audio) {
+      audio.pause();
       try {
-        track.audio.currentTime = 0;
+        audio.currentTime = 0;
       } catch {
         // Metadata may not be ready yet, so there may be no seekable range.
       }
@@ -139,24 +131,10 @@ export function useCelebrationSound(cue: CelebrationSoundCue | undefined, rainAc
     setWinTrackPlaying(false);
   }, []);
 
-  const stopHomeRunTrack = useCallback(() => {
-    activeHomeRunCueRef.current = undefined;
-    const track = activeHomeRunAudioRef.current;
-    activeHomeRunAudioRef.current = undefined;
-    if (!track) return;
-    track.audio.pause();
-    try {
-      track.audio.currentTime = 0;
-    } catch {
-      // Metadata may not be ready yet, so there may be no seekable range.
-    }
-  }, []);
-
   const stop = useCallback(() => {
     lastCueRef.current = undefined;
-    stopHomeRunTrack();
-    stopWinTrack();
-  }, [stopHomeRunTrack, stopWinTrack]);
+    stopCelebrationTrack();
+  }, [stopCelebrationTrack]);
 
   const stopRain = useCallback(() => {
     rainRequestRef.current += 1;
@@ -177,85 +155,71 @@ export function useCelebrationSound(cue: CelebrationSoundCue | undefined, rainAc
     setError(started ? "" : "Rain ambience is unavailable in this browser.");
   }, [ensureRainAmbience]);
 
-  const playHomeRunTrack = useCallback(
-    async (cueKey: string) => {
-      const tracks = ensureHomeRunAudioTracks();
-      const selectedUrl = selectHomeRunTrackUrl();
-      const track = tracks.find(({ url }) => url === selectedUrl);
-      if (!track) {
-        setError("The home-run celebration is not supported in this browser.");
+  const playCelebrationTrack = useCallback(
+    async (cueKey: string, kind: CelebrationSoundKind) => {
+      const audio = ensureCelebrationAudio();
+      if (!audio) {
+        setError(
+          kind === "METS_WIN"
+            ? "The Mets-win song is not supported in this browser."
+            : "The home-run celebration is not supported in this browser.",
+        );
+        if (kind === "METS_WIN") lastCueRef.current = undefined;
         return;
       }
 
-      activeHomeRunAudioRef.current?.audio.pause();
-      activeHomeRunAudioRef.current = track;
-      track.audio.pause();
-      try {
-        track.audio.currentTime = 0;
-      } catch {
-        // Playback will still begin at the start when the file first loads.
-      }
-      activeHomeRunCueRef.current = cueKey;
+      const selectedUrl = kind === "METS_WIN" ? selectWinTrackUrl() : selectHomeRunTrackUrl();
+      stopCelebrationTrack();
+      const playbackRequest = playbackRequestRef.current;
+      activeCueRef.current = cueKey;
+      activeKindRef.current = kind;
+      setWinTrackPlaying(kind === "METS_WIN");
+      audio.src = selectedUrl;
+      audio.load();
 
       try {
-        await track.audio.play();
-        if (activeHomeRunCueRef.current === cueKey) setError("");
+        await audio.play();
+        if (playbackRequestRef.current === playbackRequest && activeCueRef.current === cueKey) setError("");
       } catch {
-        if (activeHomeRunCueRef.current !== cueKey) return;
-        track.audio.pause();
-        activeHomeRunAudioRef.current = undefined;
-        activeHomeRunCueRef.current = undefined;
-        setError("The browser blocked the home-run celebration. Turn sound on and try again.");
-      }
-    },
-    [ensureHomeRunAudioTracks],
-  );
-
-  const playWinTrack = useCallback(
-    async (cueKey: string) => {
-      const tracks = ensureWinAudioTracks();
-      const selectedUrl = selectWinTrackUrl();
-      const track = tracks.find(({ url }) => url === selectedUrl);
-      if (!track) {
-        setError("The Mets-win song is not supported in this browser.");
-        lastCueRef.current = undefined;
-        return;
-      }
-
-      activeWinAudioRef.current?.audio.pause();
-      activeWinAudioRef.current = track;
-      track.audio.pause();
-      try {
-        track.audio.currentTime = 0;
-      } catch {
-        // Playback will still begin at the start when the file first loads.
-      }
-      activeWinCueRef.current = cueKey;
-      setWinTrackPlaying(true);
-
-      try {
-        await track.audio.play();
-        if (activeWinCueRef.current === cueKey) setError("");
-      } catch {
-        if (activeWinCueRef.current !== cueKey) return;
-        track.audio.pause();
-        activeWinAudioRef.current = undefined;
-        activeWinCueRef.current = undefined;
-        lastCueRef.current = undefined;
+        if (playbackRequestRef.current !== playbackRequest || activeCueRef.current !== cueKey) return;
+        audio.pause();
+        activeCueRef.current = undefined;
+        activeKindRef.current = undefined;
+        if (kind === "METS_WIN") lastCueRef.current = undefined;
         setWinTrackPlaying(false);
-        setError("The browser blocked the Mets-win song. Turn sound on and try again.");
+        setError(
+          kind === "METS_WIN"
+            ? "The browser blocked the Mets-win song. Turn sound on and try again."
+            : "The browser blocked the home-run celebration. Turn sound on and try again.",
+        );
       }
     },
-    [ensureWinAudioTracks],
+    [ensureCelebrationAudio, stopCelebrationTrack],
   );
 
   const enable = useCallback(async () => {
     if (enabled) return true;
     const htmlAudioSupported = typeof Audio !== "undefined";
     const rainPreparation = ensureRainAmbience().prepare();
-    const htmlAudioPreparation = htmlAudioSupported
-      ? Promise.all([...ensureHomeRunAudioTracks(), ...ensureWinAudioTracks()].map(primeAudioTrack))
-      : Promise.resolve([]);
+    const celebrationAudio = htmlAudioSupported ? ensureCelebrationAudio() : undefined;
+    let htmlAudioPreparation = Promise.resolve(false);
+    if (celebrationAudio) {
+      if (audioPreparedRef.current) {
+        htmlAudioPreparation = Promise.resolve(true);
+      } else if (audioPreparationRef.current) {
+        htmlAudioPreparation = audioPreparationRef.current;
+      } else {
+        const preparation = primeCelebrationAudio(celebrationAudio).then((prepared) => {
+          audioPreparedRef.current = prepared;
+          return prepared;
+        });
+        audioPreparationRef.current = preparation;
+        void preparation.finally(() => {
+          if (audioPreparationRef.current === preparation) audioPreparationRef.current = undefined;
+        });
+        htmlAudioPreparation = preparation;
+      }
+    }
     const [rainReady] = await Promise.all([rainPreparation, htmlAudioPreparation]);
     if (!htmlAudioSupported && !rainReady) {
       setError("Scene audio is not supported in this browser.");
@@ -263,10 +227,7 @@ export function useCelebrationSound(cue: CelebrationSoundCue | undefined, rainAc
     }
 
     try {
-      if (htmlAudioSupported) {
-        ensureHomeRunAudioTracks();
-        ensureWinAudioTracks();
-      }
+      if (htmlAudioSupported) ensureCelebrationAudio();
       setError("");
       setEnabled(true);
       return true;
@@ -274,7 +235,7 @@ export function useCelebrationSound(cue: CelebrationSoundCue | undefined, rainAc
       setError("The browser blocked audio. Try turning sound on again.");
       return false;
     }
-  }, [enabled, ensureHomeRunAudioTracks, ensureRainAmbience, ensureWinAudioTracks]);
+  }, [enabled, ensureCelebrationAudio, ensureRainAmbience]);
 
   const toggle = useCallback(async () => {
     if (!enabled) {
@@ -301,8 +262,8 @@ export function useCelebrationSound(cue: CelebrationSoundCue | undefined, rainAc
 
   useEffect(() => {
     if (!cueId || !cueKind) {
-      stopHomeRunTrack();
-      if (!activeWinCueRef.current) lastCueRef.current = undefined;
+      if (activeKindRef.current === "HOME_RUN") stopCelebrationTrack();
+      if (activeKindRef.current !== "METS_WIN") lastCueRef.current = undefined;
       return;
     }
     if (!enabled) return;
@@ -311,47 +272,34 @@ export function useCelebrationSound(cue: CelebrationSoundCue | undefined, rainAc
     if (lastCueRef.current === cueKey) return;
     lastCueRef.current = cueKey;
 
-    if (cueKind === "METS_WIN") {
-      stopHomeRunTrack();
-      void playWinTrack(cueKey);
-      return;
+    void playCelebrationTrack(cueKey, cueKind);
+
+    if (cueKind === "HOME_RUN") {
+      return () => {
+        if (activeCueRef.current === cueKey) stopCelebrationTrack();
+      };
     }
-
-    stopWinTrack();
-    void playHomeRunTrack(cueKey);
-
-    return () => {
-      stopHomeRunTrack();
-    };
-  }, [cueId, cueKind, enabled, playHomeRunTrack, playWinTrack, stopHomeRunTrack, stopWinTrack]);
+  }, [cueId, cueKind, enabled, playCelebrationTrack, stopCelebrationTrack]);
 
   useEffect(
     () => () => {
       rainRequestRef.current += 1;
       rainAmbienceRef.current?.dispose();
       rainAmbienceRef.current = undefined;
-      activeHomeRunCueRef.current = undefined;
-      activeHomeRunAudioRef.current = undefined;
-      const homeRunTracks = homeRunAudioTracksRef.current;
-      homeRunAudioTracksRef.current = [];
-      homeRunTracks.forEach(({ audio }) => {
+      activeCueRef.current = undefined;
+      activeKindRef.current = undefined;
+      playbackRequestRef.current += 1;
+      audioPreparedRef.current = false;
+      audioPreparationRef.current = undefined;
+      const audio = celebrationAudioRef.current;
+      celebrationAudioRef.current = undefined;
+      if (audio) {
         audio.onended = null;
         audio.onerror = null;
         audio.pause();
         audio.removeAttribute("src");
         audio.load();
-      });
-      activeWinCueRef.current = undefined;
-      activeWinAudioRef.current = undefined;
-      const tracks = winAudioTracksRef.current;
-      winAudioTracksRef.current = [];
-      tracks.forEach(({ audio }) => {
-        audio.onended = null;
-        audio.onerror = null;
-        audio.pause();
-        audio.removeAttribute("src");
-        audio.load();
-      });
+      }
     },
     [],
   );
