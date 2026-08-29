@@ -16,13 +16,25 @@ export function stadiumInningScores(
 ) {
   const recordedInnings = data.linescore?.innings ?? [];
   const cells = innings.map((inningNumber) => {
+    const isCurrentInning = inningNumber === data.inning;
     const existing = recordedInnings.find((inning) => inning.inning === inningNumber);
+    const homeScoreExists = existing?.home !== null && existing?.home !== undefined;
+    const inningHasStarted =
+      inningNumber < data.inning ||
+      (isCurrentInning &&
+        data.phase !== "PREGAME" &&
+        data.phase !== "SLEEP" &&
+        (side === "away" ||
+          data.half === "BOTTOM" ||
+          data.half === "END" ||
+          (data.half === "MIDDLE" && homeScoreExists)));
+    if (!inningHasStarted) return null;
     return existing?.[side] ?? null;
   });
   const recordedTotal = recordedInnings.reduce<number>((sum, inning) => sum + (inning[side] ?? 0), 0);
   const unassignedRuns = data[side].runs - recordedTotal;
   const currentIndex = innings.indexOf(data.inning);
-  if (unassignedRuns !== 0 && currentIndex >= 0) {
+  if (unassignedRuns !== 0 && currentIndex >= 0 && cells[currentIndex] !== null) {
     cells[currentIndex] = Math.max(0, (cells[currentIndex] ?? 0) + unassignedRuns);
   }
   return cells;

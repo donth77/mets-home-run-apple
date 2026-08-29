@@ -16,6 +16,8 @@ Open [http://localhost:4174](http://localhost:4174).
 
 The site checks the Mets schedule when it loads. Between games, it can show the next three matchups. During a live game—including delays, challenges, and reviews—it follows MLB feed updates through `@apple/mlb-live-feed` and sends normalized evidence to the compiled C++ core.
 
+The deployed site reads MLB data through a small same-origin Cloudflare Pages Function. It only relays the schedule, season, and live-game routes the app uses; there is no database or continuously running server. Local Vite development exposes the same `/api/mlb` path through its development proxy. If that route is temporarily unavailable, the browser can fall back to MLB directly.
+
 The initial game history seeds the core without celebrating old plays. Only a newly accepted home run or win starts the apple animation. Virtual Apple has no route to a physical device.
 
 ## Scoreboards and celebrations
@@ -60,7 +62,7 @@ A deployment can supply another authorized browser-playable feed:
 VITE_METS_AUDIO_STREAM_URL=https://audio-provider.example/authorized-stream
 ```
 
-No audio proxy or application server is required.
+Radio audio is loaded directly from the configured provider and does not pass through the MLB feed relay.
 
 Radio playback and celebration sound are separate controls. The speaker button enables home-run and win clips; it does not mute the radio. A radio stream that is already playing continues when Focus view or Mini Apple hides the radio card.
 

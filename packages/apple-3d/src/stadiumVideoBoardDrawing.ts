@@ -250,7 +250,7 @@ export function drawStadiumScoreboard(
       context.fillStyle = index >= 9 ? "#ffffff" : score === null || score === undefined ? "#546b7e" : "#dce7ef";
       context.font = index >= 9 ? "900 38px Arial, sans-serif" : "800 33px Arial, sans-serif";
       context.textAlign = "center";
-      context.fillText(score === null || score === undefined ? "–" : String(score), x, y + 6);
+      context.fillText(score === null || score === undefined ? "" : String(score), x, y + 6);
     });
   });
 
