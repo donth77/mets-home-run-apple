@@ -47,7 +47,11 @@ vi.mock("@react-three/drei", () => {
   return { OrbitControls: () => null, useGLTF };
 });
 
-vi.mock("./AppleAssembly", () => ({ AppleAssembly: () => <div data-testid="apple-assembly" /> }));
+vi.mock("./AppleAssembly", () => ({
+  AppleAssembly: ({ restingOffsetY = 0 }: { restingOffsetY?: number }) => (
+    <div data-testid="apple-assembly" data-resting-offset-y={restingOffsetY} />
+  ),
+}));
 vi.mock("./LabEnvironment", () => ({ LabEnvironment: () => null }));
 vi.mock("./OutfieldEnvironment", () => ({ OutfieldEnvironment: () => <div data-testid="outfield" /> }));
 
@@ -75,6 +79,22 @@ afterEach(async () => {
   rendererState.canvas = undefined;
   rendererState.renderFrame = true;
   vi.useRealTimers();
+});
+
+describe("AppleStage assembly placement", () => {
+  it("lowers only the outfield resting position", async () => {
+    await act(async () => {
+      root.render(<AppleStage mode="outfield" positionMm={0} />);
+    });
+    expect(container.querySelector('[data-testid="apple-assembly"]')?.getAttribute("data-resting-offset-y")).toBe(
+      "-0.28",
+    );
+
+    await act(async () => {
+      root.render(<AppleStage mode="lab" positionMm={0} />);
+    });
+    expect(container.querySelector('[data-testid="apple-assembly"]')?.getAttribute("data-resting-offset-y")).toBe("0");
+  });
 });
 
 describe("AppleStage mobile renderer recovery", () => {

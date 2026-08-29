@@ -27,24 +27,38 @@ vi.mock("./rainAmbience", () => ({
 const audioInstances: FakeAudio[] = [];
 
 class FakeAudio {
+  private source = "";
   currentTime = 0;
+  muted = false;
   onended: (() => void) | null = null;
   onerror: (() => void) | null = null;
   paused = true;
+  playMutedStates: boolean[] = [];
   preload = "none";
-  src: string;
+  srcAssignments: string[] = [];
   volume = 1;
   load = vi.fn();
   pause = vi.fn(() => {
     this.paused = true;
   });
   play = vi.fn(async () => {
+    this.playMutedStates.push(this.muted);
     this.paused = false;
   });
   removeAttribute = vi.fn();
 
-  constructor(src: string) {
-    this.src = src;
+  get src() {
+    return this.source;
+  }
+
+  set src(value: string) {
+    this.source = value;
+    this.srcAssignments.push(value);
+  }
+
+  constructor(src = "") {
+    this.source = src;
+    if (src) this.srcAssignments.push(src);
     audioInstances.push(this);
   }
 }
@@ -95,36 +109,34 @@ describe("celebration recording playback", () => {
     );
 
     await act(async () => result.current.toggle());
-    expect(audioInstances.map(({ src }) => src)).toEqual([...HOME_RUN_TRACK_URLS, ...WIN_TRACK_URLS]);
-    expect(audioInstances.every(({ play }) => play.mock.calls.length === 1)).toBe(true);
-    audioInstances.forEach(({ play }) => {
-      play.mockClear();
-    });
-    const homeRunAudio = audioInstances.find(({ src }) => src === HOME_RUN_TRACK_URLS[3]);
-    expect(homeRunAudio).toBeDefined();
-    if (!homeRunAudio) throw new Error("Expected the fourth home-run audio track.");
-    expect(homeRunAudio.volume).toBe(0.82);
+    expect(audioInstances).toHaveLength(1);
+    const [celebrationAudio] = audioInstances;
+    if (!celebrationAudio) throw new Error("Expected the shared celebration audio player.");
+    expect(celebrationAudio.play).toHaveBeenCalledOnce();
+    expect(celebrationAudio.playMutedStates).toEqual([true]);
+    expect(celebrationAudio.volume).toBe(0.82);
+    expect(celebrationAudio.muted).toBe(false);
+    expect([...HOME_RUN_TRACK_URLS, ...WIN_TRACK_URLS]).not.toContain(celebrationAudio.src);
+    celebrationAudio.play.mockClear();
+    celebrationAudio.playMutedStates.length = 0;
+    celebrationAudio.srcAssignments.length = 0;
 
     rerender({ cue: { id: "777686:home-run", kind: "HOME_RUN" } });
-    await waitFor(() => expect(homeRunAudio.play).toHaveBeenCalledOnce());
-    expect(
-      audioInstances
-        .filter(({ src }) => HOME_RUN_TRACK_URLS.includes(src as (typeof HOME_RUN_TRACK_URLS)[number]))
-        .filter(({ play }) => play.mock.calls.length > 0),
-    ).toEqual([homeRunAudio]);
+    await waitFor(() => expect(celebrationAudio.play).toHaveBeenCalledOnce());
+    expect(celebrationAudio.src).toBe(HOME_RUN_TRACK_URLS[3]);
+    expect(celebrationAudio.srcAssignments).toEqual([HOME_RUN_TRACK_URLS[3]]);
+    expect(celebrationAudio.playMutedStates).toEqual([false]);
+    expect(audioInstances).toHaveLength(1);
 
     vi.mocked(Math.random).mockReturnValue(0);
     rerender({ cue: { id: "777686:home-run", kind: "HOME_RUN" } });
-    expect(homeRunAudio.play).toHaveBeenCalledOnce();
-    const firstHomeRunAudio = audioInstances.find(({ src }) => src === HOME_RUN_TRACK_URLS[0]);
-    expect(firstHomeRunAudio).toBeDefined();
-    if (!firstHomeRunAudio) throw new Error("Expected the first home-run audio track.");
-    expect(firstHomeRunAudio.play).not.toHaveBeenCalled();
+    expect(celebrationAudio.play).toHaveBeenCalledOnce();
+    expect(celebrationAudio.src).toBe(HOME_RUN_TRACK_URLS[3]);
 
-    const pauseCallsBeforeCueClears = homeRunAudio.pause.mock.calls.length;
+    const pauseCallsBeforeCueClears = celebrationAudio.pause.mock.calls.length;
     rerender({ cue: undefined });
-    expect(homeRunAudio.pause).toHaveBeenCalledTimes(pauseCallsBeforeCueClears + 1);
-    expect(homeRunAudio.currentTime).toBe(0);
+    expect(celebrationAudio.pause).toHaveBeenCalledTimes(pauseCallsBeforeCueClears + 1);
+    expect(celebrationAudio.currentTime).toBe(0);
     unmount();
   });
 
@@ -136,29 +148,56 @@ describe("celebration recording playback", () => {
     );
 
     await act(async () => result.current.toggle());
-    expect(audioInstances.map(({ src }) => src)).toEqual([...HOME_RUN_TRACK_URLS, ...WIN_TRACK_URLS]);
-    expect(audioInstances.every(({ play }) => play.mock.calls.length === 1)).toBe(true);
-    audioInstances.forEach(({ play }) => {
-      play.mockClear();
-    });
-    const firstWinAudio = audioInstances.find(({ src }) => src === WIN_TRACK_URLS[0]);
-    const secondWinAudio = audioInstances.find(({ src }) => src === WIN_TRACK_URLS[1]);
-    expect(firstWinAudio).toBeDefined();
-    expect(secondWinAudio).toBeDefined();
-    if (!firstWinAudio || !secondWinAudio) throw new Error("Expected both Mets-win audio tracks.");
+    expect(audioInstances).toHaveLength(1);
+    const [celebrationAudio] = audioInstances;
+    if (!celebrationAudio) throw new Error("Expected the shared celebration audio player.");
+    expect(celebrationAudio.playMutedStates).toEqual([true]);
+    celebrationAudio.play.mockClear();
+    celebrationAudio.playMutedStates.length = 0;
+    celebrationAudio.srcAssignments.length = 0;
 
     rerender({ cue: { id: "777686:final", kind: "METS_WIN" } });
     await waitFor(() => expect(result.current.winTrackPlaying).toBe(true));
-    expect(firstWinAudio.play).not.toHaveBeenCalled();
-    expect(secondWinAudio.play).toHaveBeenCalledOnce();
+    expect(celebrationAudio.src).toBe(WIN_TRACK_URLS[1]);
+    expect(celebrationAudio.srcAssignments).toEqual([WIN_TRACK_URLS[1]]);
+    expect(celebrationAudio.play).toHaveBeenCalledOnce();
+    expect(celebrationAudio.playMutedStates).toEqual([false]);
+    expect(audioInstances).toHaveLength(1);
 
-    const pauseCallsBeforeCueClears = secondWinAudio.pause.mock.calls.length;
+    const pauseCallsBeforeCueClears = celebrationAudio.pause.mock.calls.length;
     rerender({ cue: undefined });
     expect(result.current.winTrackPlaying).toBe(true);
-    expect(secondWinAudio.pause).toHaveBeenCalledTimes(pauseCallsBeforeCueClears);
+    expect(celebrationAudio.pause).toHaveBeenCalledTimes(pauseCallsBeforeCueClears);
 
-    act(() => secondWinAudio.onended?.());
+    act(() => celebrationAudio.onended?.());
     expect(result.current.winTrackPlaying).toBe(false);
+    unmount();
+  });
+
+  it("reuses the same player when a home-run track is replaced by a win track", async () => {
+    const initialProps: { cue: CelebrationSoundCue | undefined } = { cue: undefined };
+    const { result, rerender, unmount } = renderHook(
+      ({ cue }: { cue: CelebrationSoundCue | undefined }) => useCelebrationSound(cue),
+      { initialProps },
+    );
+
+    await act(async () => result.current.toggle());
+    const [celebrationAudio] = audioInstances;
+    if (!celebrationAudio) throw new Error("Expected the shared celebration audio player.");
+    celebrationAudio.play.mockClear();
+    celebrationAudio.playMutedStates.length = 0;
+
+    vi.mocked(Math.random).mockReturnValue(0);
+    rerender({ cue: { id: "demo:home-run", kind: "HOME_RUN" } });
+    await waitFor(() => expect(celebrationAudio.src).toBe(HOME_RUN_TRACK_URLS[0]));
+
+    const pauseCallsBeforeWin = celebrationAudio.pause.mock.calls.length;
+    rerender({ cue: { id: "demo:mets-win", kind: "METS_WIN" } });
+    await waitFor(() => expect(celebrationAudio.src).toBe(WIN_TRACK_URLS[0]));
+
+    expect(audioInstances).toHaveLength(1);
+    expect(celebrationAudio.pause.mock.calls.length).toBeGreaterThan(pauseCallsBeforeWin);
+    expect(celebrationAudio.playMutedStates).toEqual([false, false]);
     unmount();
   });
 });

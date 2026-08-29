@@ -130,10 +130,12 @@ export function AppleAssembly({
   wireframe = false,
   showDimensions = false,
   sceneScale = 1,
+  restingOffsetY = 0,
 }: AppleAssemblyProps) {
   const logoTexture = useTexture(METS_DECAL_URL) as Texture;
   const actualPositionMm = clampActuatorPosition(positionMm);
-  const appleHomeY = -0.62;
+  const restingBlend = 1 - actualPositionMm / ACTUATOR_STROKE_MM;
+  const appleHomeY = -0.62 + restingOffsetY * restingBlend;
   const travelSceneUnits = (actualPositionMm / ACTUATOR_STROKE_MM) * 1.28;
   const rodHeight = 0.72 + travelSceneUnits;
 
