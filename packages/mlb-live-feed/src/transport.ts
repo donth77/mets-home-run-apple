@@ -11,7 +11,7 @@ async function readBoundedText(response: Response): Promise<string> {
     throw oversizedResponse();
   }
 
-  if (!response.body) {
+  if (!response.body || typeof response.body.getReader !== "function") {
     const text = await response.text();
     if (new TextEncoder().encode(text).byteLength > MAXIMUM_RESPONSE_BYTES) throw oversizedResponse();
     return text;

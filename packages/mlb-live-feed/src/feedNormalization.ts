@@ -328,11 +328,15 @@ export function normalizeFeed(
   });
   const innings = arrayAt(linescore, "innings").flatMap((candidate) => {
     if (!isObject(candidate)) return [];
+    const inningNumber = numberAt(candidate, "num");
+    const homeHalfHasNotStarted =
+      inningNumber === inning && (half === "TOP" || (half === "MIDDLE" && inningState === "middle"));
     return [
       {
-        inning: numberAt(candidate, "num"),
+        inning: inningNumber,
         away: objectAt(candidate, "away") ? numberAt(objectAt(candidate, "away"), "runs") : null,
-        home: objectAt(candidate, "home") ? numberAt(objectAt(candidate, "home"), "runs") : null,
+        home:
+          !homeHalfHasNotStarted && objectAt(candidate, "home") ? numberAt(objectAt(candidate, "home"), "runs") : null,
       },
     ];
   });

@@ -13,6 +13,8 @@
 
 ## Game data and decisions
 
+Virtual Apple reaches the MLB Stats API through a narrow same-origin edge relay. The relay removes a fragile cross-origin hop for mobile browsers, briefly shares identical responses at Cloudflare's edge, and falls back to direct MLB access if needed. It has no database and does not make game decisions.
+
 Each MLB update is read once and split into two parts:
 
 - `gameSnapshot` has the score, inning, outs, runners, count, batter, pitcher, status, and line score. Scoreboards and display code read it.

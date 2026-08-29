@@ -317,6 +317,25 @@ describe("MLB recording transport", () => {
     });
   });
 
+  it("keeps an unplayed home half blank when MLB supplies a placeholder zero", async () => {
+    const currentPlay = play({ atBatIndex: 20, halfInning: "top", inning: 3, isComplete: false });
+    const payload = feed("20260827_190010", [currentPlay], "In Progress", {
+      currentInning: 3,
+      inningHalf: "Top",
+      inningState: "Top",
+      innings: [
+        { num: 1, away: { runs: 0 }, home: { runs: 1 } },
+        { num: 2, away: { runs: 0 }, home: { runs: 0 } },
+        { num: 3, away: { runs: 0 }, home: { runs: 0 } },
+      ],
+    });
+    const client = new MlbRecordingClient(vi.fn<typeof fetch>().mockResolvedValue(response(payload)));
+
+    const result = await client.poll({ gamePk: 777001, gameNumber: 1 });
+
+    expect(result.capture?.gameSnapshot.linescore?.innings[2]).toEqual({ inning: 3, away: 0, home: null });
+  });
+
   it("updates the activity line from the newest pitch event", async () => {
     const firstPitch = play({
       atBatIndex: 20,

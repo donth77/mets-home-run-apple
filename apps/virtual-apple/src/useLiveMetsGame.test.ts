@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   FINAL_SCOREBOARD_HOLD_MS,
+  liveFeedRetryDelay,
   liveFeedContinuation,
   remainingLivePollDelay,
   selectTrackableMetsGame,
@@ -31,6 +32,16 @@ describe("live Mets game selection", () => {
 
   it("returns no game between games", () => {
     expect(selectTrackableMetsGame([game(1, "Final", "Final"), game(2, "Preview", "Scheduled")])).toBeUndefined();
+  });
+});
+
+describe("live feed recovery", () => {
+  it("retries transient failures quickly and caps the backoff", () => {
+    expect(liveFeedRetryDelay(1)).toBe(2_000);
+    expect(liveFeedRetryDelay(2)).toBe(5_000);
+    expect(liveFeedRetryDelay(3)).toBe(10_000);
+    expect(liveFeedRetryDelay(4)).toBe(30_000);
+    expect(liveFeedRetryDelay(20)).toBe(30_000);
   });
 });
 

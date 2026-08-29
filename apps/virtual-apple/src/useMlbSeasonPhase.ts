@@ -6,6 +6,7 @@ import {
   type MlbOffseasonWindow,
   type MlbSeasonDates,
 } from "@apple/mlb-live-feed";
+import { mlbApiFetch } from "./mlbApiFetch";
 
 const CALENDAR_RECHECK_MS = 60_000;
 const METADATA_REFRESH_MS = 24 * 60 * 60_000;
@@ -50,7 +51,7 @@ export function useMlbSeasonPhase(): MlbSeasonPhaseState {
       const requestDate = easternDate();
       try {
         const nextSeasons = await Promise.all(
-          seasonYearsForDate(requestDate).map((year) => fetchMlbSeasonDates(year, fetch, controller?.signal)),
+          seasonYearsForDate(requestDate).map((year) => fetchMlbSeasonDates(year, mlbApiFetch, controller?.signal)),
         );
         if (disposed) return;
         setDate(requestDate);

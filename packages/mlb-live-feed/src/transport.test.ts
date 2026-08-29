@@ -48,4 +48,18 @@ describe("bounded MLB transport", () => {
 
     await expect(request).rejects.toMatchObject({ name: "AbortError" });
   });
+
+  it("falls back to response text when streaming readers are unavailable", async () => {
+    const text = vi.fn().mockResolvedValue('{"available":true}');
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue({
+      body: {},
+      headers: new Headers(),
+      ok: true,
+      status: 200,
+      text,
+    } as unknown as Response);
+
+    await expect(fetchJson(fetcher, "https://statsapi.mlb.com/example")).resolves.toEqual({ available: true });
+    expect(text).toHaveBeenCalledOnce();
+  });
 });

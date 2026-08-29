@@ -7,12 +7,14 @@ import {
   type LiveCorePresentation,
   LiveGameCoreController,
 } from "./liveGameCoreController";
+import { mlbApiFetch } from "./mlbApiFetch";
 
 export type { LiveCelebration } from "./liveGameCoreController";
 
 const SCHEDULE_RECHECK_NEAR_GAME_MS = 60_000;
 const SCHEDULE_RECHECK_IDLE_MS = 15 * 60_000;
-const FEED_RETRY_MS = 60_000;
+const DISCOVERY_RETRY_MS = 10_000;
+const LIVE_FEED_RETRY_DELAYS_MS = [2_000, 5_000, 10_000, 30_000] as const;
 export const FINAL_SCOREBOARD_HOLD_MS = 60_000;
 
 export type LiveMetsGameStatus = "CHECKING" | "BETWEEN_GAMES" | "CONNECTING" | "POLLING" | "FINAL" | "ERROR";
@@ -49,6 +51,11 @@ export function liveFeedContinuation(phase: GameSnapshot["phase"], waitMs: numbe
 
 export function remainingLivePollDelay(waitMs: number, requestElapsedMs: number) {
   return Math.max(0, waitMs - Math.max(0, requestElapsedMs));
+}
+
+export function liveFeedRetryDelay(consecutiveFailures: number) {
+  const index = Math.min(LIVE_FEED_RETRY_DELAYS_MS.length - 1, Math.max(0, Math.trunc(consecutiveFailures) - 1));
+  return LIVE_FEED_RETRY_DELAYS_MS[index];
 }
 
 function scheduleRecheckDelay(games: readonly MlbScheduleGame[]) {
@@ -96,6 +103,8 @@ export function useLiveMetsGame(enabled = true): LiveMetsGameState {
     let scheduleTimer: number | undefined;
     let feedTimer: number | undefined;
     let tickTimer: number | undefined;
+    let resumeTracking: (() => void) | undefined;
+    let scheduledDiscoveryRecovery = false;
 
     const stopTracking = () => {
       runToken += 1;
@@ -105,6 +114,7 @@ export function useLiveMetsGame(enabled = true): LiveMetsGameState {
       if (tickTimer !== undefined) window.clearInterval(tickTimer);
       feedTimer = undefined;
       tickTimer = undefined;
+      resumeTracking = undefined;
       coreRef.current?.dispose();
       coreRef.current = undefined;
       setTargetPositionMm(0);
@@ -113,7 +123,11 @@ export function useLiveMetsGame(enabled = true): LiveMetsGameState {
 
     const queueDiscovery = (delayMs: number, recoveringFromError = false) => {
       if (scheduleTimer !== undefined) window.clearTimeout(scheduleTimer);
-      scheduleTimer = window.setTimeout(() => void discover(recoveringFromError), delayMs);
+      scheduledDiscoveryRecovery = recoveringFromError;
+      scheduleTimer = window.setTimeout(() => {
+        scheduleTimer = undefined;
+        void discover(recoveringFromError);
+      }, delayMs);
     };
 
     const startTracking = async (selectedGame: MlbScheduleGame, recoveringFromError = false) => {
@@ -122,7 +136,7 @@ export function useLiveMetsGame(enabled = true): LiveMetsGameState {
       setGame(selectedGame);
       setStatus(recoveringFromError ? "ERROR" : "CONNECTING");
       if (!recoveringFromError) setError(undefined);
-      const client = new MlbRecordingClient();
+      const client = new MlbRecordingClient(mlbApiFetch);
       try {
         const core = await LiveGameCoreController.create();
         if (disposed || token !== runToken) {
@@ -158,14 +172,30 @@ export function useLiveMetsGame(enabled = true): LiveMetsGameState {
           }, 100);
         };
 
+        let consecutiveFailures = 0;
+        let hasCapture = false;
+        let pollInFlight = false;
+
+        const queuePoll = (delayMs: number) => {
+          if (feedTimer !== undefined) window.clearTimeout(feedTimer);
+          feedTimer = window.setTimeout(() => {
+            feedTimer = undefined;
+            void poll();
+          }, delayMs);
+        };
+
         const poll = async (): Promise<void> => {
-          if (disposed || token !== runToken) return;
-          requestController = new AbortController();
+          if (disposed || token !== runToken || pollInFlight) return;
+          pollInFlight = true;
+          const activeController = new AbortController();
+          requestController = activeController;
           const requestStartedAt = performance.now();
           try {
-            const result = await client.poll(selectedGame, requestController.signal);
+            const result = await client.poll(selectedGame, activeController.signal);
             if (disposed || token !== runToken) return;
+            consecutiveFailures = 0;
             if (result.capture) {
+              hasCapture = true;
               setSnapshot(result.capture.gameSnapshot);
               setError(undefined);
               const corePresentation = core.ingest(result.capture.coreInput, performance.now());
@@ -174,36 +204,41 @@ export function useLiveMetsGame(enabled = true): LiveMetsGameState {
               const continuation = liveFeedContinuation(result.capture.gameSnapshot.phase, result.waitMs);
               if (continuation.kind === "DISCOVER") {
                 setStatus("FINAL");
+                resumeTracking = undefined;
                 queueDiscovery(continuation.delayMs);
                 return;
               }
               setStatus("POLLING");
-              feedTimer = window.setTimeout(
-                poll,
-                remainingLivePollDelay(continuation.delayMs, performance.now() - requestStartedAt),
-              );
+              queuePoll(remainingLivePollDelay(continuation.delayMs, performance.now() - requestStartedAt));
               return;
             } else {
               setError(undefined);
               setStatus("POLLING");
             }
-            feedTimer = window.setTimeout(
-              poll,
-              remainingLivePollDelay(result.waitMs, performance.now() - requestStartedAt),
-            );
+            queuePoll(remainingLivePollDelay(result.waitMs, performance.now() - requestStartedAt));
           } catch (reason) {
             if (isAbortError(reason) || disposed || token !== runToken) return;
+            consecutiveFailures += 1;
             setError(reason instanceof Error ? reason.message : "Live Mets data is temporarily unavailable.");
-            setStatus("ERROR");
-            queueDiscovery(FEED_RETRY_MS, true);
+            setStatus(hasCapture ? "POLLING" : "ERROR");
+            queuePoll(liveFeedRetryDelay(consecutiveFailures));
+          } finally {
+            if (requestController === activeController) requestController = undefined;
+            pollInFlight = false;
           }
+        };
+        resumeTracking = () => {
+          if (disposed || token !== runToken || pollInFlight) return;
+          if (feedTimer !== undefined) window.clearTimeout(feedTimer);
+          feedTimer = undefined;
+          void poll();
         };
         await poll();
       } catch (reason) {
         if (disposed || token !== runToken) return;
         setError(reason instanceof Error ? reason.message : "The live game service could not start.");
         setStatus("ERROR");
-        queueDiscovery(FEED_RETRY_MS, true);
+        queueDiscovery(DISCOVERY_RETRY_MS, true);
       }
     };
 
@@ -213,7 +248,7 @@ export function useLiveMetsGame(enabled = true): LiveMetsGameState {
       if (!recoveringFromError) setError(undefined);
       requestController = new AbortController();
       try {
-        const games = await fetchMetsSchedule(easternDate(), fetch, requestController.signal);
+        const games = await fetchMetsSchedule(easternDate(), mlbApiFetch, requestController.signal);
         if (disposed) return;
         setCheckedAt(new Date().toISOString());
         const activeGame = selectTrackableMetsGame(games);
@@ -230,9 +265,27 @@ export function useLiveMetsGame(enabled = true): LiveMetsGameState {
         if (isAbortError(reason) || disposed) return;
         setError(reason instanceof Error ? reason.message : "The Mets schedule is temporarily unavailable.");
         setStatus("ERROR");
-        queueDiscovery(FEED_RETRY_MS, true);
+        queueDiscovery(DISCOVERY_RETRY_MS, true);
       }
     };
+
+    const resume = () => {
+      if (disposed || !enabled) return;
+      if (resumeTracking) {
+        resumeTracking();
+        return;
+      }
+      if (scheduleTimer === undefined) return;
+      window.clearTimeout(scheduleTimer);
+      scheduleTimer = undefined;
+      void discover(scheduledDiscoveryRecovery);
+    };
+    const resumeWhenVisible = () => {
+      if (document.visibilityState === "visible") resume();
+    };
+
+    window.addEventListener("online", resume);
+    document.addEventListener("visibilitychange", resumeWhenVisible);
 
     if (enabled) {
       void discover();
@@ -246,6 +299,8 @@ export function useLiveMetsGame(enabled = true): LiveMetsGameState {
       disposed = true;
       if (scheduleTimer !== undefined) window.clearTimeout(scheduleTimer);
       stopTracking();
+      window.removeEventListener("online", resume);
+      document.removeEventListener("visibilitychange", resumeWhenVisible);
     };
   }, [acceptCorePresentation, enabled]);
 

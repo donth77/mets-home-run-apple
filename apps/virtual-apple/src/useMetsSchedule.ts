@@ -5,6 +5,7 @@ import {
   selectUpcomingMetsGames,
   type UpcomingMetsGame,
 } from "@apple/mlb-live-feed";
+import { mlbApiFetch } from "./mlbApiFetch";
 
 const SCHEDULE_WINDOW_DAYS = 21;
 const SCHEDULE_CACHE_MS = 10 * 60 * 1000;
@@ -54,7 +55,7 @@ export function useMetsSchedule(enabled: boolean) {
         const schedule = await fetchMetsScheduleRange(
           easternDate(now),
           easternDate(dateAfterDays(now, SCHEDULE_WINDOW_DAYS)),
-          fetch,
+          mlbApiFetch,
           controller.signal,
         );
         if (disposed) return;
