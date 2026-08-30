@@ -9,6 +9,12 @@ import type {
 import { MAXIMUM_POLL_WAIT_MS, MINIMUM_POLL_WAIT_MS, MLB_TIMECODE_PATTERN } from "./constants";
 import { MlbFeedError } from "./errors";
 import {
+  assertFeedProjectionAgreement,
+  type CanonicalGameFrame,
+  projectCoreInput,
+  projectGameSnapshot,
+} from "./feedProjections";
+import {
   arrayAt,
   booleanAt,
   clampInteger,
@@ -20,12 +26,6 @@ import {
   stringAt,
 } from "./jsonValue";
 import type { FeedPayloadKind, NormalizedFeedCapture } from "./types";
-import {
-  assertFeedProjectionAgreement,
-  type CanonicalGameFrame,
-  projectCoreInput,
-  projectGameSnapshot,
-} from "./feedProjections";
 
 type CoreHalf = GameHalf;
 type CorePlayEvidence = NormalizedPlayEvidence;
@@ -64,8 +64,15 @@ function phaseForFeed(feed: unknown, currentReview: ReviewState): GamePhase {
   const status = objectAt(objectAt(feed, "gameData"), "status");
   const abstractState = stringAt(status, "abstractGameState").toLowerCase();
   const detailedState = stringAt(status, "detailedState").toLowerCase();
-  if (abstractState === "final" || detailedState.includes("final") || detailedState === "game over") return "FINAL";
-  if (["delayed", "postponed", "suspended"].some((word) => detailedState.includes(word))) return "DELAYED";
+  if (
+    abstractState === "final" ||
+    detailedState.includes("final") ||
+    detailedState === "game over" ||
+    detailedState.includes("completed early")
+  )
+    return "FINAL";
+  if (["delayed", "postponed", "suspended", "cancelled", "canceled"].some((word) => detailedState.includes(word)))
+    return "DELAYED";
   if (detailedState.includes("challenge") || detailedState.includes("review")) return "REVIEW";
   if (abstractState === "live" || detailedState === "in progress" || detailedState === "manager challenge")
     return "LIVE";

@@ -22,4 +22,12 @@ Each MLB update is read once and split into two parts:
 
 The core returns celebration events and extend, retract, or disable commands. It does not build a scoreboard, choose screen text, play sound, or control hardware directly.
 
-`CELEBRATION` is a temporary screen state, not an MLB game state, so it never goes back into the core. The physical screen receives a smaller `DeviceDisplayState` made from `gameSnapshot`; firmware owns its 1.96-inch layout.
+`CELEBRATION` is a temporary screen state, not an MLB game state, so it never goes back into the core. The physical screen receives a smaller `DeviceDisplayState` made from `gameSnapshot`; firmware owns its 2-inch layout.
+
+The two Apples share the underlying score, inning, outs, runners, count, batter and pitcher. Virtual Apple keeps the browser-only extras: long play descriptions, the full line score with hits and errors, team artwork and colors, schedule links, radio, the stadium scene, visual effects and browser accessibility controls. None of those extras can change a motion decision.
+
+## Celebrations while the game continues
+
+MLB polling does not pause when a celebration starts. The core saves each newly confirmed event and queues consecutive home runs in order. The active celebration keeps its own scoreboard snapshot until its complete raise, hold and lower sequence ends; ordinary pitch updates are allowed to pass in the background. The next queued celebration then starts, or the scoreboard catches up to the newest game state when the queue is empty.
+
+Reviews can still hold or overturn an event before motion. Final, completed-early, postponed and cancelled updates wait for active and queued celebrations to finish before the app leaves that game. Doubleheader games keep separate MLB game IDs, so finishing game one does not consume or disarm game two.

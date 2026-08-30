@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   FINAL_SCOREBOARD_HOLD_MS,
-  liveFeedRetryDelay,
   liveFeedContinuation,
+  liveFeedRetryDelay,
   remainingLivePollDelay,
   selectTrackableMetsGame,
+  TERMINAL_SCOREBOARD_HOLD_MS,
 } from "./useLiveMetsGame";
 
 function game(gamePk: number, abstractState: string, detailedState: string) {
@@ -56,6 +57,18 @@ describe("live feed continuation", () => {
 
   it("keeps polling at the feed cadence while the game is not final", () => {
     expect(liveFeedContinuation("LIVE", 5_000)).toEqual({ kind: "POLL", delayMs: 5_000 });
+  });
+
+  it("stops polling terminal postponed and cancelled feeds after a short scoreboard hold", () => {
+    expect(liveFeedContinuation("DELAYED", 5_000, "Postponed")).toEqual({
+      kind: "DISCOVER",
+      delayMs: TERMINAL_SCOREBOARD_HOLD_MS,
+    });
+    expect(liveFeedContinuation("DELAYED", 5_000, "Cancelled: Weather")).toEqual({
+      kind: "DISCOVER",
+      delayMs: TERMINAL_SCOREBOARD_HOLD_MS,
+    });
+    expect(liveFeedContinuation("DELAYED", 5_000, "Suspended: Rain")).toEqual({ kind: "POLL", delayMs: 5_000 });
   });
 
   it("counts request time toward the polling cadence", () => {

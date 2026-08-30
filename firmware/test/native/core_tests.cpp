@@ -358,6 +358,56 @@ void test_doubleheader_contexts_are_independent() {
   EXPECT_TRUE(ledger.keys.count("777102:play-8") == 1);
 }
 
+void test_consecutive_home_runs_run_to_completion_in_fifo_order() {
+  MemoryLedger ledger;
+  Engine engine(ledger);
+  bootstrap(engine, 823580);
+
+  auto lindor = game("20260830_192134", UpdateMode::Incremental, 823580);
+  lindor.home_runs = 3;
+  lindor.plays.push_back(home_run("823580:lindor-home-run"));
+  lindor.plays.back().batter_name = "Francisco Lindor";
+  const auto first = engine.ingest(lindor, 100);
+  EXPECT_EQ(first.events.size(), 1U);
+  EXPECT_EQ(first.events[0].event_key, "823580:lindor-home-run");
+
+  auto soto = game("20260830_192231", UpdateMode::Incremental, 823580);
+  soto.home_runs = 4;
+  soto.plays.push_back(home_run("823580:soto-home-run"));
+  soto.plays.back().batter_name = "Juan Soto";
+  EXPECT_TRUE(engine.ingest(soto, 200).events.empty());
+
+  auto third = game("20260830_192240", UpdateMode::Incremental, 823580);
+  third.home_runs = 5;
+  third.plays.push_back(home_run("823580:third-home-run"));
+  third.plays.back().batter_name = "Mets hitter";
+  EXPECT_TRUE(engine.ingest(third, 300).events.empty());
+  EXPECT_EQ(engine.queued_sequence_count(), 2U);
+
+  EXPECT_TRUE(has_command(engine.tick(2'100), CommandType::MotionExtend));
+  engine.report_position(50, 3'000);
+  EXPECT_TRUE(has_command(engine.tick(33'000), CommandType::MotionRetract));
+  const auto second_started = engine.report_position(0, 34'000);
+  EXPECT_EQ(second_started.events.size(), 1U);
+  EXPECT_EQ(second_started.events[0].event_key, "823580:soto-home-run");
+  EXPECT_EQ(engine.queued_sequence_count(), 1U);
+
+  EXPECT_TRUE(has_command(engine.tick(36'000), CommandType::MotionExtend));
+  engine.report_position(50, 37'000);
+  EXPECT_TRUE(has_command(engine.tick(67'000), CommandType::MotionRetract));
+  const auto third_started = engine.report_position(0, 68'000);
+  EXPECT_EQ(third_started.events.size(), 1U);
+  EXPECT_EQ(third_started.events[0].event_key, "823580:third-home-run");
+  EXPECT_EQ(engine.queued_sequence_count(), 0U);
+
+  EXPECT_TRUE(has_command(engine.tick(70'000), CommandType::MotionExtend));
+  engine.report_position(50, 71'000);
+  EXPECT_TRUE(has_command(engine.tick(101'000), CommandType::MotionRetract));
+  const auto settled = engine.report_position(0, 102'000);
+  EXPECT_TRUE(settled.events.empty());
+  EXPECT_EQ(engine.sequence_state(), SequenceState::Idle);
+}
+
 void test_wrong_game_and_monotonic_regression() {
   MemoryLedger ledger;
   Engine engine(ledger);
@@ -381,7 +431,8 @@ int main() {
   test_mets_win_and_bootstrap_final();
   test_storage_and_motion_fail_closed();
   test_doubleheader_contexts_are_independent();
+  test_consecutive_home_runs_run_to_completion_in_fifo_order();
   test_wrong_game_and_monotonic_regression();
-  std::cout << "PASS apple_core_tests (9 scenarios)\n";
+  std::cout << "PASS apple_core_tests (10 scenarios)\n";
   return 0;
 }
