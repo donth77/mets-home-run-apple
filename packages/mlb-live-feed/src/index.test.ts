@@ -238,6 +238,24 @@ describe("MLB recording transport", () => {
     expect(suspended.capture?.gameSnapshot).toMatchObject({ phase: "DELAYED", label: "Suspended: Rain" });
   });
 
+  it("preserves postponed and cancelled labels while treating completed-early games as final", async () => {
+    const currentPlay = play({ atBatIndex: 11, halfInning: "bottom", isComplete: false });
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(response(feed("20260827_190000", [currentPlay], "Postponed")))
+      .mockResolvedValueOnce(response(feed("20260827_190010", [currentPlay], "Cancelled")))
+      .mockResolvedValueOnce(response(feed("20260827_190020", [currentPlay], "Completed Early: Rain")));
+    const client = new MlbRecordingClient(fetcher);
+
+    const postponed = await client.poll({ gamePk: 777001, gameNumber: 1 });
+    const cancelled = await client.poll({ gamePk: 777001, gameNumber: 1 });
+    const completedEarly = await client.poll({ gamePk: 777001, gameNumber: 1 });
+
+    expect(postponed.capture?.gameSnapshot).toMatchObject({ phase: "DELAYED", label: "Postponed" });
+    expect(cancelled.capture?.gameSnapshot).toMatchObject({ phase: "DELAYED", label: "Cancelled" });
+    expect(completedEarly.capture?.gameSnapshot).toMatchObject({ phase: "FINAL", label: "FINAL" });
+  });
+
   it("resets the count when the linescore advances to a new batter", async () => {
     const completedPlay = play({
       atBatIndex: 12,

@@ -1,6 +1,7 @@
 import { easternDate, fetchMetsSchedule, MlbRecordingClient, type MlbScheduleGame } from "@apple/mlb-live-feed";
 import type { GameSnapshot } from "@apple/protocol";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { LiveCelebrationLatch } from "./liveCelebrationLatch";
 import {
   coreSequenceNeedsTicking,
   type LiveCelebration,
@@ -16,6 +17,7 @@ const SCHEDULE_RECHECK_IDLE_MS = 15 * 60_000;
 const DISCOVERY_RETRY_MS = 10_000;
 const LIVE_FEED_RETRY_DELAYS_MS = [2_000, 5_000, 10_000, 30_000] as const;
 export const FINAL_SCOREBOARD_HOLD_MS = 60_000;
+export const TERMINAL_SCOREBOARD_HOLD_MS = 60_000;
 
 export type LiveMetsGameStatus = "CHECKING" | "BETWEEN_GAMES" | "CONNECTING" | "POLLING" | "FINAL" | "ERROR";
 
@@ -43,10 +45,12 @@ export function selectTrackableMetsGame(games: readonly MlbScheduleGame[]) {
   });
 }
 
-export function liveFeedContinuation(phase: GameSnapshot["phase"], waitMs: number) {
-  return phase === "FINAL"
-    ? { kind: "DISCOVER" as const, delayMs: FINAL_SCOREBOARD_HOLD_MS }
-    : { kind: "POLL" as const, delayMs: waitMs };
+export function liveFeedContinuation(phase: GameSnapshot["phase"], waitMs: number, label = "") {
+  if (phase === "FINAL") return { kind: "DISCOVER" as const, delayMs: FINAL_SCOREBOARD_HOLD_MS };
+  if (/^(?:postponed|cancelled|canceled)\b/i.test(label.trim())) {
+    return { kind: "DISCOVER" as const, delayMs: TERMINAL_SCOREBOARD_HOLD_MS };
+  }
+  return { kind: "POLL" as const, delayMs: waitMs };
 }
 
 export function remainingLivePollDelay(waitMs: number, requestElapsedMs: number) {
@@ -82,10 +86,15 @@ export function useLiveMetsGame(enabled = true): LiveMetsGameState {
   const [checkedAt, setCheckedAt] = useState<string>();
   const [error, setError] = useState<string>();
   const coreRef = useRef<LiveGameCoreController | undefined>(undefined);
+  const celebrationLatchRef = useRef(new LiveCelebrationLatch());
+  const afterCorePresentationRef = useRef<((presentation: LiveCorePresentation) => void) | undefined>(undefined);
 
-  const acceptCorePresentation = useCallback((presentation: LiveCorePresentation) => {
-    setCelebration(presentation.celebration);
-    setTargetPositionMm(presentation.targetPositionMm);
+  const acceptCorePresentation = useCallback((presentation: LiveCorePresentation, fallbackSnapshot?: GameSnapshot) => {
+    const latched = celebrationLatchRef.current.accept(presentation, fallbackSnapshot);
+    setCelebration(latched.celebration);
+    setTargetPositionMm(latched.targetPositionMm);
+    if (latched.snapshot) setSnapshot(latched.snapshot);
+    afterCorePresentationRef.current?.(latched);
   }, []);
 
   const reportPosition = useCallback(
@@ -117,6 +126,8 @@ export function useLiveMetsGame(enabled = true): LiveMetsGameState {
       resumeTracking = undefined;
       coreRef.current?.dispose();
       coreRef.current = undefined;
+      afterCorePresentationRef.current = undefined;
+      celebrationLatchRef.current.reset();
       setTargetPositionMm(0);
       setCelebration(undefined);
     };
@@ -174,7 +185,21 @@ export function useLiveMetsGame(enabled = true): LiveMetsGameState {
 
         let consecutiveFailures = 0;
         let hasCapture = false;
+        let pendingDiscoveryDelayMs: number | undefined;
         let pollInFlight = false;
+
+        const queuePendingDiscoveryIfSettled = (presentation: LiveCorePresentation) => {
+          if (
+            pendingDiscoveryDelayMs === undefined ||
+            presentation.celebration ||
+            coreSequenceNeedsTicking(presentation.decision?.sequenceState)
+          )
+            return;
+          const delayMs = pendingDiscoveryDelayMs;
+          pendingDiscoveryDelayMs = undefined;
+          queueDiscovery(delayMs);
+        };
+        afterCorePresentationRef.current = queuePendingDiscoveryIfSettled;
 
         const queuePoll = (delayMs: number) => {
           if (feedTimer !== undefined) window.clearTimeout(feedTimer);
@@ -196,16 +221,21 @@ export function useLiveMetsGame(enabled = true): LiveMetsGameState {
             consecutiveFailures = 0;
             if (result.capture) {
               hasCapture = true;
-              setSnapshot(result.capture.gameSnapshot);
               setError(undefined);
+              celebrationLatchRef.current.recordCapture(result.capture);
+              const continuation = liveFeedContinuation(
+                result.capture.gameSnapshot.phase,
+                result.waitMs,
+                result.capture.gameSnapshot.label,
+              );
+              if (continuation.kind === "DISCOVER") pendingDiscoveryDelayMs = continuation.delayMs;
               const corePresentation = core.ingest(result.capture.coreInput, performance.now());
-              acceptCorePresentation(corePresentation);
+              acceptCorePresentation(corePresentation, result.capture.gameSnapshot);
               syncCoreTicking(corePresentation);
-              const continuation = liveFeedContinuation(result.capture.gameSnapshot.phase, result.waitMs);
               if (continuation.kind === "DISCOVER") {
-                setStatus("FINAL");
+                setStatus(result.capture.gameSnapshot.phase === "FINAL" ? "FINAL" : "POLLING");
                 resumeTracking = undefined;
-                queueDiscovery(continuation.delayMs);
+                queuePendingDiscoveryIfSettled(corePresentation);
                 return;
               }
               setStatus("POLLING");
