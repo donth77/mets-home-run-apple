@@ -4,10 +4,12 @@ These rules apply to the whole public monorepo.
 
 ## Keep one source of truth
 
-- `firmware/lib/core` owns game decisions and sequence safety.
-- Keep the core free of Arduino, networking, storage, display, motor, and wall-clock code.
-- Compile the same core for native tests, browser WebAssembly, and the Nano.
+- `firmware/lib/game_state` will own the canonical game state shared by the browser and device.
+- `firmware/lib/core` owns celebration decisions and sequence safety; it consumes only the evidence it needs.
+- Keep both portable libraries free of Arduino, networking, storage, display, motor, and wall-clock code.
+- Compile the same libraries for native tests, browser WebAssembly, and the Nano.
 - Do not recreate home-run, win, review, or deduplication rules outside the C++ core.
+- Keep score, inning, runners, count, batter, pitcher, line score, and game disposition out of the motion engine unless a field is required for a decision.
 
 ## Preserve motion safety
 
@@ -25,6 +27,7 @@ These rules apply to the whole public monorepo.
 - Browser GLB assets are visual references, not manufacturing CAD.
 - Give every physical Apple unique credentials. Never reuse a claim code, setup secret, or device key across units.
 - Keep remote services optional. The device must follow games and remain safe without Apple Lab or a hosted service.
+- Keep Apple Manager as the device-hosted owner interface and Apple Lab as the optional builder tool. Neither may become part of the autonomous game loop.
 - Do not expose raw motor commands through local or remote management.
 - Require physical presence and a short-lived authenticated maintenance session for hardware tests.
 

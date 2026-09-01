@@ -4,6 +4,7 @@ dist/
 coverage/
 .pio/
 .cache/
+.vite/
 .wrangler/
 .env
 .env.*
@@ -14,3 +15,6 @@ coverage/
 user-assets/
 *.local.glb
 *.local.png
+*.local.json
+*.local.hpp
+*.local.html

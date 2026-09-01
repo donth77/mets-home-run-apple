@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { MINI_APPLE_HEARTBEAT_EVENT } from "./miniAppleHeartbeat";
 
 interface DocumentPictureInPictureOptions {
   height?: number;
@@ -12,6 +13,8 @@ interface DocumentPictureInPictureApi {
 type PictureInPictureCapableWindow = Window & {
   documentPictureInPicture?: DocumentPictureInPictureApi;
 };
+
+const MINI_APPLE_HEARTBEAT_INTERVAL_MS = 250;
 
 export function documentPictureInPictureSupported(browserWindow: Window | undefined) {
   return (
@@ -58,11 +61,13 @@ function pictureInPictureError(error: unknown) {
 
 export function useMiniAppleWindow(onBeforeClose?: () => void) {
   const [container, setContainer] = useState<HTMLElement | null>(null);
+  const [animationWindow, setAnimationWindow] = useState<Window | null>(null);
   const [error, setError] = useState("");
   const [supported] = useState(() =>
     documentPictureInPictureSupported(typeof window === "undefined" ? undefined : window),
   );
   const childWindowRef = useRef<Window | null>(null);
+  const stopHeartbeatRef = useRef<(() => void) | null>(null);
   const removeCloseListenerRef = useRef<(() => void) | null>(null);
   const mountedRef = useRef(true);
   const onBeforeCloseRef = useRef(onBeforeClose);
@@ -73,10 +78,15 @@ export function useMiniAppleWindow(onBeforeClose?: () => void) {
   }, []);
 
   const clearWindowState = useCallback(() => {
+    stopHeartbeatRef.current?.();
+    stopHeartbeatRef.current = null;
     removeCloseListenerRef.current?.();
     removeCloseListenerRef.current = null;
     childWindowRef.current = null;
-    if (mountedRef.current) setContainer(null);
+    if (mountedRef.current) {
+      setAnimationWindow(null);
+      setContainer(null);
+    }
   }, []);
 
   const close = useCallback(() => {
@@ -118,7 +128,13 @@ export function useMiniAppleWindow(onBeforeClose?: () => void) {
       };
       childWindow.addEventListener("pagehide", handleClose, { once: true });
       removeCloseListenerRef.current = () => childWindow.removeEventListener("pagehide", handleClose);
+      const heartbeatTimer = childWindow.setInterval(
+        () => window.dispatchEvent(new Event(MINI_APPLE_HEARTBEAT_EVENT)),
+        MINI_APPLE_HEARTBEAT_INTERVAL_MS,
+      );
+      stopHeartbeatRef.current = () => childWindow.clearInterval(heartbeatTimer);
       childWindowRef.current = childWindow;
+      setAnimationWindow(childWindow);
       setContainer(root);
       return true;
     } catch (caughtError) {
@@ -133,6 +149,8 @@ export function useMiniAppleWindow(onBeforeClose?: () => void) {
       mountedRef.current = false;
       restoreContent();
       const childWindow = childWindowRef.current;
+      stopHeartbeatRef.current?.();
+      stopHeartbeatRef.current = null;
       removeCloseListenerRef.current?.();
       removeCloseListenerRef.current = null;
       childWindowRef.current = null;
@@ -145,6 +163,7 @@ export function useMiniAppleWindow(onBeforeClose?: () => void) {
     container,
     error,
     isOpen: container !== null,
+    animationWindow,
     open,
     supported,
   };

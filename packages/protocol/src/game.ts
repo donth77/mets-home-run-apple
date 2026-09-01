@@ -54,6 +54,9 @@ interface SnapshotBase {
   outs: 0 | 1 | 2 | 3;
   review: ReviewState;
   lastEvent: string;
+  /** UTC MLB start time when the feed supplies it. Renderers choose a local zone. */
+  scheduledStart?: string;
+  venue?: string;
   atBat?: AtBatState;
   linescore?: GameLinescore;
 }

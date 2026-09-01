@@ -62,10 +62,12 @@ describe("Mini Apple document setup", () => {
       expect(await result.current.open()).toBe(true);
     });
     expect(result.current.isOpen).toBe(true);
+    expect(result.current.animationWindow).toBe(childWindow);
 
     act(() => childWindow.dispatchEvent(new childWindow.Event("pagehide")));
 
     expect(restoreContent).toHaveBeenCalledOnce();
     await waitFor(() => expect(result.current.isOpen).toBe(false));
+    expect(result.current.animationWindow).toBeNull();
   });
 });

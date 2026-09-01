@@ -8,3 +8,8 @@ This directory holds the versioned information needed to reproduce a physical Ho
 CAD, print projects, wiring drawings, assembly instructions, and images will be
 added after the physical dimensions and hardware choices are verified on the
 real build.
+
+The finished hardware is intended to operate autonomously. Its Nano ESP32 will
+serve a local Apple Manager page for Wi-Fi setup, audio tracks, settings, status,
+and updates; neither a hosted dashboard nor a continuously running Apple Lab
+computer is part of the required build.

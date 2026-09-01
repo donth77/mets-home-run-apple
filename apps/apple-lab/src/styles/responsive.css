@@ -153,7 +153,10 @@
     grid-template-columns: 1fr;
   }
   .simulator-stage-panel {
-    grid-template-rows: 72px auto minmax(450px, 1fr) auto;
+    grid-template-rows: 72px auto minmax(450px, 1fr) auto auto;
+  }
+  .physical-output-body {
+    grid-template-columns: 1fr;
   }
   .motion-control {
     grid-template-columns: 1fr;
@@ -263,6 +266,13 @@
   .stage-badges {
     align-items: flex-start;
     flex-direction: column;
+  }
+  .physical-output-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .physical-output-signals {
+    grid-template-columns: 1fr;
   }
   .telemetry-list {
     grid-template-columns: 1fr;

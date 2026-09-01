@@ -20,6 +20,6 @@ Live data can be delayed or temporarily unavailable. MLB Gameday is the authorit
 
 ## About the project
 
-Virtual Mets Apple is part of the open-source [Mets Home Run Apple project](https://github.com/donth77/mets-home-run-apple), which also includes Apple Lab and work toward a standalone physical Wi-Fi Apple. The public website cannot connect to or command physical hardware.
+Virtual Mets Apple is part of the open-source [Mets Home Run Apple project](https://github.com/donth77/mets-home-run-apple), which also includes the Apple Lab builder tool and work toward an autonomous physical Wi-Fi Apple. The physical device will serve its own local Apple Manager for setup and settings; the public Virtual Apple website cannot connect to or command physical hardware.
 
 This project is not affiliated with, endorsed by, or sponsored by the New York Mets, Major League Baseball, Citi Field, or Audacy.

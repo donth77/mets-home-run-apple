@@ -38,6 +38,9 @@ importers:
       '@apple/apple-3d':
         specifier: workspace:*
         version: link:../../packages/apple-3d
+      '@apple/device-display-wasm':
+        specifier: workspace:*
+        version: link:../../packages/device-display-wasm
       '@apple/game-core-wasm':
         specifier: workspace:*
         version: link:../../packages/game-core-wasm
@@ -139,6 +142,8 @@ importers:
       three:
         specifier: ^0.185.1
         version: 0.185.1
+
+  packages/device-display-wasm: {}
 
   packages/game-core-wasm:
     dependencies:

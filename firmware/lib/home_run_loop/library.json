@@ -1,0 +1,10 @@
+{
+  "$schema": "https://raw.githubusercontent.com/platformio/platformio-core/develop/platformio/assets/schema/library.json",
+  "name": "apple-home-run-loop",
+  "version": "0.1.0",
+  "description": "Hardware-independent home run celebration renderer for the 320x240 panel.",
+  "build": {
+    "includeDir": "include",
+    "srcDir": "src"
+  }
+}

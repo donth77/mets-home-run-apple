@@ -325,6 +325,8 @@ export function normalizeFeed(
   const battingStats = playerGameStats(liveData, battingSide, numberAt(batter, "id", -1), "batting");
   const pitchingStats = playerGameStats(liveData, pitchingSide, numberAt(pitcher, "id", -1), "pitching");
   const status = objectAt(gameData, "status");
+  const scheduledStart = stringAt(objectAt(gameData, "datetime"), "dateTime") || undefined;
+  const venue = stringAt(objectAt(gameData, "venue"), "name") || undefined;
   const lastEvent = liveActivityDescription({
     allPlays: allRawPlays,
     currentPlay,
@@ -379,6 +381,8 @@ export function normalizeFeed(
     evidenceOuts: feedOuts,
     review: currentReview,
     lastEvent,
+    scheduledStart,
+    venue,
     atBat,
     linescore: {
       innings,

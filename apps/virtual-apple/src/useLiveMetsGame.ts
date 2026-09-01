@@ -8,6 +8,7 @@ import {
   type LiveCorePresentation,
   LiveGameCoreController,
 } from "./liveGameCoreController";
+import { MINI_APPLE_HEARTBEAT_EVENT } from "./miniAppleHeartbeat";
 import { mlbApiFetch } from "./mlbApiFetch";
 
 export type { LiveCelebration } from "./liveGameCoreController";
@@ -110,9 +111,11 @@ export function useLiveMetsGame(enabled = true): LiveMetsGameState {
     let runToken = 0;
     let requestController: AbortController | undefined;
     let scheduleTimer: number | undefined;
+    let scheduleDueAt = 0;
     let feedTimer: number | undefined;
     let tickTimer: number | undefined;
     let resumeTracking: (() => void) | undefined;
+    let serviceTrackingClock: (() => void) | undefined;
     let scheduledDiscoveryRecovery = false;
 
     const stopTracking = () => {
@@ -124,6 +127,7 @@ export function useLiveMetsGame(enabled = true): LiveMetsGameState {
       feedTimer = undefined;
       tickTimer = undefined;
       resumeTracking = undefined;
+      serviceTrackingClock = undefined;
       coreRef.current?.dispose();
       coreRef.current = undefined;
       afterCorePresentationRef.current = undefined;
@@ -135,8 +139,10 @@ export function useLiveMetsGame(enabled = true): LiveMetsGameState {
     const queueDiscovery = (delayMs: number, recoveringFromError = false) => {
       if (scheduleTimer !== undefined) window.clearTimeout(scheduleTimer);
       scheduledDiscoveryRecovery = recoveringFromError;
+      scheduleDueAt = Date.now() + delayMs;
       scheduleTimer = window.setTimeout(() => {
         scheduleTimer = undefined;
+        scheduleDueAt = 0;
         void discover(recoveringFromError);
       }, delayMs);
     };
@@ -160,33 +166,35 @@ export function useLiveMetsGame(enabled = true): LiveMetsGameState {
           if (tickTimer !== undefined) window.clearInterval(tickTimer);
           tickTimer = undefined;
         };
+        const tickCore = () => {
+          if (!coreRef.current) {
+            stopCoreTicking();
+            return;
+          }
+          try {
+            const nextPresentation = coreRef.current.tick(performance.now());
+            acceptCorePresentation(nextPresentation);
+            if (!coreSequenceNeedsTicking(nextPresentation.decision?.sequenceState)) stopCoreTicking();
+          } catch (reason) {
+            stopCoreTicking();
+            setError(reason instanceof Error ? reason.message : "Live game timing stopped unexpectedly.");
+            setStatus("ERROR");
+          }
+        };
         const syncCoreTicking = (presentation: LiveCorePresentation) => {
           if (!coreSequenceNeedsTicking(presentation.decision?.sequenceState)) {
             stopCoreTicking();
             return;
           }
           if (tickTimer !== undefined) return;
-          tickTimer = window.setInterval(() => {
-            if (!coreRef.current) {
-              stopCoreTicking();
-              return;
-            }
-            try {
-              const nextPresentation = coreRef.current.tick(performance.now());
-              acceptCorePresentation(nextPresentation);
-              if (!coreSequenceNeedsTicking(nextPresentation.decision?.sequenceState)) stopCoreTicking();
-            } catch (reason) {
-              stopCoreTicking();
-              setError(reason instanceof Error ? reason.message : "Live game timing stopped unexpectedly.");
-              setStatus("ERROR");
-            }
-          }, 100);
+          tickTimer = window.setInterval(tickCore, 100);
         };
 
         let consecutiveFailures = 0;
         let hasCapture = false;
         let pendingDiscoveryDelayMs: number | undefined;
         let pollInFlight = false;
+        let nextFeedPollAt = 0;
 
         const queuePendingDiscoveryIfSettled = (presentation: LiveCorePresentation) => {
           if (
@@ -203,8 +211,10 @@ export function useLiveMetsGame(enabled = true): LiveMetsGameState {
 
         const queuePoll = (delayMs: number) => {
           if (feedTimer !== undefined) window.clearTimeout(feedTimer);
+          nextFeedPollAt = Date.now() + delayMs;
           feedTimer = window.setTimeout(() => {
             feedTimer = undefined;
+            nextFeedPollAt = 0;
             void poll();
           }, delayMs);
         };
@@ -212,6 +222,7 @@ export function useLiveMetsGame(enabled = true): LiveMetsGameState {
         const poll = async (): Promise<void> => {
           if (disposed || token !== runToken || pollInFlight) return;
           pollInFlight = true;
+          nextFeedPollAt = 0;
           const activeController = new AbortController();
           requestController = activeController;
           const requestStartedAt = performance.now();
@@ -261,6 +272,15 @@ export function useLiveMetsGame(enabled = true): LiveMetsGameState {
           if (disposed || token !== runToken || pollInFlight) return;
           if (feedTimer !== undefined) window.clearTimeout(feedTimer);
           feedTimer = undefined;
+          nextFeedPollAt = 0;
+          void poll();
+        };
+        serviceTrackingClock = () => {
+          if (tickTimer !== undefined) tickCore();
+          if (nextFeedPollAt === 0 || Date.now() < nextFeedPollAt || pollInFlight) return;
+          if (feedTimer !== undefined) window.clearTimeout(feedTimer);
+          feedTimer = undefined;
+          nextFeedPollAt = 0;
           void poll();
         };
         await poll();
@@ -313,8 +333,17 @@ export function useLiveMetsGame(enabled = true): LiveMetsGameState {
     const resumeWhenVisible = () => {
       if (document.visibilityState === "visible") resume();
     };
+    const serviceMiniWindow = () => {
+      serviceTrackingClock?.();
+      if (scheduleTimer === undefined || scheduleDueAt === 0 || Date.now() < scheduleDueAt) return;
+      window.clearTimeout(scheduleTimer);
+      scheduleTimer = undefined;
+      scheduleDueAt = 0;
+      void discover(scheduledDiscoveryRecovery);
+    };
 
     window.addEventListener("online", resume);
+    window.addEventListener(MINI_APPLE_HEARTBEAT_EVENT, serviceMiniWindow);
     document.addEventListener("visibilitychange", resumeWhenVisible);
 
     if (enabled) {
@@ -330,6 +359,7 @@ export function useLiveMetsGame(enabled = true): LiveMetsGameState {
       if (scheduleTimer !== undefined) window.clearTimeout(scheduleTimer);
       stopTracking();
       window.removeEventListener("online", resume);
+      window.removeEventListener(MINI_APPLE_HEARTBEAT_EVENT, serviceMiniWindow);
       document.removeEventListener("visibilitychange", resumeWhenVisible);
     };
   }, [acceptCorePresentation, enabled]);

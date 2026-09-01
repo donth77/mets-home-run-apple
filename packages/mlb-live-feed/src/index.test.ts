@@ -61,6 +61,8 @@ function feed(
     gamePk: 777001,
     metaData: { timeStamp: cursor, wait: 10 },
     gameData: {
+      datetime: { dateTime: "2026-08-27T23:10:00Z" },
+      venue: { name: "Citi Field" },
       status: {
         abstractGameState: status === "Final" ? "Final" : "Live",
         detailedState: status,
@@ -145,6 +147,10 @@ describe("MLB recording transport", () => {
     expect(bootstrap.capture?.coreInput.updateMode).toBe("BOOTSTRAP");
     expect(bootstrap.capture?.changedPlayCount).toBe(1);
     expect(bootstrap.capture?.gameSnapshot.atBat).toMatchObject({ batterLine: "1–2", pitchCount: 74 });
+    expect(bootstrap.capture?.gameSnapshot).toMatchObject({
+      scheduledStart: "2026-08-27T23:10:00Z",
+      venue: "Citi Field",
+    });
     expect(bootstrap.capture?.coreInput).toMatchObject({
       gamePk: bootstrap.capture?.gameSnapshot.gamePk,
       gameNumber: bootstrap.capture?.gameSnapshot.gameNumber,

@@ -14,7 +14,8 @@
     "native:configure": "cmake -S firmware -B .cache/native -DCMAKE_BUILD_TYPE=Debug",
     "native:build": "pnpm run native:configure && cmake --build .cache/native --parallel",
     "test:native": "pnpm run native:build && ctest --test-dir .cache/native --output-on-failure",
-    "wasm:build": "pnpm --filter @apple/game-core-wasm build",
+    "native:asan": "cmake -S firmware -B .cache/native-asan -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS=\"-fsanitize=address,undefined -fno-omit-frame-pointer -g\" && cmake --build .cache/native-asan --parallel && ASAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1 ctest --test-dir .cache/native-asan --output-on-failure",
+    "wasm:build": "pnpm --filter @apple/game-core-wasm --filter @apple/device-display-wasm build",
     "build": "pnpm run wasm:build && pnpm --filter @apple/apple-lab --filter @apple/virtual-apple run build",
     "typecheck": "pnpm -r --if-present run typecheck",
     "lint": "biome lint .",
@@ -23,7 +24,7 @@
     "check:public": "node scripts/check-public-boundary.mjs",
     "check:assets": "node scripts/check-3d-assets.mjs",
     "check:constants": "node scripts/check-core-constants.mjs",
-    "test:unit": "pnpm --filter @apple/protocol --filter @apple/test-fixtures --filter @apple/game-core-wasm --filter @apple/mlb-live-feed --filter @apple/apple-3d --filter @apple/scoreboard-ui --filter @apple/web-debug --filter @apple/apple-lab --filter @apple/virtual-apple run test",
+    "test:unit": "pnpm --filter @apple/protocol --filter @apple/test-fixtures --filter @apple/game-core-wasm --filter @apple/device-display-wasm --filter @apple/mlb-live-feed --filter @apple/apple-3d --filter @apple/scoreboard-ui --filter @apple/web-debug --filter @apple/apple-lab --filter @apple/virtual-apple run test",
     "test": "pnpm run check:public && pnpm run check:assets && pnpm run check:constants && pnpm run test:native && pnpm run wasm:build && pnpm run test:unit"
   },
   "devDependencies": {

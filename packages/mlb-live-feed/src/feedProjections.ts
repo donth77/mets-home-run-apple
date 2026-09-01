@@ -28,6 +28,8 @@ export interface CanonicalGameFrame {
   evidenceOuts: 0 | 1 | 2 | 3;
   review: ReviewState;
   lastEvent: string;
+  scheduledStart?: string;
+  venue?: string;
   atBat?: AtBatState;
   linescore: GameLinescore;
   changedPlays: readonly NormalizedPlayEvidence[];
@@ -48,6 +50,8 @@ export function projectGameSnapshot(frame: CanonicalGameFrame): GameSnapshot {
     outs: frame.displayOuts,
     review: frame.review,
     lastEvent: frame.lastEvent,
+    scheduledStart: frame.scheduledStart,
+    venue: frame.venue,
     atBat: frame.atBat,
     linescore: frame.linescore,
   };

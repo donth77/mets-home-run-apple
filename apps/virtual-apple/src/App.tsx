@@ -10,6 +10,7 @@ import { gameDateParts, nextGameLabelParts, timeZoneAbbreviation } from "./gameD
 import { selectHomeRunPhrase } from "./homeRunPhrases";
 import { LiveGamedayWidget } from "./LiveGamedayWidget";
 import { MiniAppleView } from "./MiniAppleView";
+import { PwaInstallPrompt } from "./PwaInstallPrompt";
 import {
   fanFacingMoment,
   isCitiFieldVenue,
@@ -17,7 +18,6 @@ import {
   liveMoment,
   liveOffseasonSnapshot,
 } from "./presentation";
-import { PwaInstallPrompt } from "./PwaInstallPrompt";
 import { RadioCompanion } from "./RadioCompanion";
 import { createSharedAppleStageHost, moveSharedAppleStage, SharedAppleStage } from "./SharedAppleStage";
 import { UpcomingGames } from "./UpcomingGames";
@@ -117,7 +117,11 @@ export function App() {
     }),
     [demoOverride, live.celebration, liveStandby, moment, sourceSnapshot],
   );
-  const liveActuator = useActuatorSimulation(live.targetPositionMm, { reducedMotion });
+  const actuatorAnimationWindow = miniAppleWindow.animationWindow ?? window;
+  const liveActuator = useActuatorSimulation(live.targetPositionMm, {
+    animationWindow: actuatorAnimationWindow,
+    reducedMotion,
+  });
   useEffect(() => {
     live.reportPosition(liveActuator.positionMm);
   }, [live.reportPosition, liveActuator.positionMm]);
@@ -158,7 +162,10 @@ export function App() {
   const [winAppleReachedTop, setWinAppleReachedTop] = useState(false);
   const holdWinAppleRaised = winCelebration && celebrationSound.winTrackPlaying && winAppleReachedTop;
   const presentationTargetPositionMm = holdWinAppleRaised ? MAX_STROKE_MM : underlyingPresentationTargetMm;
-  const presentationActuator = useActuatorSimulation(presentationTargetPositionMm, { reducedMotion });
+  const presentationActuator = useActuatorSimulation(presentationTargetPositionMm, {
+    animationWindow: actuatorAnimationWindow,
+    reducedMotion,
+  });
   const appleFullyRaised = presentationActuator.positionMm >= MAX_STROKE_MM - 0.25;
   useEffect(() => {
     if (!winCelebration) {

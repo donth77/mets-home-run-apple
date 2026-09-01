@@ -4,6 +4,8 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   type CelebrationSoundCue,
+  HOME_RUN_AUDIO_DURATION_MS,
+  HOME_RUN_AUDIO_FADE_MS,
   HOME_RUN_TRACK_URLS,
   useCelebrationSound,
   WIN_TRACK_URLS,
@@ -199,5 +201,39 @@ describe("celebration recording playback", () => {
     expect(celebrationAudio.pause.mock.calls.length).toBeGreaterThan(pauseCallsBeforeWin);
     expect(celebrationAudio.playMutedStates).toEqual([false, false]);
     unmount();
+  });
+
+  it("fades a home-run song out before the 30-second audio limit", async () => {
+    vi.useFakeTimers();
+    const initialProps: { cue: CelebrationSoundCue | undefined } = { cue: undefined };
+    const { result, rerender, unmount } = renderHook(
+      ({ cue }: { cue: CelebrationSoundCue | undefined }) => useCelebrationSound(cue),
+      { initialProps },
+    );
+
+    await act(async () => result.current.toggle());
+    const [celebrationAudio] = audioInstances;
+    if (!celebrationAudio) throw new Error("Expected the shared celebration audio player.");
+    celebrationAudio.play.mockClear();
+
+    rerender({ cue: { id: "777686:fade-home-run", kind: "HOME_RUN" } });
+    await act(async () => Promise.resolve());
+    expect(celebrationAudio.volume).toBe(0.82);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(HOME_RUN_AUDIO_DURATION_MS - HOME_RUN_AUDIO_FADE_MS + 1_500);
+    });
+    expect(celebrationAudio.volume).toBeGreaterThan(0);
+    expect(celebrationAudio.volume).toBeLessThan(0.82);
+
+    const pauseCallsBeforeFadeEnds = celebrationAudio.pause.mock.calls.length;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(HOME_RUN_AUDIO_FADE_MS - 1_500 + 100);
+    });
+    expect(celebrationAudio.pause.mock.calls.length).toBeGreaterThan(pauseCallsBeforeFadeEnds);
+    expect(celebrationAudio.currentTime).toBe(0);
+
+    unmount();
+    vi.useRealTimers();
   });
 });
