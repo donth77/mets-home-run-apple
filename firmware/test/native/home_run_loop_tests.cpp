@@ -130,10 +130,15 @@ void test_name_normalization_and_fit() {
   }
   EXPECT_TRUE(loop.name().widest_px * loop.name().scale_x <= HomeRunLoop::kMaxLineWidth);
 
-  // The headline keeps its full size.
+  // Headlines stay large and fully inside the margins with either the public
+  // font or a local licensed font override. Exact advances differ by font.
   loop.begin(Headline::GrandSlam, "X", 1);
-  EXPECT_EQ(HomeRunLoop::fit_words("GRAND", "SLAM").scale_x, 4);
-  EXPECT_EQ(HomeRunLoop::fit_words("HOME", "RUN").scale_y, 4);
+  const TextFit grand_slam = HomeRunLoop::fit_words("GRAND", "SLAM");
+  const TextFit home_run = HomeRunLoop::fit_words("HOME", "RUN");
+  EXPECT_TRUE(grand_slam.scale_x >= 3);
+  EXPECT_TRUE(home_run.scale_y >= 3);
+  EXPECT_TRUE(grand_slam.widest_px * grand_slam.scale_x <= HomeRunLoop::kMaxLineWidth);
+  EXPECT_TRUE(home_run.widest_px * home_run.scale_x <= HomeRunLoop::kMaxLineWidth);
 }
 
 void test_name_never_repeats_headline_picks() {

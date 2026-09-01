@@ -57,6 +57,7 @@ const result = spawnSync(
     resolve(rendererRoot, "src/home_run_loop.cpp"),
     resolve(rendererRoot, "src/mets_win_loop.cpp"),
     `-I${resolve(rendererRoot, "include")}`,
+    "-DAPPLE_FORCE_PUBLIC_FONT=1",
     "-std=c++17",
     "-O2",
     "-Wall",
