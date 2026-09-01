@@ -58,13 +58,63 @@ export interface DeviceDisplayTeam {
   runs: number;
 }
 
+export type DeviceDisplayKind =
+  | "LIVE"
+  | "UPCOMING"
+  | "OFFSEASON"
+  | "REVIEW"
+  | "DELAY"
+  | "RAIN_DELAY"
+  | "SUSPENDED"
+  | "POSTPONED"
+  | "CANCELLED"
+  | "FINAL";
+
+export type DeviceFinalResult = "METS_WIN" | "METS_LOSS" | "TIE";
+
+function displayKind(snapshot: GameSnapshot): DeviceDisplayKind {
+  if (snapshot.phase === "LIVE") return "LIVE";
+  if (snapshot.phase === "REVIEW") return "REVIEW";
+  if (snapshot.phase === "FINAL") return "FINAL";
+  if (snapshot.phase === "PREGAME") return "UPCOMING";
+  if (snapshot.phase === "SLEEP") {
+    return snapshot.label.toUpperCase().includes("OFFSEASON") ? "OFFSEASON" : "UPCOMING";
+  }
+
+  const status = `${snapshot.label} ${snapshot.lastEvent}`.toLowerCase();
+  if (status.includes("postpon")) return "POSTPONED";
+  if (status.includes("cancel")) return "CANCELLED";
+  if (status.includes("suspend")) return "SUSPENDED";
+  if (/\brain\b|weather|inclement/.test(status)) return "RAIN_DELAY";
+  return "DELAY";
+}
+
+function finalResult(snapshot: GameSnapshot): DeviceFinalResult | undefined {
+  if (snapshot.phase !== "FINAL") return undefined;
+  const mets =
+    snapshot.away.abbreviation === "NYM"
+      ? snapshot.away
+      : snapshot.home.abbreviation === "NYM"
+        ? snapshot.home
+        : undefined;
+  const opponent = mets === snapshot.away ? snapshot.home : snapshot.away;
+  if (!mets) return undefined;
+  if (mets.runs === opponent.runs) return "TIE";
+  return mets.runs > opponent.runs ? "METS_WIN" : "METS_LOSS";
+}
+
 /** Structured data for the small physical screen. Firmware owns the layout. */
 export interface DeviceDisplayState {
   schemaVersion: 1;
+  kind: DeviceDisplayKind;
   gamePk: number;
   gameNumber: 1 | 2;
   phase: GamePhase;
   status: string;
+  lastEvent: string;
+  scheduledStart?: string;
+  venue?: string;
+  finalResult?: DeviceFinalResult;
   away: DeviceDisplayTeam;
   home: DeviceDisplayTeam;
   inning: number;
@@ -78,6 +128,7 @@ export interface DeviceDisplayState {
   balls?: 0 | 1 | 2 | 3;
   strikes?: 0 | 1 | 2;
   batter?: string;
+  batterLine?: string;
   pitcher?: string;
   pitchCount?: number;
 }
@@ -85,10 +136,15 @@ export interface DeviceDisplayState {
 export function toDeviceDisplayState(snapshot: GameSnapshot): DeviceDisplayState {
   return {
     schemaVersion: 1,
+    kind: displayKind(snapshot),
     gamePk: snapshot.gamePk,
     gameNumber: snapshot.gameNumber,
     phase: snapshot.phase,
     status: snapshot.label,
+    lastEvent: snapshot.lastEvent,
+    scheduledStart: snapshot.scheduledStart,
+    venue: snapshot.venue,
+    finalResult: finalResult(snapshot),
     away: { abbreviation: snapshot.away.abbreviation, runs: snapshot.away.runs },
     home: { abbreviation: snapshot.home.abbreviation, runs: snapshot.home.runs },
     inning: snapshot.inning,
@@ -98,6 +154,7 @@ export function toDeviceDisplayState(snapshot: GameSnapshot): DeviceDisplayState
     balls: snapshot.atBat?.balls,
     strikes: snapshot.atBat?.strikes,
     batter: snapshot.atBat?.batter,
+    batterLine: snapshot.atBat?.batterLine,
     pitcher: snapshot.atBat?.pitcher,
     pitchCount: snapshot.atBat?.pitchCount,
   };

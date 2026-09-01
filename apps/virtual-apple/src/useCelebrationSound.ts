@@ -19,6 +19,11 @@ export const WIN_TRACK_URLS = [
   new URL("../public/audio/win2.mp3", import.meta.url).href,
 ] as const;
 
+export const HOME_RUN_AUDIO_DURATION_MS = 30_000;
+export const HOME_RUN_AUDIO_FADE_MS = 3_000;
+const CELEBRATION_VOLUME = 0.82;
+const FADE_UPDATE_MS = 100;
+
 // Unlock delayed playback with silence, never with one of the celebration recordings.
 // Otherwise a browser can briefly expose the priming recording before the randomly
 // selected event recording replaces it.
@@ -71,6 +76,8 @@ export function useCelebrationSound(cue: CelebrationSoundCue | undefined, rainAc
   const activeKindRef = useRef<CelebrationSoundKind | undefined>(undefined);
   const playbackRequestRef = useRef(0);
   const lastCueRef = useRef<string | undefined>(undefined);
+  const homeRunFadeStartTimerRef = useRef<number | undefined>(undefined);
+  const homeRunFadeTimerRef = useRef<number | undefined>(undefined);
   const rainAmbienceRef = useRef<RainAmbienceController | undefined>(undefined);
   const rainRequestRef = useRef(0);
   const supported = useMemo(() => typeof Audio !== "undefined" || rainAmbienceSupported(), []);
@@ -80,13 +87,25 @@ export function useCelebrationSound(cue: CelebrationSoundCue | undefined, rainAc
     return rainAmbienceRef.current;
   }, []);
 
+  const clearHomeRunFade = useCallback(() => {
+    if (homeRunFadeStartTimerRef.current !== undefined) {
+      window.clearTimeout(homeRunFadeStartTimerRef.current);
+      homeRunFadeStartTimerRef.current = undefined;
+    }
+    if (homeRunFadeTimerRef.current !== undefined) {
+      window.clearInterval(homeRunFadeTimerRef.current);
+      homeRunFadeTimerRef.current = undefined;
+    }
+  }, []);
+
   const ensureCelebrationAudio = useCallback(() => {
     if (celebrationAudioRef.current) return celebrationAudioRef.current;
     if (typeof Audio === "undefined") return undefined;
     const audio = new Audio();
     audio.preload = "metadata";
-    audio.volume = 0.82;
+    audio.volume = CELEBRATION_VOLUME;
     audio.onended = () => {
+      clearHomeRunFade();
       const finishedKind = activeKindRef.current;
       if (!activeCueRef.current) return;
       activeCueRef.current = undefined;
@@ -97,6 +116,7 @@ export function useCelebrationSound(cue: CelebrationSoundCue | undefined, rainAc
       }
     };
     audio.onerror = () => {
+      clearHomeRunFade();
       const failedKind = activeKindRef.current;
       if (!activeCueRef.current || !failedKind) return;
       activeCueRef.current = undefined;
@@ -113,9 +133,10 @@ export function useCelebrationSound(cue: CelebrationSoundCue | undefined, rainAc
     };
     celebrationAudioRef.current = audio;
     return audio;
-  }, []);
+  }, [clearHomeRunFade]);
 
   const stopCelebrationTrack = useCallback(() => {
+    clearHomeRunFade();
     playbackRequestRef.current += 1;
     activeCueRef.current = undefined;
     activeKindRef.current = undefined;
@@ -127,9 +148,30 @@ export function useCelebrationSound(cue: CelebrationSoundCue | undefined, rainAc
       } catch {
         // Metadata may not be ready yet, so there may be no seekable range.
       }
+      audio.volume = CELEBRATION_VOLUME;
     }
     setWinTrackPlaying(false);
-  }, []);
+  }, [clearHomeRunFade]);
+
+  const scheduleHomeRunFade = useCallback(
+    (cueKey: string, audio: HTMLAudioElement) => {
+      clearHomeRunFade();
+      homeRunFadeStartTimerRef.current = window.setTimeout(() => {
+        homeRunFadeStartTimerRef.current = undefined;
+        const fadeStartedAt = performance.now();
+        homeRunFadeTimerRef.current = window.setInterval(() => {
+          if (activeCueRef.current !== cueKey || activeKindRef.current !== "HOME_RUN") {
+            clearHomeRunFade();
+            return;
+          }
+          const progress = Math.min(1, Math.max(0, performance.now() - fadeStartedAt) / HOME_RUN_AUDIO_FADE_MS);
+          audio.volume = CELEBRATION_VOLUME * (1 - progress);
+          if (progress >= 1) stopCelebrationTrack();
+        }, FADE_UPDATE_MS);
+      }, HOME_RUN_AUDIO_DURATION_MS - HOME_RUN_AUDIO_FADE_MS);
+    },
+    [clearHomeRunFade, stopCelebrationTrack],
+  );
 
   const stop = useCallback(() => {
     lastCueRef.current = undefined;
@@ -174,12 +216,16 @@ export function useCelebrationSound(cue: CelebrationSoundCue | undefined, rainAc
       activeCueRef.current = cueKey;
       activeKindRef.current = kind;
       setWinTrackPlaying(kind === "METS_WIN");
+      audio.volume = CELEBRATION_VOLUME;
       audio.src = selectedUrl;
       audio.load();
 
       try {
         await audio.play();
-        if (playbackRequestRef.current === playbackRequest && activeCueRef.current === cueKey) setError("");
+        if (playbackRequestRef.current === playbackRequest && activeCueRef.current === cueKey) {
+          if (kind === "HOME_RUN") scheduleHomeRunFade(cueKey, audio);
+          setError("");
+        }
       } catch {
         if (playbackRequestRef.current !== playbackRequest || activeCueRef.current !== cueKey) return;
         audio.pause();
@@ -194,7 +240,7 @@ export function useCelebrationSound(cue: CelebrationSoundCue | undefined, rainAc
         );
       }
     },
-    [ensureCelebrationAudio, stopCelebrationTrack],
+    [ensureCelebrationAudio, scheduleHomeRunFade, stopCelebrationTrack],
   );
 
   const enable = useCallback(async () => {
@@ -291,6 +337,7 @@ export function useCelebrationSound(cue: CelebrationSoundCue | undefined, rainAc
       playbackRequestRef.current += 1;
       audioPreparedRef.current = false;
       audioPreparationRef.current = undefined;
+      clearHomeRunFade();
       const audio = celebrationAudioRef.current;
       celebrationAudioRef.current = undefined;
       if (audio) {
@@ -301,7 +348,7 @@ export function useCelebrationSound(cue: CelebrationSoundCue | undefined, rainAc
         audio.load();
       }
     },
-    [],
+    [clearHomeRunFade],
   );
 
   return { enable, enabled, error, rainPlaying, supported, toggle, winTrackPlaying, stop };

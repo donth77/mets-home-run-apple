@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="440" viewBox="0 0 1200 440" role="img" aria-labelledby="title description">
-  <title id="title">Mets Home Run Apple software architecture</title>
-  <desc id="description">Shared game logic runs in Apple Lab, Virtual Apple, and the autonomous physical Apple. Apple Lab has an optional two-way local management and telemetry connection to the physical Apple.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="520" viewBox="0 0 1200 520" role="img" aria-labelledby="title description">
+  <title id="title">Target Mets Home Run Apple software architecture</title>
+  <desc id="description">The target architecture shares C++ game-state and decision libraries across Virtual Apple, Apple Lab, and the autonomous physical Apple. The game-state library and Apple Manager are planned. Apple Manager will be a local website served by the physical Apple, while Apple Lab can optionally connect for local telemetry and guarded tests.</desc>
 
   <defs>
     <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
@@ -12,14 +12,6 @@
       <stop offset="0" stop-color="#123b70" />
       <stop offset="1" stop-color="#0a2448" />
     </linearGradient>
-    <linearGradient id="orangeFill" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#ff6b22" />
-      <stop offset="1" stop-color="#dd3f0b" />
-    </linearGradient>
-    <linearGradient id="blueFill" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#1675d1" />
-      <stop offset="1" stop-color="#0d4b91" />
-    </linearGradient>
     <pattern id="grid" width="34" height="34" patternUnits="userSpaceOnUse">
       <path d="M34 0H0V34" fill="none" stroke="#7ba7d8" stroke-opacity="0.055" />
     </pattern>
@@ -29,64 +21,81 @@
     <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
       <path d="M1 1L9 5L1 9Z" fill="#6ca4df" />
     </marker>
-    <marker id="arrowManagement" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto-start-reverse" markerUnits="strokeWidth">
+    <marker id="arrowLocal" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto-start-reverse" markerUnits="strokeWidth">
       <path d="M1 1L8 4.5L1 8Z" fill="#a9c0da" />
     </marker>
     <style>
       text { font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-      .eyebrow { fill: #8fb4dc; font-size: 14px; font-weight: 800; letter-spacing: 2.1px; }
-      .title { fill: #ffffff; font-size: 30px; font-weight: 800; }
-      .subtitle { fill: #a9c0da; font-size: 16px; font-weight: 500; }
-      .card-title { fill: #ffffff; font-size: 22px; font-weight: 800; }
-      .card-subtitle { fill: #90aeca; font-size: 15px; font-weight: 600; }
-      .body { fill: #c9d8e8; font-size: 15px; font-weight: 500; }
-      .small { fill: #8eabc7; font-size: 13px; font-weight: 650; }
-      .pill { fill: #dcecff; font-size: 13px; font-weight: 750; }
+      .eyebrow { fill: #8fb4dc; font-size: 12px; font-weight: 800; letter-spacing: 1.6px; }
+      .card-title { fill: #ffffff; font-size: 21px; font-weight: 800; }
+      .card-subtitle { fill: #a9c0da; font-size: 15px; font-weight: 600; }
+      .body { fill: #c9d8e8; font-size: 14px; font-weight: 500; }
+      .small { fill: #a9c0da; font-size: 12px; font-weight: 700; letter-spacing: 0.6px; }
+      .pill { fill: #dcecff; font-size: 12px; font-weight: 750; }
       .orange { fill: #ff7a32; }
       .blue { fill: #56a9ff; }
       .mint { fill: #55d6bb; }
     </style>
   </defs>
 
-  <rect width="1200" height="440" rx="30" fill="url(#background)" />
-  <rect width="1200" height="440" rx="30" fill="url(#grid)" />
-  <rect x="1.5" y="1.5" width="1197" height="437" rx="28.5" fill="none" stroke="#23466d" stroke-width="3" />
+  <rect width="1200" height="520" rx="30" fill="url(#background)" />
+  <rect width="1200" height="520" rx="30" fill="url(#grid)" />
+  <rect x="1.5" y="1.5" width="1197" height="517" rx="28.5" fill="none" stroke="#23466d" stroke-width="3" />
 
   <g filter="url(#shadow)">
-    <rect x="310" y="38" width="580" height="166" rx="22" fill="url(#coreFill)" stroke="#ff6b22" stroke-width="2.5" />
-    <text x="334" y="105" class="card-title">Shared C++ core</text>
-    <text x="334" y="135" class="card-subtitle">Decides when to celebrate and when motion is allowed</text>
+    <rect x="300" y="34" width="600" height="154" rx="22" fill="url(#coreFill)" stroke="#ff6b22" stroke-width="2.5" />
+    <text x="330" y="70" class="card-title" style="font-size: 25px">Shared C++ libraries</text>
+    <rect x="330" y="88" width="255" height="76" rx="12" fill="#0b203d" stroke="#345c87" />
+    <text x="348" y="112" class="eyebrow blue">GAME STATE · PLANNED</text>
+    <text x="348" y="137" class="body">Score · inning · situation</text>
+    <text x="348" y="157" class="small">PLAYERS · LINE SCORE · STATUS</text>
+    <rect x="597" y="88" width="273" height="76" rx="12" fill="#0b203d" stroke="#345c87" />
+    <text x="615" y="112" class="eyebrow orange">DECISION CORE</text>
+    <text x="615" y="137" class="body">Events · deduplication</text>
+    <text x="615" y="157" class="small">REVIEW GATE · SEQUENCE SAFETY</text>
   </g>
 
   <g fill="none" stroke="#6ca4df" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)">
-    <path d="M600 204V235H210V265" />
-    <path d="M600 235H560V265" />
-    <path d="M600 235H990V265" />
+    <path d="M600 188V224H155V266" />
+    <path d="M600 224H435V266" />
+    <path d="M600 224H735V266" />
   </g>
 
   <g filter="url(#shadow)">
-    <rect x="70" y="270" width="280" height="140" rx="18" fill="#0b1e36" stroke="#ff6b22" stroke-width="2" />
-    <text x="94" y="310" class="card-title">Virtual Apple</text>
-    <text x="94" y="341" class="eyebrow orange">GAMEDAY SITE</text>
-    <text x="94" y="376" class="body">Follow Mets games live</text>
+    <rect x="30" y="270" width="250" height="166" rx="18" fill="#0b1e36" stroke="#ff6b22" stroke-width="2" />
+    <text x="54" y="311" class="card-title">Virtual Apple</text>
+    <text x="54" y="340" class="eyebrow orange">PUBLIC GAMEDAY SITE</text>
+    <text x="54" y="374" class="body">Live 3D scene, scoreboards,</text>
+    <text x="54" y="397" class="body">sound, and celebrations</text>
   </g>
 
   <g filter="url(#shadow)">
-    <rect x="420" y="270" width="280" height="140" rx="18" fill="#0b1e36" stroke="#ff6b22" stroke-width="2" />
-    <text x="444" y="310" class="card-title">Apple Lab</text>
-    <text x="444" y="341" class="eyebrow orange">LOCAL BUILDER TOOL</text>
-    <text x="444" y="376" class="body">Build and test a physical Apple</text>
+    <rect x="310" y="270" width="250" height="166" rx="18" fill="#0b1e36" stroke="#ff6b22" stroke-width="2" />
+    <text x="334" y="311" class="card-title">Apple Lab</text>
+    <text x="334" y="340" class="eyebrow orange">BUILDER WORKSHOP</text>
+    <text x="334" y="374" class="body">Simulate, replay, diagnose,</text>
+    <text x="334" y="397" class="body">and run guarded tests</text>
   </g>
 
   <g filter="url(#shadow)">
-    <rect x="850" y="270" width="280" height="140" rx="18" fill="#0b1e36" stroke="#42bfa6" stroke-width="2" />
-    <text x="874" y="310" class="card-title">Physical Apple</text>
-    <text x="874" y="341" class="eyebrow mint">NANO ESP32 DEVICE</text>
-    <text x="874" y="376" class="body">Wi-Fi · storage · display · motor</text>
+    <rect x="600" y="270" width="270" height="166" rx="18" fill="#0b1e36" stroke="#42bfa6" stroke-width="2" />
+    <text x="624" y="311" class="card-title">Physical Apple</text>
+    <text x="624" y="340" class="eyebrow mint">AUTONOMOUS NANO ESP32</text>
+    <text x="624" y="374" class="body">MLB feed · display · audio</text>
+    <text x="624" y="397" class="body">lights · storage · lift</text>
   </g>
 
-  <path d="M700 365H850" fill="none" stroke="#a9c0da" stroke-width="2.25" stroke-dasharray="5 7" stroke-linecap="round" marker-start="url(#arrowManagement)" marker-end="url(#arrowManagement)" />
-  <rect x="706" y="305" width="138" height="29" rx="14.5" fill="#0d2340" stroke="#496784" />
-  <text x="775" y="324" text-anchor="middle" class="small" style="font-size: 11px">management + telemetry</text>
+  <g filter="url(#shadow)">
+    <rect x="920" y="270" width="250" height="166" rx="18" fill="#0b1e36" stroke="#56a9ff" stroke-width="2" />
+    <text x="944" y="311" class="card-title">Apple Manager</text>
+    <text x="944" y="340" class="eyebrow blue">SERVED BY THE NANO</text>
+    <text x="944" y="374" class="body">Wi-Fi, tracks, settings,</text>
+    <text x="944" y="397" class="body">status, and updates</text>
+  </g>
 
+  <path d="M870 405H920" fill="none" stroke="#56a9ff" stroke-width="2.5" stroke-linecap="round" marker-start="url(#arrowLocal)" marker-end="url(#arrowLocal)" />
+
+  <path d="M435 436V478H735V436" fill="none" stroke="#a9c0da" stroke-width="2.25" stroke-dasharray="5 7" stroke-linecap="round" marker-start="url(#arrowLocal)" marker-end="url(#arrowLocal)" />
+  <rect x="493" y="461" width="184" height="31" rx="15.5" fill="#0d2340" stroke="#496784" />
+  <text x="585" y="481" text-anchor="middle" class="small">OPTIONAL LOCAL TELEMETRY</text>
 </svg>

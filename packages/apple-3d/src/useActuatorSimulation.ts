@@ -7,6 +7,7 @@ import {
 } from "./actuatorPhysics";
 
 export interface ActuatorSimulationOptions {
+  animationWindow?: Pick<Window, "cancelAnimationFrame" | "performance" | "requestAnimationFrame">;
   reducedMotion?: boolean;
   speedMmPerSecond?: number;
 }
@@ -17,6 +18,7 @@ export function useActuatorSimulation(targetPositionMm: number, options: Actuato
   const positionRef = useRef(target);
   const [positionMm, setPositionMm] = useState(target);
   const speedMmPerSecond = options.speedMmPerSecond ?? ACTUATOR_RATED_SPEED_MM_PER_SECOND;
+  const animationWindow = options.animationWindow ?? window;
 
   useEffect(() => {
     targetRef.current = target;
@@ -27,20 +29,23 @@ export function useActuatorSimulation(targetPositionMm: number, options: Actuato
     }
 
     let animationFrame = 0;
-    let previousTime = performance.now();
+    let previousTime = animationWindow.performance.now();
 
     function advance(time: number) {
-      const elapsedSeconds = Math.min(0.1, Math.max(0, time - previousTime) / 1000);
+      // Use real elapsed time. A 100 ms cap made the simulated actuator run at
+      // one tenth speed when a background browser throttled animation frames,
+      // which could trip the core's motion deadline in Mini Apple mode.
+      const elapsedSeconds = Math.max(0, time - previousTime) / 1000;
       previousTime = time;
       const next = advanceActuatorPosition(positionRef.current, targetRef.current, elapsedSeconds, speedMmPerSecond);
       positionRef.current = next;
       setPositionMm(next);
-      if (next !== targetRef.current) animationFrame = requestAnimationFrame(advance);
+      if (next !== targetRef.current) animationFrame = animationWindow.requestAnimationFrame(advance);
     }
 
-    animationFrame = requestAnimationFrame(advance);
-    return () => cancelAnimationFrame(animationFrame);
-  }, [options.reducedMotion, speedMmPerSecond, target]);
+    animationFrame = animationWindow.requestAnimationFrame(advance);
+    return () => animationWindow.cancelAnimationFrame(animationFrame);
+  }, [animationWindow, options.reducedMotion, speedMmPerSecond, target]);
 
   return useMemo(
     () => ({

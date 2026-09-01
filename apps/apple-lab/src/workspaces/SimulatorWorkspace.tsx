@@ -3,6 +3,7 @@ import {
   ACTUATOR_FULL_STROKE_SECONDS,
   ACTUATOR_RATED_SPEED_MM_PER_SECOND,
   AppleStage,
+  HOME_RUN_DISPLAY_LEAD_IN_MS,
   HOME_RUN_RAISED_DWELL_MS,
   useActuatorSimulation,
 } from "@apple/apple-3d";
@@ -10,6 +11,7 @@ import { MAX_STROKE_MM } from "@apple/protocol";
 import { Scoreboard } from "@apple/scoreboard-ui";
 import { fixtureScenarios } from "@apple/test-fixtures";
 import { CsvExportButton, useReducedMotion, WorkspaceHeading } from "../managerComponents";
+import { PhysicalOutputPreview } from "../PhysicalOutputPreview";
 import { useFixturePlayback } from "../useFixturePlayback";
 
 export function SimulatorWorkspace() {
@@ -25,6 +27,16 @@ export function SimulatorWorkspace() {
     speedMmPerSecond: ACTUATOR_RATED_SPEED_MM_PER_SECOND * (manualPosition === null ? playback.speed : 1),
   });
   const visibleFrames = playback.scenario.frames.filter((frame) => frame.atMs <= playback.elapsedMs);
+  const celebrationFrame = [...visibleFrames]
+    .reverse()
+    .find((frame) => frame.events.some((event) => event.type === "CELEBRATION_STARTED"));
+  const celebrationElapsedMs = celebrationFrame ? playback.elapsedMs - celebrationFrame.atMs : 0;
+  const celebration =
+    celebrationFrame &&
+    playback.activeFrame.snapshot.phase === "CELEBRATION" &&
+    celebrationElapsedMs < HOME_RUN_DISPLAY_LEAD_IN_MS + HOME_RUN_RAISED_DWELL_MS
+      ? celebrationFrame.events.find((event) => event.type === "CELEBRATION_STARTED")
+      : undefined;
   const frameIndex = Math.max(0, playback.scenario.frames.indexOf(playback.activeFrame));
   const progress = playback.durationMs === 0 ? 0 : (playback.elapsedMs / playback.durationMs) * 100;
   function chooseScenario(id: string) {
@@ -154,6 +166,13 @@ export function SimulatorWorkspace() {
               <span>{HOME_RUN_RAISED_DWELL_MS / 1000} s raised</span>
             </div>
           </div>
+          <PhysicalOutputPreview
+            snapshot={playback.activeFrame.snapshot}
+            celebration={celebration}
+            celebrationElapsedMs={celebrationElapsedMs}
+            elapsedMs={playback.elapsedMs}
+            motionState={actuator.state}
+          />
           <div className="motion-control">
             <div className="motion-readout">
               <span>Simulated position</span>

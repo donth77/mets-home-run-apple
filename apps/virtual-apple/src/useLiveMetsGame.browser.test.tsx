@@ -40,6 +40,7 @@ vi.mock("./liveGameCoreController", () => ({
     sequenceState === "RETRACTING",
 }));
 
+import { MINI_APPLE_HEARTBEAT_EVENT } from "./miniAppleHeartbeat";
 import { useLiveMetsGame } from "./useLiveMetsGame";
 
 const snapshot: GameSnapshot = {
@@ -150,6 +151,30 @@ describe("live mobile recovery", () => {
     act(() => document.dispatchEvent(new Event("visibilitychange")));
     await flush();
 
+    expect(testState.poll).toHaveBeenCalledTimes(2);
+  });
+
+  it("services a due poll and core clock from the visible Mini Apple heartbeat", async () => {
+    const activePresentation = {
+      celebration: { eventKey: "823583:final", kind: "METS_WIN" as const, subject: "Mets Win!" },
+      decision: { sequenceState: "LEAD_IN" as const },
+      targetPositionMm: 0,
+    };
+    testState.ingest.mockReturnValue(activePresentation);
+    testState.tick.mockReturnValue(activePresentation);
+    testState.poll.mockResolvedValue({ capture: { coreInput, gameSnapshot: snapshot }, waitMs: 10_000 });
+    const startedAt = Date.now();
+    renderHook(() => useLiveMetsGame());
+    await flush();
+
+    expect(testState.poll).toHaveBeenCalledOnce();
+    expect(testState.tick).not.toHaveBeenCalled();
+    vi.setSystemTime(startedAt + 10_001);
+
+    act(() => window.dispatchEvent(new Event(MINI_APPLE_HEARTBEAT_EVENT)));
+    await flush();
+
+    expect(testState.tick).toHaveBeenCalledOnce();
     expect(testState.poll).toHaveBeenCalledTimes(2);
   });
 });

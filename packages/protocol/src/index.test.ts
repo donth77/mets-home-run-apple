@@ -51,10 +51,12 @@ describe("toDeviceDisplayState", () => {
 
     expect(toDeviceDisplayState(snapshot)).toEqual({
       schemaVersion: 1,
+      kind: "LIVE",
       gamePk: 777686,
       gameNumber: 1,
       phase: "LIVE",
       status: "LIVE",
+      lastEvent: "Pitch accepted",
       away: { abbreviation: "ATL", runs: 2 },
       home: { abbreviation: "NYM", runs: 3 },
       inning: 7,
@@ -64,6 +66,7 @@ describe("toDeviceDisplayState", () => {
       balls: 2,
       strikes: 1,
       batter: "Juan Soto",
+      batterLine: "2–3 · HR",
       pitcher: "Spencer Strider",
       pitchCount: 74,
     });
@@ -86,8 +89,35 @@ describe("toDeviceDisplayState", () => {
     } satisfies GameSnapshot;
 
     expect(toDeviceDisplayState(snapshot)).toMatchObject({
+      kind: "FINAL",
       phase: "FINAL",
+      finalResult: "METS_WIN",
       bases: { first: false, second: false, third: false },
     });
+  });
+
+  it.each([
+    ["RAIN DELAY", "RAIN_DELAY"],
+    ["Delayed", "DELAY"],
+    ["Suspended", "SUSPENDED"],
+    ["Postponed", "POSTPONED"],
+    ["Cancelled", "CANCELLED"],
+  ] as const)("maps %s to the physical display state %s", (label, kind) => {
+    const snapshot = {
+      schemaVersion: 1,
+      gamePk: 777686,
+      gameNumber: 1,
+      phase: "DELAYED",
+      label,
+      away: { abbreviation: "ATL", name: "Atlanta Braves", runs: 2 },
+      home: { id: 121, abbreviation: "NYM", name: "New York Mets", runs: 3 },
+      inning: 7,
+      half: "BOTTOM",
+      outs: 1,
+      review: "NONE",
+      lastEvent: label,
+    } satisfies GameSnapshot;
+
+    expect(toDeviceDisplayState(snapshot).kind).toBe(kind);
   });
 });
