@@ -1,4 +1,5 @@
 import { GameCore } from "@apple/game-core-wasm";
+import { GameStateProjector } from "@apple/game-state-wasm";
 import { describe, expect, it, vi } from "vitest";
 import { applyJsonPatch, fetchMetsSchedule, fetchMlbHistoricalGameIndex, MlbRecordingClient } from "./index";
 
@@ -7,6 +8,7 @@ function play({
   balls = 0,
   batterId = 101,
   batterName,
+  endTime,
   halfInning,
   inning = 6,
   isComplete = true,
@@ -21,6 +23,7 @@ function play({
   balls?: number;
   batterId?: number;
   batterName?: string;
+  endTime?: string;
   halfInning: "top" | "bottom";
   inning?: number;
   isComplete?: boolean;
@@ -33,7 +36,7 @@ function play({
 }) {
   return {
     result: { eventType, description: resultDescription ?? `${eventType} description`, rbi },
-    about: { atBatIndex, halfInning, inning, isComplete },
+    about: { atBatIndex, halfInning, inning, isComplete, ...(endTime ? { endTime } : {}) },
     count: { balls, strikes },
     matchup: {
       batter: { id: batterId, fullName: batterName ?? (halfInning === "bottom" ? "Juan Soto" : "Opponent") },
@@ -113,6 +116,57 @@ function response(value: unknown) {
 }
 
 describe("MLB recording transport", () => {
+  it("keeps a historical replay identical through the C++ game-state projector", async () => {
+    const firstPlay = play({ atBatIndex: 40, halfInning: "bottom", eventType: "single" });
+    const homeRun = play({
+      atBatIndex: 41,
+      batterName: "Francisco Lindor",
+      eventType: "home_run",
+      halfInning: "bottom",
+      resultDescription: "Francisco Lindor homers on a fly ball to right field.",
+    });
+    const frames = [
+      feed("20260827_190000", [firstPlay], "In Progress"),
+      feed("20260827_190010", [firstPlay, homeRun], "In Progress", {
+        teams: {
+          away: { runs: 2, hits: 5, errors: 0 },
+          home: { runs: 4, hits: 8, errors: 0 },
+        },
+      }),
+      feed("20260827_220000", [firstPlay, homeRun], "Final", {
+        currentInning: 9,
+        inningHalf: "Bottom",
+        inningState: "End",
+        outs: 3,
+        teams: {
+          away: { runs: 2, hits: 7, errors: 0 },
+          home: { runs: 4, hits: 9, errors: 0 },
+        },
+      }),
+    ];
+    const timecodes = ["20260827_190000", "20260827_190010", "20260827_220000"];
+    const fetcher = () =>
+      vi
+        .fn<typeof fetch>()
+        .mockResolvedValueOnce(response(frames[0]))
+        .mockResolvedValueOnce(response(frames[1]))
+        .mockResolvedValueOnce(response(frames[2]));
+    const now = () => new Date("2026-08-27T22:00:30Z");
+    const established = new MlbRecordingClient(fetcher(), now);
+    const stateProjector = await GameStateProjector.create();
+    const cpp = new MlbRecordingClient(fetcher(), now, (canonical) => stateProjector.project(canonical));
+
+    try {
+      for (const timecode of timecodes) {
+        const expected = await established.loadTimecode({ gamePk: 777001, gameNumber: 1 }, timecode);
+        const actual = await cpp.loadTimecode({ gamePk: 777001, gameNumber: 1 }, timecode);
+        expect(actual).toStrictEqual(expected);
+      }
+    } finally {
+      stateProjector.dispose();
+    }
+  });
+
   it("discovers both games in a doubleheader without merging their identities", async () => {
     const scheduledGames = [1, 2].map((gameNumber) => ({
       gamePk: 777000 + gameNumber,
@@ -135,8 +189,18 @@ describe("MLB recording transport", () => {
   });
 
   it("bootstraps history and emits only new or changed play evidence afterward", async () => {
-    const oldPlay = play({ atBatIndex: 1, halfInning: "bottom", eventType: "home_run" });
-    const newPlay = play({ atBatIndex: 2, halfInning: "bottom", eventType: "home_run" });
+    const oldPlay = play({
+      atBatIndex: 1,
+      endTime: "2026-08-27T18:59:50.000Z",
+      halfInning: "bottom",
+      eventType: "home_run",
+    });
+    const newPlay = play({
+      atBatIndex: 2,
+      endTime: "2026-08-27T19:00:05.000Z",
+      halfInning: "bottom",
+      eventType: "home_run",
+    });
     const fetcher = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(response(feed("20260827_190000", [oldPlay])))
@@ -146,6 +210,13 @@ describe("MLB recording transport", () => {
     const bootstrap = await client.poll({ gamePk: 777001, gameNumber: 1 });
     expect(bootstrap.capture?.coreInput.updateMode).toBe("BOOTSTRAP");
     expect(bootstrap.capture?.changedPlayCount).toBe(1);
+    expect(bootstrap.capture?.replayCandidates).toEqual([
+      {
+        eventKey: "777001:play-1",
+        kind: "HOME_RUN",
+        occurredAt: "2026-08-27T18:59:50.000Z",
+      },
+    ]);
     expect(bootstrap.capture?.gameSnapshot.atBat).toMatchObject({ batterLine: "1–2", pitchCount: 74 });
     expect(bootstrap.capture?.gameSnapshot).toMatchObject({
       scheduledStart: "2026-08-27T23:10:00Z",
@@ -165,6 +236,37 @@ describe("MLB recording transport", () => {
     const incremental = await client.poll({ gamePk: 777001, gameNumber: 1 });
     expect(incremental.capture?.coreInput.updateMode).toBe("INCREMENTAL");
     expect(incremental.capture?.coreInput.plays.map(({ eventKey }) => eventKey)).toEqual(["777001:play-2"]);
+    expect(incremental.capture?.replayCandidates).toEqual([]);
+  });
+
+  it("exposes a timestamped final candidate when a new client opens a completed game", async () => {
+    const finalPlay = play({
+      atBatIndex: 41,
+      endTime: "2026-08-27T22:00:00.000Z",
+      halfInning: "bottom",
+      inning: 9,
+    });
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      response(
+        feed("20260827_220005", [finalPlay], "Final", {
+          currentInning: 9,
+          inningHalf: "Bottom",
+          outs: 3,
+        }),
+      ),
+    );
+    const client = new MlbRecordingClient(fetcher, () => new Date("2026-08-27T22:00:30Z"));
+
+    const bootstrap = await client.poll({ gamePk: 777001, gameNumber: 1 });
+
+    expect(bootstrap.capture?.coreInput.phase).toBe("FINAL");
+    expect(bootstrap.capture?.replayCandidates).toEqual([
+      {
+        eventKey: "777001:final",
+        kind: "FINAL",
+        occurredAt: "2026-08-27T22:00:00.000Z",
+      },
+    ]);
   });
 
   it("preserves a pending review for the C++ decision gate", async () => {

@@ -2,15 +2,15 @@
 
 ![Mets Home Run Apple architecture](assets/architecture.svg)
 
-The diagram shows the target architecture. The decision core and portable
-celebration renderer work today; the C++ game-state layer and Apple Manager are
-planned and will be introduced in tested stages.
+The diagram shows the target architecture. The decision core, game-state
+foundation, and portable celebration renderer work today. Both browser apps
+use the shared state path; Nano integration and Apple Manager are still planned.
 
 ## Components
 
 | Name | What it does | Must stay open? |
 | --- | --- | --- |
-| Planned C++ game state | Keeps the shared score, situation, players, line score, and game status | Will run wherever it is compiled |
+| C++ game state | Keeps the shared score, situation, players, line score, and game status | Used by Apple Lab recording/replay and Virtual Apple live games; Nano integration is next |
 | C++ decision core | Accepts celebrations and guards the motion sequence | Runs wherever it is compiled |
 | Physical Apple | Follows games and controls its display, speaker, lights, and lift | Yes; it is the autonomous device |
 | Apple Manager | Handles owner setup and settings from a page served by the Nano | No |
@@ -39,7 +39,7 @@ The relay removes a fragile cross-origin hop for mobile browsers, briefly shares
 identical responses at Cloudflare's edge, and falls back to direct MLB access if
 needed. It has no database and does not make game decisions.
 
-The target shared path reads each MLB update once and produces two C++
+The shared C++ projector accepts one normalized MLB update and produces two
 projections:
 
 - `gameSnapshot` has the score, inning, outs, runners, count, batter, pitcher,
@@ -48,11 +48,15 @@ projections:
 - `coreInput` has only the facts the decision core needs to decide whether a
   celebration should start and whether motion should change.
 
-Browser and firmware transports still fetch and decode MLB JSON in the way that
-fits their platform. They pass extracted feed facts to the same portable C++
-game-state layer. The current browser snapshot path remains in place. The C++
-projection will be checked against archived games, and Virtual Apple will
-switch only after those results match.
+Browser and firmware transports fetch and decode MLB JSON in the way that fits
+their platform. They pass extracted feed facts to the same portable C++
+game-state layer. Native tests cover validation and stale-field cleanup, while
+WebAssembly parity tests compare live, changeover, pregame, and final
+projections with the established TypeScript output. A historical transport fixture also
+checks the live-to-home-run-to-final transport path. Apple Lab's recording and
+historical replay and Virtual Apple's live feed now use the C++ projection.
+Virtual Apple keeps the TypeScript projection only as a parity oracle while the
+migration settles; it is no longer the production default for that app.
 
 The decision core returns celebration events and extend, retract, or disable
 commands. It does not build a scoreboard, choose screen text, play sound,
@@ -89,7 +93,13 @@ Apple Manager uses same-origin requests because its page and API both come from
 the Nano. This keeps first-time setup phone-friendly and avoids a permanent
 external dependency.
 
-Apple Lab telemetry is optional. After explicit local pairing, the Lab will
+Apple Lab's USB bench connection is intentionally narrow: it recognizes only
+the guarded commissioning firmware profiles, reads their versioned serial state,
+and after physical-presence confirmations can request one bounded action per
+arm: the no-power signal self-test, a single short actuator jog, or one
+engine-driven celebration sequence on the commissioning build. The Nano owns
+every deadline, auto-stop, and fault; the browser never holds a raw motor
+command. Full telemetry remains optional. After explicit local pairing, the Lab will
 fetch one status snapshot from the Nano and subscribe to authenticated updates
 over WebSocket or server-sent events. Telemetry can include the current screen,
 audio track and fade, LED pattern, motion phase, feed freshness, storage health,

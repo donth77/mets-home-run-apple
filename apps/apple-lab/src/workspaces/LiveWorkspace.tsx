@@ -15,7 +15,7 @@ export function LiveWorkspace({ events }: { events: readonly DeviceTimelineEvent
         eyebrow="Read-only game workspace"
         title="Live game"
         titleId="live-title"
-        description="Monitor the autonomous Apple or inspect a direct MLB feed through the same compiled C++ decision core. Neither source can reach physical outputs from this browser."
+        description="Monitor the autonomous Apple or inspect a direct MLB feed through the compiled C++ game-state and decision layers. Neither source can reach physical outputs from this browser."
       >
         <span className={source === "device" ? "mode-pill mode-pill--read" : "mode-pill mode-pill--safe"}>
           <i /> {source === "device" ? "Monitoring only" : "Recording only"}
@@ -59,8 +59,8 @@ export function LiveWorkspace({ events }: { events: readonly DeviceTimelineEvent
           <div className="live-notice live-notice--recording">
             <strong>Developer recording transport</strong>
             <span>
-              MLB data enters the canonical C++ core, but every emitted command remains an in-memory receipt. Starting
-              this monitor cannot move a connected or future Apple.
+              MLB data enters the C++ game-state projector before its smaller evidence envelope reaches the decision
+              core. Every emitted command remains an in-memory receipt and cannot move an Apple.
             </span>
           </div>
           <MlbRecordingView recording={recording} />

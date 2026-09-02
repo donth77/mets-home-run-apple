@@ -1,6 +1,6 @@
 /** @vitest-environment happy-dom */
 
-import { useActuatorSimulation } from "@apple/apple-3d";
+import { ACTUATOR_SPEED_MM_PER_SECOND, useActuatorSimulation } from "@apple/apple-3d";
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -24,9 +24,9 @@ describe("actuator animation timing", () => {
 
     now = 1_000;
     act(() => nextFrame?.(now));
-    expect(result.current.positionMm).toBeCloseTo(15.24, 2);
+    expect(result.current.positionMm).toBeCloseTo(ACTUATOR_SPEED_MM_PER_SECOND, 2);
 
-    now = 4_000;
+    now = 6_000;
     act(() => nextFrame?.(now));
     expect(result.current.positionMm).toBe(50);
   });

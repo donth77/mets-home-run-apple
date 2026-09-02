@@ -12,6 +12,7 @@
       "!user-assets",
       "!packages/apple-3d/assets",
       "!packages/device-display-wasm/src/generated",
+      "!packages/game-state-wasm/src/generated",
       "!packages/game-core-wasm/src/generated"
     ]
   },

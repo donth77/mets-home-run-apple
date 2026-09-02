@@ -21,6 +21,12 @@ export interface MlbHistoricalGameIndex {
   bookmarks: readonly MlbHistoricalBookmark[];
 }
 
+export interface MlbCelebrationReplayCandidate {
+  eventKey: string;
+  kind: MlbHistoricalBookmarkKind;
+  occurredAt: string;
+}
+
 export type FeedPayloadKind = "FULL_BOOTSTRAP" | "DIFF_PATCH" | "FULL_DIFF_RESPONSE" | "FULL_FALLBACK" | "NO_CHANGE";
 
 export interface NormalizedFeedCapture {
@@ -34,6 +40,8 @@ export interface NormalizedFeedCapture {
   receivedAt: string;
   rawPlayCount: number;
   changedPlayCount: number;
+  /** Timestamped bootstrap evidence available to recording-only presentation clients. */
+  replayCandidates: readonly MlbCelebrationReplayCandidate[];
 }
 
 export interface MlbPollResult {

@@ -24,6 +24,9 @@
   .test-control-grid {
     grid-template-columns: 1fr 1fr;
   }
+  .commissioning-grid {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 @media (max-width: 1040px) {
@@ -46,6 +49,12 @@
   }
   .interlock-grid {
     grid-template-columns: 1fr 1fr;
+  }
+  .usb-bench-facts {
+    grid-template-columns: 1fr 1fr;
+  }
+  .usb-bench-state {
+    grid-template-columns: repeat(3, 76px) minmax(0, 1fr);
   }
   .simulator-grid {
     grid-template-columns: 1fr;
@@ -181,6 +190,15 @@
   .service-safety button {
     width: 100%;
   }
+  .usb-bench-heading,
+  .bench-log-panel .panel-title {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .usb-bench-connection-actions,
+  .bench-log-actions {
+    justify-content: flex-start;
+  }
   .detail-list--wide {
     grid-template-columns: 1fr;
   }
@@ -228,7 +246,27 @@
   .health-list,
   .scenario-list,
   .interlock-grid,
-  .test-control-grid {
+  .test-control-grid,
+  .usb-bench-facts,
+  .commissioning-grid {
+    grid-template-columns: 1fr;
+  }
+  .usb-bench-state {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .usb-bench-state p {
+    grid-column: 1 / -1;
+  }
+  .bench-command-bar,
+  .bench-session-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .bench-command-bar button,
+  .bench-session-actions button {
+    width: 100%;
+  }
+  .bench-serial-log li {
     grid-template-columns: 1fr;
   }
   .panel-title--timeline {

@@ -18,13 +18,13 @@ Open [http://localhost:4173](http://localhost:4173).
 | Live Game | A read-only event timeline and opt-in MLB feed recorder |
 | Historical Replay | Playback of completed MLB games through the C++ core |
 | Simulator | Fast, repeatable test scenarios |
-| Hardware Tests | Future armed and time-limited service controls |
+| Hardware Tests | USB bench commissioning and future guarded component tests |
 | Diagnostics | Telemetry and the event ledger |
 | Settings | Development defaults and future paired-device inspection |
 
 ## What works without hardware
 
-Live Game and Historical Replay never contact MLB just because their page opened. Choose a date or start a recording to make a request. Incoming JSON is normalized first; only the compiled C++ core can accept a home run or win.
+Live Game and Historical Replay never contact MLB just because their page opened. Choose a date or start a recording to make a request. Incoming JSON is normalized first, projected into display state and decision evidence by C++/WebAssembly, and then evaluated by the separate C++ decision core. Only that decision core can accept a home run or win.
 
 To replay a completed game:
 
@@ -37,13 +37,27 @@ Seeking backward resets and bootstraps the core, so revisiting an old home run c
 
 Simulator scenarios also pass through the real C++ decision code. The browser records the commands it would have sent, but it cannot move hardware. **Run on device** stays disabled until an authenticated Nano ESP32 connection exists.
 
-The Simulator previews the 320 x 240 physical screen alongside the selected audio slot, LED state, and actuator sequence. Home-run, grand-slam, and Mets-win frames come from the same portable C++ renderer compiled for the Nano; ordinary screen layouts consume the structured display snapshot while the planned C++ game-state migration remains behind an archived-feed parity gate. Browser audio remains opt-in.
+The Simulator previews the 320 x 240 physical screen alongside the selected audio slot, LED state, and actuator sequence. Home-run, grand-slam, and Mets-win frames come from the same portable C++ renderer compiled for the Nano. Live recording and Historical Replay use the C++ game-state projector; its WebAssembly is loaded only when one of those sources starts. Browser audio remains opt-in.
 
 Timeline tables are filtered and paginated, with 5, 10, and 25-row page sizes. CSV exports include every row matching the filter, not only the current page. They include browser-local, IANA-zone, and UTC timestamps and neutralize spreadsheet-formula prefixes.
 
+## USB bench connection
+
+Hardware Tests can connect to the dedicated `nano_esp32_motor_logic_test`
+firmware over Web Serial from localhost in Brave, Chrome, or Edge. The Lab reads
+a versioned device identity, the current ENA/IN1/IN2 state, and bounded test
+receipts. Serial evidence can be exported, while the commissioning checklist is
+stored only in the current browser.
+
+The logic self-test requires a new 60-second session and explicit confirmation
+that 12 V, the actuator, and both motor outputs are disconnected. It runs one
+fixed raise/stop/lower/stop signal pattern and returns all outputs LOW. The Lab
+does not expose the firmware's raw direction commands, and this connection
+cannot run a powered actuator test.
+
 ## Physical-device boundary
 
-The current device adapter is a fake. A future connection will pair with a Nano on the same local network, fetch a status snapshot, and subscribe to authenticated live telemetry. The Nano can keep a bounded event and fault ledger so the Lab can recover useful history after reconnecting; it does not need to store every animation frame or rapid sensor sample.
+Outside the USB commissioning panel, device telemetry remains a fake preview. A future connection will pair with a Nano on the same local network, fetch a status snapshot, and subscribe to authenticated live telemetry. The Nano can keep a bounded event and fault ledger so the Lab can recover useful history after reconnecting; it does not need to store every animation frame or rapid sensor sample.
 
 Telemetry is optional and only runs while Apple Lab is connected. The normal development setup is a local `pnpm dev:lab` session on the same network as the Apple—no hosted Lab or cloud relay is required. A public HTTPS deployment is not the preferred path because browsers may block it from connecting to a local HTTP device.
 

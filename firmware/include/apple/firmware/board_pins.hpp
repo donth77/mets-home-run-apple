@@ -6,8 +6,8 @@
 
 namespace apple::firmware {
 
-// These are reserved for the future motor adapter. The diagnostic firmware
-// never drives them high and has no movement command path.
+// Motor outputs default LOW. Only dedicated, bounded commissioning firmware
+// and the future production motion adapter may drive them high.
 constexpr std::uint8_t kReservedMotorPinA = D4;
 constexpr std::uint8_t kReservedMotorPinB = D5;
 constexpr std::uint8_t kReservedMotorPinC = D6;

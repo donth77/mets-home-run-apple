@@ -14,21 +14,21 @@ export function OverviewWorkspace({
   return (
     <section className="workspace" aria-labelledby="overview-title">
       <WorkspaceHeading
-        eyebrow="Local device manager"
-        title="Your Apple is ready"
+        eyebrow="Local engineering tool"
+        title="Apple Lab is ready"
         titleId="overview-title"
-        description="One view of the autonomous device, current game, and safety state. Apple Lab is optional—the device keeps running when this page is closed."
+        description="Use fixtures, live feeds, historical games, and the USB bench workspace without putting this browser in the autonomous game loop."
       >
-        <span className="mode-pill mode-pill--live">
-          <i /> Autonomous live
+        <span className="mode-pill mode-pill--read">
+          <i /> Preview data
         </span>
       </WorkspaceHeading>
       <div className="overview-grid">
         <article className="manager-panel overview-game">
           <header className="panel-title">
             <div>
-              <span>Fake device preview</span>
-              <h2>Simulated game state</h2>
+              <span>Reference device preview</span>
+              <h2>Example game state</h2>
             </div>
             <span className="read-only-badge">Read only</span>
           </header>
@@ -53,8 +53,8 @@ export function OverviewWorkspace({
         <article className="manager-panel apple-state-card">
           <header className="panel-title">
             <div>
-              <span>Physical state</span>
-              <h2>Apple position</h2>
+              <span>Simulated state</span>
+              <h2>Apple position preview</h2>
             </div>
             <span className="state-badge state-badge--safe">Home</span>
           </header>
@@ -89,8 +89,8 @@ export function OverviewWorkspace({
         <article className="manager-panel device-health">
           <header className="panel-title">
             <div>
-              <span>Device health</span>
-              <h2>All systems nominal</h2>
+              <span>Reference telemetry</span>
+              <h2>Example device health</h2>
             </div>
             <span className="health-score">4/4</span>
           </header>

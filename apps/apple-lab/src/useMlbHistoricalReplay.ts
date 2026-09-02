@@ -1,17 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { GameCore, type CoreResult } from "@apple/game-core-wasm";
+import type { CoreResult } from "@apple/game-core-wasm";
 import {
   dateFromMlbTimecode,
   easternDate,
   fetchMetsSchedule,
   fetchMlbHistoricalGameIndex,
-  MlbRecordingClient,
   type FeedPayloadKind,
   type MlbHistoricalBookmark,
   type MlbHistoricalGameIndex,
   type MlbScheduleGame,
   type NormalizedFeedCapture,
 } from "@apple/mlb-live-feed";
+import { type AppleLabMlbRuntime, createAppleLabMlbRuntime } from "./mlbRecordingRuntime";
 
 export type HistoricalReplayStatus =
   | "IDLE"
@@ -86,8 +86,7 @@ export function useMlbHistoricalReplay(): MlbHistoricalReplayState {
   const [stagedBookmarkId, setStagedBookmarkId] = useState<string>();
   const [receipts, setReceipts] = useState<readonly HistoricalReplayReceipt[]>([]);
   const [error, setError] = useState<string>();
-  const clientRef = useRef(new MlbRecordingClient());
-  const coreRef = useRef<GameCore | undefined>(undefined);
+  const runtimeRef = useRef<AppleLabMlbRuntime | undefined>(undefined);
   const abortRef = useRef<AbortController | undefined>(undefined);
   const operationTokenRef = useRef(0);
   const clockRef = useRef(0);
@@ -103,9 +102,8 @@ export function useMlbHistoricalReplay(): MlbHistoricalReplayState {
   }, []);
 
   const releaseRuntime = useCallback(() => {
-    clientRef.current.reset();
-    coreRef.current?.dispose();
-    coreRef.current = undefined;
+    runtimeRef.current?.dispose();
+    runtimeRef.current = undefined;
     clockRef.current = 0;
     currentIndexRef.current = -1;
   }, []);
@@ -119,9 +117,9 @@ export function useMlbHistoricalReplay(): MlbHistoricalReplayState {
   useEffect(
     () => () => {
       cancelOperation();
-      coreRef.current?.dispose();
+      releaseRuntime();
     },
-    [cancelOperation],
+    [cancelOperation, releaseRuntime],
   );
 
   const clearArchive = useCallback(() => {
@@ -192,19 +190,20 @@ export function useMlbHistoricalReplay(): MlbHistoricalReplayState {
       const controller = new AbortController();
       abortRef.current = controller;
       try {
-        const core = await GameCore.create();
+        const runtime = await createAppleLabMlbRuntime();
         if (token !== operationTokenRef.current) {
-          core.dispose();
+          runtime.dispose();
           return false;
         }
-        coreRef.current = core;
-        const result = await clientRef.current.loadTimecode(
+        runtimeRef.current = runtime;
+        const result = await runtime.client.loadTimecode(
           selectedGame,
           archive.timestamps[targetIndex],
           controller.signal,
         );
-        if (token !== operationTokenRef.current || !result.capture) return false;
-        const nextDecision = core.ingest(result.capture.coreInput, 0);
+        if (token !== operationTokenRef.current) return false;
+        if (!result.capture) throw new Error("The archived update did not contain a game-state capture.");
+        const nextDecision = runtime.core.ingest(result.capture.coreInput, 0);
         currentIndexRef.current = targetIndex;
         setCurrentIndex(targetIndex);
         setCapture(result.capture);
@@ -224,6 +223,7 @@ export function useMlbHistoricalReplay(): MlbHistoricalReplayState {
         return true;
       } catch (reason) {
         if (isAbortError(reason) || token !== operationTokenRef.current) return false;
+        releaseRuntime();
         setError(reason instanceof Error ? reason.message : "Unable to stage the archived update.");
         setStatus("ERROR");
         return false;
@@ -236,7 +236,7 @@ export function useMlbHistoricalReplay(): MlbHistoricalReplayState {
     async (requestedIndex: number, continuePlaying = false) => {
       if (!selectedGame || !archive) return false;
       const targetIndex = Math.min(Math.max(0, requestedIndex), archive.timestamps.length - 1);
-      if (!coreRef.current || targetIndex <= currentIndexRef.current) {
+      if (!runtimeRef.current || targetIndex <= currentIndexRef.current) {
         const staged = await stageAt(targetIndex);
         if (staged && continuePlaying && targetIndex < archive.timestamps.length - 1) {
           setPlaying(true);
@@ -252,15 +252,15 @@ export function useMlbHistoricalReplay(): MlbHistoricalReplayState {
       const controller = new AbortController();
       abortRef.current = controller;
       try {
+        const runtime = runtimeRef.current;
+        if (!runtime) throw new Error("The C++ replay runtime was released unexpectedly.");
         const previousIndex = currentIndexRef.current;
-        const result = await clientRef.current.loadTimecode(
+        const result = await runtime.client.loadTimecode(
           selectedGame,
           archive.timestamps[targetIndex],
           controller.signal,
         );
         if (token !== operationTokenRef.current) return false;
-        const core = coreRef.current;
-        if (!core) throw new Error("The C++ replay core was released unexpectedly.");
         const elapsed = Math.max(
           1,
           dateFromMlbTimecode(archive.timestamps[targetIndex]).getTime() -
@@ -269,7 +269,7 @@ export function useMlbHistoricalReplay(): MlbHistoricalReplayState {
         clockRef.current += elapsed;
         if (result.capture) {
           const acceptedCapture = result.capture;
-          const acceptedDecision = core.ingest(acceptedCapture.coreInput, clockRef.current);
+          const acceptedDecision = runtime.core.ingest(acceptedCapture.coreInput, clockRef.current);
           setCapture(acceptedCapture);
           setDecision(acceptedDecision);
           setReceipts((current) =>

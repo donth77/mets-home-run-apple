@@ -96,6 +96,16 @@ EngineOutput Engine::ingest(const InputEnvelope &input, std::uint64_t now_ms) {
   return output;
 }
 
+EngineOutput Engine::report_motion_fault(std::string_view reason,
+                                         std::uint64_t now_ms) {
+  EngineOutput output;
+  if (!validate_time(now_ms, output) || fault_latched_) {
+    return output;
+  }
+  latch_fault(reason, output);
+  return output;
+}
+
 EngineOutput Engine::tick(std::uint64_t now_ms) {
   EngineOutput output;
   if (!validate_time(now_ms, output) || fault_latched_) {

@@ -12,6 +12,7 @@
   "dependencies": {
     "@apple/apple-3d": "workspace:*",
     "@apple/game-core-wasm": "workspace:*",
+    "@apple/game-state-wasm": "workspace:*",
     "@apple/mlb-live-feed": "workspace:*",
     "@apple/protocol": "workspace:*",
     "@apple/scoreboard-ui": "workspace:*",

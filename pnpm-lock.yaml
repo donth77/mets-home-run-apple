@@ -44,6 +44,9 @@ importers:
       '@apple/game-core-wasm':
         specifier: workspace:*
         version: link:../../packages/game-core-wasm
+      '@apple/game-state-wasm':
+        specifier: workspace:*
+        version: link:../../packages/game-state-wasm
       '@apple/mlb-live-feed':
         specifier: workspace:*
         version: link:../../packages/mlb-live-feed
@@ -81,6 +84,9 @@ importers:
       '@apple/game-core-wasm':
         specifier: workspace:*
         version: link:../../packages/game-core-wasm
+      '@apple/game-state-wasm':
+        specifier: workspace:*
+        version: link:../../packages/game-state-wasm
       '@apple/mlb-live-feed':
         specifier: workspace:*
         version: link:../../packages/mlb-live-feed
@@ -155,6 +161,12 @@ importers:
         specifier: workspace:*
         version: link:../test-fixtures
 
+  packages/game-state-wasm:
+    dependencies:
+      '@apple/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+
   packages/mlb-live-feed:
     dependencies:
       '@apple/protocol':
@@ -164,6 +176,9 @@ importers:
       '@apple/game-core-wasm':
         specifier: workspace:*
         version: link:../game-core-wasm
+      '@apple/game-state-wasm':
+        specifier: workspace:*
+        version: link:../game-state-wasm
 
   packages/protocol: {}
 

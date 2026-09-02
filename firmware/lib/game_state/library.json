@@ -1,0 +1,10 @@
+{
+  "$schema": "https://raw.githubusercontent.com/platformio/platformio-core/develop/platformio/assets/schema/library.json",
+  "name": "apple-game-state",
+  "version": "0.1.0",
+  "description": "Hardware-independent canonical game-state projections.",
+  "build": {
+    "includeDir": "include",
+    "srcDir": "src"
+  }
+}

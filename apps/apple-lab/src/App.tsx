@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   createRecordedDiagnosticEvent,
   fakeDeviceTimeline,
@@ -12,6 +12,7 @@ import { LiveWorkspace } from "./workspaces/LiveWorkspace";
 import { OverviewWorkspace } from "./workspaces/OverviewWorkspace";
 import { SettingsWorkspace } from "./workspaces/SettingsWorkspace";
 import { SimulatorWorkspace } from "./workspaces/SimulatorWorkspace";
+import { useUsbBenchDevice } from "./useUsbBenchDevice";
 
 type WorkspaceId = "overview" | "live" | "replay" | "simulator" | "tests" | "diagnostics" | "settings";
 
@@ -21,7 +22,7 @@ const workspaces: readonly {
   label: string;
   description: string;
 }[] = [
-  { id: "overview", index: "01", label: "Overview", description: "Apple and game health" },
+  { id: "overview", index: "01", label: "Overview", description: "Lab and device preview" },
   { id: "live", index: "02", label: "Live game", description: "Read-only device timeline" },
   { id: "replay", index: "03", label: "Historical replay", description: "Archived MLB game playback" },
   { id: "simulator", index: "04", label: "Simulator", description: "Offline fixture replay" },
@@ -34,6 +35,8 @@ export function App() {
   const [workspace, setWorkspace] = useState<WorkspaceId>("overview");
   const [serviceArmed, setServiceArmed] = useState(false);
   const [recordedEvents, setRecordedEvents] = useState<DeviceTimelineEvent[]>([]);
+  const usbBench = useUsbBenchDevice();
+  const benchConnected = usbBench.connection === "CONNECTED";
   const allEvents = useMemo(
     () =>
       [...recordedEvents, ...fakeDeviceTimeline].sort((a, b) => Date.parse(b.occurredAt) - Date.parse(a.occurredAt)),
@@ -44,10 +47,15 @@ export function App() {
     const timer = window.setTimeout(() => setServiceArmed(false), 60_000);
     return () => window.clearTimeout(timer);
   }, [serviceArmed]);
-  function recordServiceAction(title: string) {
-    if (!serviceArmed) return;
-    setRecordedEvents((current) => [createRecordedDiagnosticEvent(title, new Date().toISOString()), ...current]);
-  }
+  const recordServiceAction = useCallback(
+    (title: string) => {
+      if (!serviceArmed) return;
+      setRecordedEvents((current) => [createRecordedDiagnosticEvent(title, new Date().toISOString()), ...current]);
+    },
+    [serviceArmed],
+  );
+  const armServiceSession = useCallback(() => setServiceArmed(true), []);
+  const disarmServiceSession = useCallback(() => setServiceArmed(false), []);
   const activeWorkspace = workspaces.find((item) => item.id === workspace) ?? workspaces[0];
 
   return (
@@ -60,16 +68,16 @@ export function App() {
           <img src="/favicon.png" alt="" />
           <div>
             <strong>Apple Lab</strong>
-            <small>Local device manager</small>
+            <small>Local engineering tool</small>
           </div>
         </div>
         <section className="sidebar-device" aria-label="Selected device">
           <div>
-            <span className="connection-dot" />
-            <strong>{fakeManagedDevice.name}</strong>
+            <span className={benchConnected ? "connection-dot" : "connection-dot connection-dot--offline"} />
+            <strong>{benchConnected ? "Nano ESP32" : "No physical device"}</strong>
           </div>
-          <small>{fakeManagedDevice.host}</small>
-          <span>FAKE DEVICE · CONNECTED</span>
+          <small>{benchConnected ? "USB serial · local bench" : "Simulator and feed tools available"}</small>
+          <span>{benchConnected ? "USB BENCH · CONNECTED" : "HARDWARE · DISCONNECTED"}</span>
         </section>
         <nav className="workspace-nav" aria-label="Apple Lab workspaces">
           {workspaces.map((item) => (
@@ -90,9 +98,9 @@ export function App() {
         </nav>
         <footer className="sidebar-footer">
           <span>
-            <i /> Autonomous service active
+            <i /> Device remains autonomous
           </span>
-          <p>The Apple continues running without this dashboard.</p>
+          <p>Apple Lab is optional and never sits in the live control loop.</p>
         </footer>
       </aside>
       <section className="manager-main">
@@ -103,12 +111,17 @@ export function App() {
           </div>
           <div className="topbar-status">
             <span>
-              <i className="status-light status-light--good" /> Feed healthy
+              <i className="status-light status-light--good" /> Lab tools ready
             </span>
             <span>
-              <i className="status-light status-light--safe" /> Apple home
+              <i className={`status-light ${benchConnected ? "status-light--safe" : ""}`} />{" "}
+              {benchConnected
+                ? usbBench.driverState?.state === "STOP"
+                  ? "Outputs low"
+                  : "Bench active"
+                : "Hardware disconnected"}
             </span>
-            <span className="transport-pill">Fake transport</span>
+            <span className="transport-pill">{benchConnected ? "USB serial" : "No device"}</span>
           </div>
         </header>
         <div id="workspace-content" className="manager-content" tabIndex={-1}>
@@ -120,9 +133,10 @@ export function App() {
             <HardwareTestsWorkspace
               armed={serviceArmed}
               events={recordedEvents}
-              onArm={() => setServiceArmed(true)}
-              onDisarm={() => setServiceArmed(false)}
+              onArm={armServiceSession}
+              onDisarm={disarmServiceSession}
               onRecord={recordServiceAction}
+              bench={usbBench}
             />
           )}
           {workspace === "diagnostics" && <DiagnosticsWorkspace events={allEvents} />}

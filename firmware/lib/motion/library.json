@@ -1,0 +1,11 @@
+{
+  "$schema": "https://raw.githubusercontent.com/platformio/platformio-core/develop/platformio/assets/schema/library.json",
+  "name": "apple-motion",
+  "version": "0.1.0",
+  "description": "Hardware-independent timed drive model for a two-wire actuator with internal end stops.",
+  "dependencies": [{ "name": "apple-core" }],
+  "build": {
+    "includeDir": "include",
+    "srcDir": "src"
+  }
+}

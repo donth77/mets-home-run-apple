@@ -2,6 +2,7 @@ import { MLB_STATS_API_ORIGIN } from "./constants";
 import { MlbFeedError } from "./errors";
 import { isFullFeed, patchOperationsFromPayload } from "./feedPayload";
 import { feedCursor, normalizeFeed, normalizedStateFingerprint, waitMilliseconds } from "./feedNormalization";
+import { type CanonicalGameProjector, projectCanonicalGameFrame } from "./feedProjections";
 import { applyJsonPatch } from "./jsonPatch";
 import type { MlbScheduleGame } from "./schedule";
 import { assertMlbTimecode, formatMlbTimecode } from "./timecode";
@@ -11,6 +12,7 @@ import type { FeedPayloadKind, MlbPollResult, NormalizedFeedCapture } from "./ty
 export class MlbRecordingClient {
   readonly #fetcher: typeof fetch;
   readonly #now: () => Date;
+  readonly #projectFrame: CanonicalGameProjector;
   #baseline: unknown;
   #upstreamCursor = "";
   #deliveryCursor = "";
@@ -18,9 +20,14 @@ export class MlbRecordingClient {
   #stateFingerprint = "";
   #fingerprints = new Map<string, string>();
 
-  constructor(fetcher: typeof fetch = fetch, now: () => Date = () => new Date()) {
+  constructor(
+    fetcher: typeof fetch = fetch,
+    now: () => Date = () => new Date(),
+    projectFrame: CanonicalGameProjector = projectCanonicalGameFrame,
+  ) {
     this.#fetcher = fetcher;
     this.#now = now;
+    this.#projectFrame = projectFrame;
   }
 
   reset() {
@@ -47,6 +54,7 @@ export class MlbRecordingClient {
       "FULL_BOOTSTRAP",
       this.#now().toISOString(),
       upstreamCursor,
+      this.#projectFrame,
     );
     this.#baseline = full;
     this.#upstreamCursor = upstreamCursor;
@@ -116,6 +124,7 @@ export class MlbRecordingClient {
       payloadKind,
       this.#now().toISOString(),
       upstreamCursor,
+      this.#projectFrame,
     );
     const stateFingerprint = normalizedStateFingerprint(normalized.capture.gameSnapshot, normalized.fingerprints);
     if (upstreamCursor === this.#upstreamCursor && stateFingerprint === this.#stateFingerprint) {

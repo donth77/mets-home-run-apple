@@ -83,14 +83,14 @@ describe("canonical core WASM boundary", () => {
     expect(instance.tick(2_100).commands[0]).toMatchObject({
       type: "MOTION_EXTEND",
       positionMm: 50,
-      deadlineMs: 7_100,
+      deadlineMs: 12_100,
     });
     instance.reportPosition(50, 4_000);
     expect(instance.tick(33_999).commands).toHaveLength(0);
     expect(instance.tick(34_000).commands[0]).toMatchObject({
       type: "MOTION_RETRACT",
       positionMm: 0,
-      deadlineMs: 39_000,
+      deadlineMs: 44_000,
     });
     expect(instance.reportPosition(0, 35_000).sequenceState).toBe("IDLE");
   });

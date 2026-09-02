@@ -1,39 +1,12 @@
-import type {
-  AtBatState,
-  GameHalf,
-  GameLinescore,
-  GamePhase,
-  GameSnapshot,
-  NormalizedGameInput,
-  NormalizedPlayEvidence,
-  NormalizedUpdateMode,
-  ReviewState,
-  TeamScore,
-} from "@apple/protocol";
+import type { CanonicalGameFrame, GameSnapshot, NormalizedGameInput } from "@apple/protocol";
 import { MlbFeedError } from "./errors";
 
-/** Values parsed once from an MLB feed update before they split by purpose. */
-export interface CanonicalGameFrame {
-  gamePk: number;
-  gameNumber: 1 | 2;
-  cursor: string;
-  updateMode: NormalizedUpdateMode;
-  phase: GamePhase;
-  label: string;
-  away: TeamScore & { id: number };
-  home: TeamScore & { id: number };
-  inning: number;
-  half: GameHalf;
-  displayOuts: 0 | 1 | 2 | 3;
-  evidenceOuts: 0 | 1 | 2 | 3;
-  review: ReviewState;
-  lastEvent: string;
-  scheduledStart?: string;
-  venue?: string;
-  atBat?: AtBatState;
-  linescore: GameLinescore;
-  changedPlays: readonly NormalizedPlayEvidence[];
+export interface CanonicalGameProjection {
+  gameSnapshot: GameSnapshot;
+  coreInput: NormalizedGameInput;
 }
+
+export type CanonicalGameProjector = (frame: CanonicalGameFrame) => CanonicalGameProjection;
 
 /** Full game state for scoreboards and other read-only views. */
 export function projectGameSnapshot(frame: CanonicalGameFrame): GameSnapshot {
@@ -75,6 +48,14 @@ export function projectCoreInput(frame: CanonicalGameFrame): NormalizedGameInput
     homeRuns: frame.home.runs,
     plays: frame.changedPlays,
   };
+}
+
+/** Established TypeScript projector retained as the production default and migration oracle. */
+export function projectCanonicalGameFrame(frame: CanonicalGameFrame): CanonicalGameProjection {
+  const gameSnapshot = projectGameSnapshot(frame);
+  const coreInput = projectCoreInput(frame);
+  assertFeedProjectionAgreement(gameSnapshot, coreInput);
+  return { gameSnapshot, coreInput };
 }
 
 /** Catch accidental disagreement in fields shared by both projections. */

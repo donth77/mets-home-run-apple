@@ -28,11 +28,12 @@ After initial setup, the physical Apple will follow games and control its displa
 
 Working today:
 
-- the shared C++ core, native tests, and WebAssembly build;
+- the portable C++ game-state and decision layers, native tests, and WebAssembly builds;
+- Apple Lab recording/replay and Virtual Apple live games through both C++ layers;
 - the same C++ home-run and win display animations on the Nano and in Apple Lab;
 - live schedule/feed reading and completed-game replay;
 - review, delay, doubleheader, win, duplicate-event, and between-game handling;
-- Apple Lab's simulator, diagnostics, CSV exports, and 3D preview;
+- Apple Lab's simulator, diagnostics, CSV exports, 3D preview, and USB-only Nano logic test;
 - Virtual Apple's live presentation, Focus and Mini views, local demo mode, audio, rain, and accessibility features.
 
 Still to build:
@@ -46,7 +47,12 @@ Still to build:
 - a complete donor-free validation build using the printable Apple and base;
 - unloaded and guarded actuator tests before the Apple is attached.
 
-The current browser apps cannot command physical hardware. When Apple Manager and Apple Lab gain device connections, the Nano will still validate every request and remain in charge of motion safety.
+The browser apps cannot command raw motion. Apple Lab identifies the dedicated
+commissioning firmware profiles, reads their output state, and after physical-presence
+confirmations can request one bounded action per arm: the no-power signal self-test,
+a single short actuator jog, or one engine-driven celebration sequence. Each profile
+arms one action at a time, stops itself on a deadline, and disarms afterward; the
+Nano remains in charge of motion safety.
 
 Physical assembly and printable-part instructions will be published after the
 real build has been measured and validated.
@@ -72,7 +78,7 @@ pnpm dev:virtual
 
 ## Architecture
 
-Portable C++ code is split by responsibility. The planned game-state layer will become the source of truth for score, inning, runners, count, players, line score, and game status. The existing decision core receives only the evidence needed to accept a new home run or win and return safe sequence commands. Virtual Apple will stay on its current working snapshot path until archived-feed parity tests for the new layer pass. Both layers will ultimately run in native tests, browser WebAssembly, and the Nano ESP32. Apple Manager will configure and inspect the Nano over the local network; it will not run the game loop or make celebration decisions.
+Portable C++ code is split by responsibility. The game-state layer keeps the score, inning, runners, count, players, line score, and game status, then produces a complete scoreboard snapshot and a smaller decision envelope. The decision core receives only the evidence needed to accept a new home run or win and return safe sequence commands. Native, WebAssembly, historical-replay, and browser tests cover the boundary. Apple Lab's direct MLB sources and Virtual Apple's live path both use the C++ projector and decision core. Apple Manager will configure and inspect the Nano over the local network; it will not run the game loop or make celebration decisions.
 
 [Architecture guide](docs/ARCHITECTURE.md).
 
@@ -94,10 +100,10 @@ The full test command also needs CMake, a C++17 compiler, and Emscripten. Genera
 | `apps/apple-lab/` | Local simulator, historical replay, diagnostics, and hardware tests |
 | `apps/virtual-apple/` | Public game-day website |
 | `firmware/` | Shared C++ core, native tests, autonomous ESP32 adapters, and the future device-hosted Manager |
-| `hardware/` | Physical parts list and per-unit build record |
 | `packages/apple-3d/` | Apple model, scene, textures, and actuator animation |
 | `packages/device-display-wasm/` | Browser wrapper around the C++ physical-display animations |
 | `packages/game-core-wasm/` | Browser wrapper around the C++ core |
+| `packages/game-state-wasm/` | Browser wrapper around the C++ game-state projector |
 | `packages/mlb-live-feed/` | Schedule, live-feed, and archive handling |
 | `packages/protocol/` | Game, core, display, event, and motion contracts |
 | `packages/scoreboard-ui/` | Reusable accessible scoreboard |

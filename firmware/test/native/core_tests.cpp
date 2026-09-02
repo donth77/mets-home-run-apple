@@ -163,7 +163,7 @@ void test_home_run_golden_trace_and_timing() {
   const auto extend = engine.tick(2'100);
   EXPECT_TRUE(has_command(extend, CommandType::MotionExtend));
   EXPECT_EQ(extend.commands[0].position_mm, 50);
-  EXPECT_EQ(extend.commands[0].deadline_ms, 7'100U);
+  EXPECT_EQ(extend.commands[0].deadline_ms, 12'100U);
   EXPECT_EQ(engine.sequence_state(), SequenceState::Extending);
 
   engine.report_position(50, 4'000);
@@ -171,7 +171,7 @@ void test_home_run_golden_trace_and_timing() {
   EXPECT_TRUE(engine.tick(33'999).commands.empty());
   const auto retract = engine.tick(34'000);
   EXPECT_TRUE(has_command(retract, CommandType::MotionRetract));
-  EXPECT_EQ(retract.commands[0].deadline_ms, 39'000U);
+  EXPECT_EQ(retract.commands[0].deadline_ms, 44'000U);
   const auto home = engine.report_position(0, 35'000);
   EXPECT_TRUE(has_trace(home, "POSITION_HOME"));
   EXPECT_EQ(engine.sequence_state(), SequenceState::Idle);
@@ -332,7 +332,7 @@ void test_storage_and_motion_fail_closed() {
   bootstrap(motion_engine);
   motion_engine.ingest(update, 100);
   motion_engine.tick(2'100);
-  const auto timeout = motion_engine.tick(7'100);
+  const auto timeout = motion_engine.tick(12'100);
   EXPECT_TRUE(has_command(timeout, CommandType::MotionDisable));
   EXPECT_TRUE(has_trace(timeout, "FAULT_LATCHED"));
   EXPECT_TRUE(motion_engine.fault_latched());
