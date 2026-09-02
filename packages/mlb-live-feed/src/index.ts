@@ -6,6 +6,7 @@ export {
   MLB_STATS_API_ORIGIN,
 } from "./constants";
 export { MlbFeedError } from "./errors";
+export type { CanonicalGameProjection, CanonicalGameProjector } from "./feedProjections";
 export { fetchMlbHistoricalGameIndex } from "./historical";
 export { applyJsonPatch } from "./jsonPatch";
 export {
@@ -25,6 +26,7 @@ export type {
 export { dateFromMlbTimecode, formatMlbTimecode } from "./timecode";
 export type {
   FeedPayloadKind,
+  MlbCelebrationReplayCandidate,
   MlbHistoricalBookmark,
   MlbHistoricalBookmarkKind,
   MlbHistoricalGameIndex,

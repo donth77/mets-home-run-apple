@@ -1,5 +1,6 @@
 import type {
   AtBatState,
+  CanonicalGameFrame,
   GameHalf,
   GamePhase,
   GameSnapshot,
@@ -8,12 +9,7 @@ import type {
 } from "@apple/protocol";
 import { MAXIMUM_POLL_WAIT_MS, MINIMUM_POLL_WAIT_MS, MLB_TIMECODE_PATTERN } from "./constants";
 import { MlbFeedError } from "./errors";
-import {
-  assertFeedProjectionAgreement,
-  type CanonicalGameFrame,
-  projectCoreInput,
-  projectGameSnapshot,
-} from "./feedProjections";
+import { type CanonicalGameProjector, projectCanonicalGameFrame } from "./feedProjections";
 import {
   arrayAt,
   booleanAt,
@@ -25,7 +21,7 @@ import {
   optionalNumberAt,
   stringAt,
 } from "./jsonValue";
-import type { FeedPayloadKind, NormalizedFeedCapture } from "./types";
+import type { FeedPayloadKind, MlbCelebrationReplayCandidate, NormalizedFeedCapture } from "./types";
 
 type CoreHalf = GameHalf;
 type CorePlayEvidence = NormalizedPlayEvidence;
@@ -131,6 +127,12 @@ function normalizePlay(
     complete: booleanAt(about, "isComplete"),
     review: reviewState(play),
   };
+}
+
+function playCompletedAt(play: unknown): string | undefined {
+  const value = stringAt(objectAt(play, "about"), "endTime");
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : undefined;
 }
 
 function playFingerprint(play: CorePlayEvidence) {
@@ -239,6 +241,7 @@ export function normalizeFeed(
   payloadKind: Exclude<FeedPayloadKind, "NO_CHANGE">,
   receivedAt: string,
   deliveryCursor?: string,
+  projectFrame: CanonicalGameProjector = projectCanonicalGameFrame,
 ): { capture: NormalizedFeedCapture; fingerprints: Map<string, string> } {
   if (!isObject(feed)) throw new MlbFeedError("Live feed root was not an object.", "INVALID_FEED_SHAPE");
   const gamePk = numberAt(feed, "gamePk");
@@ -263,10 +266,19 @@ export function normalizeFeed(
     );
     if (!alreadyIncluded) allRawPlays.push(currentPlay);
   }
-  const allPlays = allRawPlays.flatMap((play) => {
+  const normalizedPlays = allRawPlays.flatMap((play) => {
     const normalized = normalizePlay(play, gamePk, away.id, home.id);
-    return normalized ? [normalized] : [];
+    return normalized ? [{ evidence: normalized, occurredAt: playCompletedAt(play) }] : [];
   });
+  const allPlays = normalizedPlays.map(({ evidence }) => evidence);
+  const replayCandidates: MlbCelebrationReplayCandidate[] =
+    updateMode === "BOOTSTRAP"
+      ? normalizedPlays.flatMap(({ evidence, occurredAt }) =>
+          occurredAt && (evidence.kind === "HOME_RUN" || evidence.kind === "GRAND_SLAM")
+            ? [{ eventKey: evidence.eventKey, kind: evidence.kind, occurredAt }]
+            : [],
+        )
+      : [];
   const fingerprints = new Map(priorFingerprints);
   const changedPlays = allPlays.filter((play) => {
     const fingerprint = playFingerprint(play);
@@ -277,6 +289,10 @@ export function normalizeFeed(
 
   const currentReview = reviewState(currentPlay);
   const phase = phaseForFeed(feed, currentReview);
+  if (updateMode === "BOOTSTRAP" && phase === "FINAL") {
+    const occurredAt = [...allRawPlays].reverse().map(playCompletedAt).find(Boolean);
+    if (occurredAt) replayCandidates.push({ eventKey: `${gamePk}:final`, kind: "FINAL", occurredAt });
+  }
   const currentAbout = objectAt(currentPlay, "about");
   const inning = clampInteger(numberAt(linescore, "currentInning", numberAt(currentAbout, "inning", 0)), 0, 99);
   const inningState = stringAt(linescore, "inningState").toLowerCase();
@@ -393,9 +409,7 @@ export function normalizeFeed(
     },
     changedPlays,
   };
-  const gameSnapshot = projectGameSnapshot(canonical);
-  const coreInput = projectCoreInput(canonical);
-  assertFeedProjectionAgreement(gameSnapshot, coreInput);
+  const { gameSnapshot, coreInput } = projectFrame(canonical);
 
   return {
     capture: {
@@ -407,6 +421,7 @@ export function normalizeFeed(
       receivedAt,
       rawPlayCount: allPlays.length,
       changedPlayCount: changedPlays.length,
+      replayCandidates,
     },
     fingerprints,
   };

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  ACTUATOR_RATED_SPEED_MM_PER_SECOND,
+  ACTUATOR_SPEED_MM_PER_SECOND,
   actuatorMotionState,
   advanceActuatorPosition,
   clampActuatorPosition,
@@ -17,7 +17,7 @@ export function useActuatorSimulation(targetPositionMm: number, options: Actuato
   const targetRef = useRef(target);
   const positionRef = useRef(target);
   const [positionMm, setPositionMm] = useState(target);
-  const speedMmPerSecond = options.speedMmPerSecond ?? ACTUATOR_RATED_SPEED_MM_PER_SECOND;
+  const speedMmPerSecond = options.speedMmPerSecond ?? ACTUATOR_SPEED_MM_PER_SECOND;
   const animationWindow = options.animationWindow ?? window;
 
   useEffect(() => {

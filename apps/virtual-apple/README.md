@@ -14,11 +14,11 @@ Open [http://localhost:4174](http://localhost:4174).
 
 ## Live game flow
 
-The site checks the Mets schedule when it loads. Between games, it can show the next three matchups. During a live game—including delays, challenges, and reviews—it follows MLB feed updates through `@apple/mlb-live-feed` and sends normalized evidence to the compiled C++ core.
+The site checks the Mets schedule when it loads. Between games, it can show the next three matchups. During a live game—including delays, challenges, and reviews—it follows MLB feed updates through `@apple/mlb-live-feed`. The feed adapter extracts a canonical update, the compiled C++ game-state layer produces the scoreboard snapshot and smaller decision envelope, and the separate compiled C++ decision core accepts or rejects celebrations.
 
 The deployed site reads MLB data through a small same-origin Cloudflare Pages Function. It only relays the schedule, season, and live-game routes the app uses; there is no database or continuously running server. Local Vite development exposes the same `/api/mlb` path through its development proxy. If that route is temporarily unavailable, the browser can fall back to MLB directly.
 
-The initial game history seeds the core without celebrating old plays. Only a newly accepted home run or win starts the apple animation. Virtual Apple has no route to a physical device.
+The initial game history normally seeds the core without celebrating old plays. For a fresh visit, Virtual Apple makes one presentation-only exception: a Mets home run or Mets win completed within the previous five minutes is re-submitted through the same decision core and, if accepted, plays its full sequence from the beginning. Older events stay historical, and an event is replayed at most once per page session. This path controls only the simulated browser Apple; Virtual Apple has no route to a physical device.
 
 ## Scoreboards and celebrations
 

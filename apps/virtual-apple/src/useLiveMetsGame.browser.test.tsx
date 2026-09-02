@@ -1,10 +1,13 @@
 /** @vitest-environment happy-dom */
 
-import type { GameSnapshot } from "@apple/protocol";
+import type { GameSnapshot, NormalizedGameInput } from "@apple/protocol";
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const testState = vi.hoisted(() => ({
+  clientArguments: [] as unknown[],
+  gameStateDispose: vi.fn(),
+  gameStateProject: vi.fn(),
   ingest: vi.fn(),
   poll: vi.fn(),
   reportPosition: vi.fn(),
@@ -12,10 +15,23 @@ const testState = vi.hoisted(() => ({
   tick: vi.fn(),
 }));
 
+vi.mock("@apple/game-state-wasm", () => ({
+  GameStateProjector: {
+    create: async () => ({
+      dispose: testState.gameStateDispose,
+      project: (...arguments_: unknown[]) => testState.gameStateProject(...arguments_),
+    }),
+  },
+}));
+
 vi.mock("@apple/mlb-live-feed", () => ({
   METS_TEAM_ID: 121,
   MLB_STATS_API_ORIGIN: "https://statsapi.mlb.com",
   MlbRecordingClient: class {
+    constructor(...arguments_: unknown[]) {
+      testState.clientArguments = arguments_;
+    }
+
     poll(...arguments_: unknown[]) {
       return testState.poll(...arguments_);
     }
@@ -102,6 +118,9 @@ async function flush() {
 
 beforeEach(() => {
   vi.useFakeTimers();
+  testState.clientArguments = [];
+  testState.gameStateDispose.mockReset();
+  testState.gameStateProject.mockReset();
   testState.ingest.mockReset().mockReturnValue({ celebration: undefined, targetPositionMm: 0 });
   testState.poll.mockReset();
   testState.reportPosition.mockReset().mockReturnValue({ celebration: undefined, targetPositionMm: 0 });
@@ -115,6 +134,25 @@ afterEach(() => {
 });
 
 describe("live mobile recovery", () => {
+  it("constructs the live feed with the C++ game-state projector", async () => {
+    testState.poll.mockResolvedValue({ capture: { coreInput, gameSnapshot: snapshot }, waitMs: 10_000 });
+    const { unmount } = renderHook(() => useLiveMetsGame());
+    await flush();
+
+    expect(testState.clientArguments).toHaveLength(3);
+    expect(testState.clientArguments[2]).toBeTypeOf("function");
+    const canonicalFrame = { gamePk: 823583 };
+    testState.gameStateProject.mockReturnValue({ coreInput, gameSnapshot: snapshot });
+    expect((testState.clientArguments[2] as (value: unknown) => unknown)(canonicalFrame)).toEqual({
+      coreInput,
+      gameSnapshot: snapshot,
+    });
+    expect(testState.gameStateProject).toHaveBeenCalledWith(canonicalFrame);
+
+    unmount();
+    expect(testState.gameStateDispose).toHaveBeenCalledOnce();
+  });
+
   it("keeps the last game state and recovers quickly after one failed poll", async () => {
     testState.poll
       .mockResolvedValueOnce({ capture: { coreInput, gameSnapshot: snapshot }, waitMs: 10_000 })
@@ -176,6 +214,136 @@ describe("live mobile recovery", () => {
 
     expect(testState.tick).toHaveBeenCalledOnce();
     expect(testState.poll).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("fresh-entry celebration replay", () => {
+  it("starts the full core sequence for a home run completed within the replay window", async () => {
+    vi.setSystemTime(new Date("2026-08-28T23:05:00.000Z"));
+    const eventKey = "823583:recent-home-run";
+    const recentInput = {
+      ...coreInput,
+      cursor: "20260828_230400",
+      homeRuns: 2,
+      plays: [
+        {
+          atBatIndex: 42,
+          batterName: "Juan Soto",
+          battingTeamId: 121,
+          complete: true,
+          eventKey,
+          kind: "HOME_RUN" as const,
+          review: "NONE" as const,
+        },
+      ],
+    };
+    const activePresentation = {
+      celebration: { eventKey, kind: "HOME_RUN" as const, subject: "Juan Soto" },
+      decision: { sequenceState: "LEAD_IN" as const },
+      targetPositionMm: 0,
+    };
+    testState.ingest.mockImplementation((input: NormalizedGameInput) =>
+      input.updateMode === "INCREMENTAL"
+        ? activePresentation
+        : { decision: { sequenceState: "IDLE" }, celebration: undefined, targetPositionMm: 0 },
+    );
+    testState.poll.mockResolvedValue({
+      capture: {
+        coreInput: recentInput,
+        gameSnapshot: { ...snapshot, home: { ...snapshot.home, runs: 2 } },
+        replayCandidates: [{ eventKey, kind: "HOME_RUN", occurredAt: "2026-08-28T23:04:00.000Z" }],
+      },
+      waitMs: 10_000,
+    });
+
+    const { result } = renderHook(() => useLiveMetsGame());
+    await flush();
+
+    expect(testState.ingest.mock.calls.map(([input]) => input.updateMode)).toEqual(["BOOTSTRAP", "INCREMENTAL"]);
+    expect(result.current.celebration).toEqual(activePresentation.celebration);
+  });
+
+  it("keeps an expired home run in bootstrap history without replaying it", async () => {
+    vi.setSystemTime(new Date("2026-08-28T23:10:01.000Z"));
+    const eventKey = "823583:expired-home-run";
+    const expiredInput = {
+      ...coreInput,
+      cursor: "20260828_230400",
+      plays: [
+        {
+          atBatIndex: 42,
+          batterName: "Juan Soto",
+          battingTeamId: 121,
+          complete: true,
+          eventKey,
+          kind: "HOME_RUN" as const,
+          review: "NONE" as const,
+        },
+      ],
+    };
+    testState.poll.mockResolvedValue({
+      capture: {
+        coreInput: expiredInput,
+        gameSnapshot: snapshot,
+        replayCandidates: [{ eventKey, kind: "HOME_RUN", occurredAt: "2026-08-28T23:04:00.000Z" }],
+      },
+      waitMs: 10_000,
+    });
+
+    const { result } = renderHook(() => useLiveMetsGame());
+    await flush();
+
+    expect(testState.ingest).toHaveBeenCalledOnce();
+    expect(testState.ingest.mock.calls[0]?.[0]).toBe(expiredInput);
+    expect(result.current.celebration).toBeUndefined();
+  });
+
+  it("opens a recently completed game and replays a core-confirmed Mets win", async () => {
+    vi.setSystemTime(new Date("2026-08-29T02:01:00.000Z"));
+    const completedGame = { ...activeGame, abstractState: "Final", detailedState: "Final" };
+    const finalSnapshot: GameSnapshot = {
+      ...snapshot,
+      away: { ...snapshot.away, runs: 3 },
+      home: { ...snapshot.home, runs: 4 },
+      half: "END",
+      label: "FINAL",
+      phase: "FINAL",
+    };
+    const finalInput = {
+      ...coreInput,
+      awayRuns: 3,
+      homeRuns: 4,
+      cursor: "20260829_020000",
+      half: "END" as const,
+      phase: "FINAL" as const,
+    };
+    const activePresentation = {
+      celebration: { eventKey: `${snapshot.gamePk}:final`, kind: "METS_WIN" as const, subject: "Mets Win!" },
+      decision: { sequenceState: "LEAD_IN" as const },
+      targetPositionMm: 0,
+    };
+    testState.schedule.mockResolvedValue([completedGame]);
+    testState.ingest.mockImplementation((input: NormalizedGameInput) =>
+      input.updateMode === "INCREMENTAL"
+        ? activePresentation
+        : { decision: { sequenceState: "IDLE" }, celebration: undefined, targetPositionMm: 0 },
+    );
+    testState.poll.mockResolvedValue({
+      capture: {
+        coreInput: finalInput,
+        gameSnapshot: finalSnapshot,
+        replayCandidates: [
+          { eventKey: `${snapshot.gamePk}:final`, kind: "FINAL", occurredAt: "2026-08-29T02:00:00.000Z" },
+        ],
+      },
+      waitMs: 10_000,
+    });
+
+    const { result } = renderHook(() => useLiveMetsGame());
+    await flush();
+
+    expect(result.current.status).toBe("FINAL");
+    expect(result.current.celebration).toEqual(activePresentation.celebration);
   });
 });
 

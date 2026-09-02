@@ -10,7 +10,9 @@ constexpr std::int32_t kSchemaVersion = 1;
 constexpr std::int32_t kMetsTeamId = 121;
 constexpr std::int32_t kMaxStrokeMm = 50;
 constexpr std::uint64_t kCelebrationLeadInMs = 2'000;
-constexpr std::uint64_t kMotionDeadlineMs = 5'000;
+// Full-stroke drive time for the measured actuator is about 5.1 s from an
+// 11 V pack; the timed motion model adds an overrun for a sagging supply.
+constexpr std::uint64_t kMotionDeadlineMs = 10'000;
 constexpr std::uint64_t kRaisedDwellMs = 30'000;
 
 enum class UpdateMode : std::uint8_t {

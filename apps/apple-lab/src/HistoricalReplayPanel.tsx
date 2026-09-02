@@ -32,8 +32,8 @@ export function HistoricalReplayPanel() {
       <div className="live-notice live-notice--replay" role="note">
         <strong>Recording-only replay</strong>
         <span>
-          Archived MLB data is evaluated by the real C++/WASM core through recording-only outputs. This internal Apple
-          Lab source cannot reach physical outputs.
+          Archived MLB data runs through the C++ game-state projector and decision core with recording-only outputs.
+          This internal Apple Lab source cannot reach physical outputs.
         </span>
       </div>
 
@@ -160,7 +160,7 @@ export function HistoricalReplayPanel() {
                   <span>Timecoded MLB snapshot</span>
                   <h2>{replay.capture ? "Normalized game state" : "Stage an archive update"}</h2>
                 </div>
-                <span className="read-only-badge">WASM · recording</span>
+                <span className="read-only-badge">C++ state · recording</span>
               </header>
               {replay.capture && presentedSnapshot ? (
                 <>
@@ -197,6 +197,10 @@ export function HistoricalReplayPanel() {
                 </div>
               </header>
               <dl className="detail-list">
+                <div>
+                  <dt>State projection</dt>
+                  <dd className="good-value">C++ / WASM</dd>
+                </div>
                 <div>
                   <dt>Game</dt>
                   <dd>

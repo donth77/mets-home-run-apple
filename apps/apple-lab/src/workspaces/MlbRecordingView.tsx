@@ -73,7 +73,7 @@ export function MlbRecordingView({ recording }: { recording: MlbRecordingFeedSta
               <span>Normalized display state</span>
               <h2>{snapshot ? "Latest accepted capture" : "Waiting for a capture"}</h2>
             </div>
-            <span className="read-only-badge">WASM · recording</span>
+            <span className="read-only-badge">C++ state · recording</span>
           </header>
           {snapshot ? (
             <>
@@ -107,6 +107,10 @@ export function MlbRecordingView({ recording }: { recording: MlbRecordingFeedSta
             </div>
           </header>
           <dl className="detail-list">
+            <div>
+              <dt>State projection</dt>
+              <dd className="good-value">C++ / WASM</dd>
+            </div>
             <div>
               <dt>Physical output</dt>
               <dd className="good-value">DISCONNECTED</dd>
@@ -214,6 +218,10 @@ export function MlbRecordingView({ recording }: { recording: MlbRecordingFeedSta
             <li>
               <i />
               Direct browser transport is opt-in
+            </li>
+            <li>
+              <i />
+              Display snapshot and decision evidence share one C++ frame
             </li>
             <li>
               <i />

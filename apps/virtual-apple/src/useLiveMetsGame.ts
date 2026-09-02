@@ -1,3 +1,4 @@
+import type { GameStateProjector as GameStateProjectorInstance } from "@apple/game-state-wasm";
 import { easternDate, fetchMetsSchedule, MlbRecordingClient, type MlbScheduleGame } from "@apple/mlb-live-feed";
 import type { GameSnapshot } from "@apple/protocol";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -10,6 +11,7 @@ import {
 } from "./liveGameCoreController";
 import { MINI_APPLE_HEARTBEAT_EVENT } from "./miniAppleHeartbeat";
 import { mlbApiFetch } from "./mlbApiFetch";
+import { buildRecentCelebrationReplay } from "./recentCelebrationReplay";
 
 export type { LiveCelebration } from "./liveGameCoreController";
 
@@ -17,6 +19,7 @@ const SCHEDULE_RECHECK_NEAR_GAME_MS = 60_000;
 const SCHEDULE_RECHECK_IDLE_MS = 15 * 60_000;
 const DISCOVERY_RETRY_MS = 10_000;
 const LIVE_FEED_RETRY_DELAYS_MS = [2_000, 5_000, 10_000, 30_000] as const;
+export const RECENT_FINAL_DISCOVERY_MAX_AGE_MS = 12 * 60 * 60_000;
 export const FINAL_SCOREBOARD_HOLD_MS = 60_000;
 export const TERMINAL_SCOREBOARD_HOLD_MS = 60_000;
 
@@ -44,6 +47,30 @@ export function selectTrackableMetsGame(games: readonly MlbScheduleGame[]) {
       )
     );
   });
+}
+
+function isFinalScheduleGame(game: MlbScheduleGame) {
+  return game.abstractState.toLowerCase() === "final" || /^(?:final|game over)\b/i.test(game.detailedState.trim());
+}
+
+export function selectRecentlyFinalMetsGame(
+  games: readonly MlbScheduleGame[],
+  nowMs = Date.now(),
+  inspectedGamePks: ReadonlySet<number> = new Set(),
+) {
+  return games
+    .filter((game) => {
+      const startedAtMs = Date.parse(game.gameDate);
+      const ageMs = nowMs - startedAtMs;
+      return (
+        isFinalScheduleGame(game) &&
+        !inspectedGamePks.has(game.gamePk) &&
+        Number.isFinite(startedAtMs) &&
+        ageMs >= 0 &&
+        ageMs <= RECENT_FINAL_DISCOVERY_MAX_AGE_MS
+      );
+    })
+    .sort((left, right) => Date.parse(right.gameDate) - Date.parse(left.gameDate))[0];
 }
 
 export function liveFeedContinuation(phase: GameSnapshot["phase"], waitMs: number, label = "") {
@@ -87,11 +114,14 @@ export function useLiveMetsGame(enabled = true): LiveMetsGameState {
   const [checkedAt, setCheckedAt] = useState<string>();
   const [error, setError] = useState<string>();
   const coreRef = useRef<LiveGameCoreController | undefined>(undefined);
+  const gameStateProjectorRef = useRef<GameStateProjectorInstance | undefined>(undefined);
   const celebrationLatchRef = useRef(new LiveCelebrationLatch());
   const afterCorePresentationRef = useRef<((presentation: LiveCorePresentation) => void) | undefined>(undefined);
+  const presentedEventKeysRef = useRef(new Set<string>());
 
   const acceptCorePresentation = useCallback((presentation: LiveCorePresentation, fallbackSnapshot?: GameSnapshot) => {
     const latched = celebrationLatchRef.current.accept(presentation, fallbackSnapshot);
+    if (latched.celebration) presentedEventKeysRef.current.add(latched.celebration.eventKey);
     setCelebration(latched.celebration);
     setTargetPositionMm(latched.targetPositionMm);
     if (latched.snapshot) setSnapshot(latched.snapshot);
@@ -117,6 +147,7 @@ export function useLiveMetsGame(enabled = true): LiveMetsGameState {
     let resumeTracking: (() => void) | undefined;
     let serviceTrackingClock: (() => void) | undefined;
     let scheduledDiscoveryRecovery = false;
+    const inspectedFinalGamePks = new Set<number>();
 
     const stopTracking = () => {
       runToken += 1;
@@ -130,6 +161,8 @@ export function useLiveMetsGame(enabled = true): LiveMetsGameState {
       serviceTrackingClock = undefined;
       coreRef.current?.dispose();
       coreRef.current = undefined;
+      gameStateProjectorRef.current?.dispose();
+      gameStateProjectorRef.current = undefined;
       afterCorePresentationRef.current = undefined;
       celebrationLatchRef.current.reset();
       setTargetPositionMm(0);
@@ -150,17 +183,30 @@ export function useLiveMetsGame(enabled = true): LiveMetsGameState {
     const startTracking = async (selectedGame: MlbScheduleGame, recoveringFromError = false) => {
       stopTracking();
       const token = runToken;
+      const inspectingCompletedGame = isFinalScheduleGame(selectedGame);
       setGame(selectedGame);
       setStatus(recoveringFromError ? "ERROR" : "CONNECTING");
       if (!recoveringFromError) setError(undefined);
-      const client = new MlbRecordingClient(mlbApiFetch);
+      let gameStateProjector: GameStateProjectorInstance | undefined;
+      let core: LiveGameCoreController | undefined;
       try {
-        const core = await LiveGameCoreController.create();
+        const { GameStateProjector } = await import("@apple/game-state-wasm");
+        const activeGameStateProjector = await GameStateProjector.create();
+        gameStateProjector = activeGameStateProjector;
+        const activeCore = await LiveGameCoreController.create();
+        core = activeCore;
         if (disposed || token !== runToken) {
-          core.dispose();
+          activeCore.dispose();
+          activeGameStateProjector.dispose();
           return;
         }
-        coreRef.current = core;
+        coreRef.current = activeCore;
+        gameStateProjectorRef.current = activeGameStateProjector;
+        const client = new MlbRecordingClient(
+          mlbApiFetch,
+          () => new Date(),
+          (frame) => activeGameStateProjector.project(frame),
+        );
 
         const stopCoreTicking = () => {
           if (tickTimer !== undefined) window.clearInterval(tickTimer);
@@ -239,11 +285,28 @@ export function useLiveMetsGame(enabled = true): LiveMetsGameState {
                 result.waitMs,
                 result.capture.gameSnapshot.label,
               );
-              if (continuation.kind === "DISCOVER") pendingDiscoveryDelayMs = continuation.delayMs;
-              const corePresentation = core.ingest(result.capture.coreInput, performance.now());
+              const replayPlan = buildRecentCelebrationReplay(
+                result.capture,
+                Date.now(),
+                presentedEventKeysRef.current,
+              );
+              let corePresentation: LiveCorePresentation;
+              if (replayPlan) {
+                for (const eventKey of replayPlan.eventKeys) presentedEventKeysRef.current.add(eventKey);
+                const bootstrapPresentation = activeCore.ingest(replayPlan.bootstrapInput, performance.now());
+                acceptCorePresentation(bootstrapPresentation, result.capture.gameSnapshot);
+                corePresentation = activeCore.ingest(replayPlan.replayInput, performance.now());
+              } else {
+                corePresentation = activeCore.ingest(result.capture.coreInput, performance.now());
+              }
               acceptCorePresentation(corePresentation, result.capture.gameSnapshot);
               syncCoreTicking(corePresentation);
               if (continuation.kind === "DISCOVER") {
+                if (result.capture.gameSnapshot.phase === "FINAL") inspectedFinalGamePks.add(selectedGame.gamePk);
+                const replayStarted =
+                  corePresentation.celebration !== undefined ||
+                  coreSequenceNeedsTicking(corePresentation.decision?.sequenceState);
+                pendingDiscoveryDelayMs = inspectingCompletedGame && !replayStarted ? 0 : continuation.delayMs;
                 setStatus(result.capture.gameSnapshot.phase === "FINAL" ? "FINAL" : "POLLING");
                 resumeTracking = undefined;
                 queuePendingDiscoveryIfSettled(corePresentation);
@@ -285,6 +348,14 @@ export function useLiveMetsGame(enabled = true): LiveMetsGameState {
         };
         await poll();
       } catch (reason) {
+        if (core) {
+          if (coreRef.current === core) coreRef.current = undefined;
+          core.dispose();
+        }
+        if (gameStateProjector) {
+          if (gameStateProjectorRef.current === gameStateProjector) gameStateProjectorRef.current = undefined;
+          gameStateProjector.dispose();
+        }
         if (disposed || token !== runToken) return;
         setError(reason instanceof Error ? reason.message : "The live game service could not start.");
         setStatus("ERROR");
@@ -301,9 +372,10 @@ export function useLiveMetsGame(enabled = true): LiveMetsGameState {
         const games = await fetchMetsSchedule(easternDate(), mlbApiFetch, requestController.signal);
         if (disposed) return;
         setCheckedAt(new Date().toISOString());
-        const activeGame = selectTrackableMetsGame(games);
-        if (activeGame) {
-          await startTracking(activeGame, recoveringFromError);
+        const selectedGame =
+          selectTrackableMetsGame(games) ?? selectRecentlyFinalMetsGame(games, Date.now(), inspectedFinalGamePks);
+        if (selectedGame) {
+          await startTracking(selectedGame, recoveringFromError);
           return;
         }
         setGame(undefined);

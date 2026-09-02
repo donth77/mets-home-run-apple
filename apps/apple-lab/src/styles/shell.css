@@ -158,6 +158,12 @@ a:focus-visible,
   width: 7px;
 }
 
+.connection-dot--offline,
+.status-light:not(.status-light--good, .status-light--safe) {
+  background: #687c8b;
+  box-shadow: none;
+}
+
 .workspace-nav {
   display: grid;
   gap: 4px;

@@ -31,6 +31,10 @@ class Engine {
   EngineOutput ingest(const InputEnvelope& input, std::uint64_t now_ms);
   EngineOutput tick(std::uint64_t now_ms);
   EngineOutput report_position(std::int32_t position_mm, std::uint64_t now_ms);
+  // Lets the motion adapter latch a fault it detected itself, such as a
+  // stall seen by a current sensor. Emits MotionDisable like any fault.
+  EngineOutput report_motion_fault(std::string_view reason,
+                                   std::uint64_t now_ms);
 
   SequenceState sequence_state() const noexcept;
   bool fault_latched() const noexcept;

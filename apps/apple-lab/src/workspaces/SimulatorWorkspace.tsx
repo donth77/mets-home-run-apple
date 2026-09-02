@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   ACTUATOR_FULL_STROKE_SECONDS,
-  ACTUATOR_RATED_SPEED_MM_PER_SECOND,
+  ACTUATOR_SPEED_MM_PER_SECOND,
   AppleStage,
   HOME_RUN_DISPLAY_LEAD_IN_MS,
   HOME_RUN_RAISED_DWELL_MS,
@@ -24,7 +24,7 @@ export function SimulatorWorkspace() {
   const commandedPositionMm = manualPosition ?? playback.activeFrame.positionMm;
   const actuator = useActuatorSimulation(commandedPositionMm, {
     reducedMotion,
-    speedMmPerSecond: ACTUATOR_RATED_SPEED_MM_PER_SECOND * (manualPosition === null ? playback.speed : 1),
+    speedMmPerSecond: ACTUATOR_SPEED_MM_PER_SECOND * (manualPosition === null ? playback.speed : 1),
   });
   const visibleFrames = playback.scenario.frames.filter((frame) => frame.atMs <= playback.elapsedMs);
   const celebrationFrame = [...visibleFrames]
@@ -160,7 +160,7 @@ export function SimulatorWorkspace() {
             <div className="stage-badges" aria-hidden="true">
               <span>Drag to orbit · scroll to zoom</span>
               <span>
-                {ACTUATOR_RATED_SPEED_MM_PER_SECOND.toFixed(2)} mm/s · {ACTUATOR_FULL_STROKE_SECONDS.toFixed(2)} s
+                {ACTUATOR_SPEED_MM_PER_SECOND.toFixed(2)} mm/s measured · {ACTUATOR_FULL_STROKE_SECONDS.toFixed(2)} s
                 stroke
               </span>
               <span>{HOME_RUN_RAISED_DWELL_MS / 1000} s raised</span>

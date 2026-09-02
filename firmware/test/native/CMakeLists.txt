@@ -33,3 +33,27 @@ elseif(MSVC)
 endif()
 
 add_test(NAME apple_mets_win_loop_tests COMMAND apple_mets_win_loop_tests)
+
+add_executable(apple_game_state_tests game_state_tests.cpp)
+target_link_libraries(apple_game_state_tests PRIVATE apple_game_state)
+target_compile_features(apple_game_state_tests PRIVATE cxx_std_17)
+
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+  target_compile_options(apple_game_state_tests PRIVATE -Wall -Wextra -Wpedantic -Werror)
+elseif(MSVC)
+  target_compile_options(apple_game_state_tests PRIVATE /W4 /WX)
+endif()
+
+add_test(NAME apple_game_state_tests COMMAND apple_game_state_tests)
+
+add_executable(apple_motion_tests motion_tests.cpp)
+target_link_libraries(apple_motion_tests PRIVATE apple_motion)
+target_compile_features(apple_motion_tests PRIVATE cxx_std_17)
+
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+  target_compile_options(apple_motion_tests PRIVATE -Wall -Wextra -Wpedantic -Werror)
+elseif(MSVC)
+  target_compile_options(apple_motion_tests PRIVATE /W4 /WX)
+endif()
+
+add_test(NAME apple_motion_tests COMMAND apple_motion_tests)

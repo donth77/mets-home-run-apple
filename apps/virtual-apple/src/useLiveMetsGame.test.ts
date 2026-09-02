@@ -3,7 +3,9 @@ import {
   FINAL_SCOREBOARD_HOLD_MS,
   liveFeedContinuation,
   liveFeedRetryDelay,
+  RECENT_FINAL_DISCOVERY_MAX_AGE_MS,
   remainingLivePollDelay,
+  selectRecentlyFinalMetsGame,
   selectTrackableMetsGame,
   TERMINAL_SCOREBOARD_HOLD_MS,
 } from "./useLiveMetsGame";
@@ -33,6 +35,17 @@ describe("live Mets game selection", () => {
 
   it("returns no game between games", () => {
     expect(selectTrackableMetsGame([game(1, "Final", "Final"), game(2, "Preview", "Scheduled")])).toBeUndefined();
+  });
+
+  it("selects a recently completed game for a one-time Virtual Apple replay check", () => {
+    const completed = game(1, "Final", "Final");
+    const startedAtMs = Date.parse(completed.gameDate);
+
+    expect(selectRecentlyFinalMetsGame([completed], startedAtMs + 4 * 60 * 60_000)).toBe(completed);
+    expect(
+      selectRecentlyFinalMetsGame([completed], startedAtMs + RECENT_FINAL_DISCOVERY_MAX_AGE_MS + 1),
+    ).toBeUndefined();
+    expect(selectRecentlyFinalMetsGame([completed], startedAtMs + 4 * 60 * 60_000, new Set([1]))).toBeUndefined();
   });
 });
 
