@@ -3,7 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "exports": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./cloudflare": "./src/cloudflare.ts"
+  },
   "scripts": {
     "build": "node scripts/build-wasm.mjs",
     "test": "vitest run --config ../../vitest.config.ts src/index.test.ts",

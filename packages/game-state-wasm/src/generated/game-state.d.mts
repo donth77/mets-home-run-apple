@@ -19,4 +19,11 @@ interface GameStateEmscriptenModule {
   _apple_game_status_classify(abstractState: number, detailedState: number, statusCode: number, reason: number, latestAdvisory: number, reviewPending: number): number;
 }
 
-export default function createGameStateModule(): Promise<GameStateEmscriptenModule>;
+interface GameStateModuleOptions {
+  instantiateWasm?(
+    imports: WebAssembly.Imports,
+    successCallback: (instance: WebAssembly.Instance, module: WebAssembly.Module) => void,
+  ): WebAssembly.Exports;
+}
+
+export default function createGameStateModule(options?: GameStateModuleOptions): Promise<GameStateEmscriptenModule>;

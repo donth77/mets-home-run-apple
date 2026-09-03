@@ -1,0 +1,11 @@
+name = "virtual-mets-apple"
+pages_build_output_dir = "./dist"
+compatibility_date = "2026-09-03"
+
+[[d1_databases]]
+binding = "NOTIFICATIONS_DB"
+database_name = "virtual-mets-apple-notifications"
+database_id = "fc5d8319-caae-4905-aee7-c1f75f5b39a5"
+
+[vars]
+VAPID_PUBLIC_KEY = "BFjuz83euqgKBHfMoSoAu9um7nXKFlGKPgbh4xrGtZ80krXV4tJ0j8aIfE397l6OqHytKD7V22c5iPXROkcRXe8"

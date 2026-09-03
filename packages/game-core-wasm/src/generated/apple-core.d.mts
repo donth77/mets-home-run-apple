@@ -30,4 +30,11 @@ interface AppleCoreEmscriptenModule {
   _apple_core_trace_detail(handle: number, index: number): number;
 }
 
-export default function createAppleCoreModule(): Promise<AppleCoreEmscriptenModule>;
+interface AppleCoreModuleOptions {
+  instantiateWasm?(
+    imports: WebAssembly.Imports,
+    successCallback: (instance: WebAssembly.Instance, module: WebAssembly.Module) => void,
+  ): WebAssembly.Exports;
+}
+
+export default function createAppleCoreModule(options?: AppleCoreModuleOptions): Promise<AppleCoreEmscriptenModule>;

@@ -13,6 +13,7 @@ Run Apple.
   wins
 - Optional Mets Radio, celebration sounds, reduced motion, keyboard controls,
   and screen-reader updates
+- Optional home run and Mets win notifications from the installed app
 - Focus and Mini Apple views on supported desktop browsers
 
 ## Live data

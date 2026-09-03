@@ -23,6 +23,7 @@ Open <http://localhost:4174>.
 - Names delays, reviews, suspensions, postponements, and cancellations
 - Takes over the stadium board for home runs and Mets wins
 - Offers optional Mets Radio and celebration sound
+- Sends optional home run and Mets win alerts from the installed app
 - Supports mobile layouts, reduced motion, screen readers, and keyboard use
 
 Focus view removes the surrounding page on desktop. On browsers with Document
@@ -46,6 +47,13 @@ previous five minutes can replay once per page session. This gives late
 visitors the full sequence without turning old games into new events.
 
 Virtual Apple has no connection to physical hardware.
+
+## Notifications
+
+Notifications start off. After installing Virtual Apple, a user can enable home
+run and Mets win alerts independently. A scheduled Cloudflare Worker checks the
+game once a minute and uses the shared decision core before sending anything.
+Subscriptions and event deduplication live in D1; no account is required.
 
 ## Sound
 
@@ -73,16 +81,16 @@ Production builds do not expose this bar, even when the URL contains the flag.
 
 ## Deploying
 
-metsapple.com is a direct-upload Cloudflare Pages project (`virtual-mets-apple`),
-so pushing to GitHub alone changes nothing on the site. The "Public checks"
+metsapple.com is a direct-upload Cloudflare Pages project (`virtual-mets-apple`).
+Push delivery uses the `virtual-mets-apple-notifications` Worker and D1 database.
+Pushing to GitHub alone changes nothing on the site. The "Public checks"
 workflow publishes it: on every push to `main` that touches the site (this
 app, `packages/`, `public/`, or the workspace files) it runs the lint,
 typecheck, tests, and build, then uploads that same build with wrangler. Two
 repository settings make that possible:
 
 - `CLOUDFLARE_API_TOKEN`, an Actions secret holding a Cloudflare API token
-  with **Cloudflare Pages: Edit** on the account (My Profile, API Tokens,
-  Create Token, "Edit Cloudflare Workers" template or a custom token).
+  with **Pages, Workers, and D1: Edit** on the account.
 - `CLOUDFLARE_ACCOUNT_ID`, an Actions variable with the account id shown by
   `wrangler whoami`.
 
@@ -110,5 +118,7 @@ from the Cloudflare dashboard.
 | `src/LiveGamedayWidget.tsx` | Game status and scoreboard presentation |
 | `src/SharedAppleStage.tsx` | 3D Apple and field scene |
 | `src/useCelebrationSound.ts` | Home run and win audio |
+| `src/NotificationSettings.tsx` | Installed-app notification controls |
 | `src/demoMode.ts` | Local-only fixture controls |
 | `functions/api/mlb/` | Cloudflare MLB relay |
+| `edge/notifications/` | Scheduled watcher and Web Push delivery |

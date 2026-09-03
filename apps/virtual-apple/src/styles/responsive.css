@@ -256,6 +256,7 @@
   .upcoming-games,
   .gameday-card,
   .pwa-install,
+  .notification-settings,
   .virtual-controls {
     background: #061422;
     border-color: #b9cfe0;
@@ -274,6 +275,7 @@
   .upcoming-games,
   .gameday-card,
   .pwa-install,
+  .notification-settings,
   .virtual-controls,
   .upcoming-game__logo {
     border: 1px solid CanvasText;
