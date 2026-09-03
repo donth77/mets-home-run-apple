@@ -107,7 +107,7 @@ constexpr char kProfileName[] = "apple_live";
 #ifdef APPLE_UPDATE_CRASH_TEST
 constexpr char kFirmwareVersion[] = "0.2.2-crashtest";
 #else
-constexpr char kFirmwareVersion[] = "0.3.0-rc.2";
+constexpr char kFirmwareVersion[] = "0.3.0-rc.3";
 #endif
 constexpr char kHostname[] = "home-run-apple";
 constexpr char kEasternTz[] = "EST5EDT,M3.2.0,M11.1.0";
@@ -2057,6 +2057,7 @@ void finish_replay(const char* status) {
   Serial.printf("APPLE_LIVE:{\"type\":\"replay\",\"status\":\"%s\"}\n", status);
   make_engine(nvs_ledger);
   tracker.reset();
+  projector = apple::game_state::Projector{};  // drop the replay's scoreboard
   game.reset();
   reset_final_tracking();
   next_schedule_ms = now32();
