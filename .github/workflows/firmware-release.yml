@@ -29,7 +29,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install PlatformIO
-        run: pip install --quiet platformio==6.1.16
+        run: pip install --quiet platformio==6.1.19
       - name: Check the tag against kFirmwareVersion
         id: version
         run: |
