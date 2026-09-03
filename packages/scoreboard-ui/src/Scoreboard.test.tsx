@@ -71,6 +71,8 @@ describe("Scoreboard", () => {
     );
 
     expect(html).toContain("LIVE");
+    expect(html).toContain("END 2");
+    expect(html).not.toContain("MID 2");
     expect(html).not.toContain("FINAL");
   });
 

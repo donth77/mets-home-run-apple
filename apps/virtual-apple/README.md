@@ -1,69 +1,114 @@
 # Virtual Apple
 
-Virtual Apple is a public, browser-based game companion: live Mets information, a Citi-inspired center-field scene, and an Apple that rises for home runs and wins.
+Virtual Apple is the public, browser-based version of the project. It follows
+Mets games in a 3D Citi Field scene and raises the Apple for confirmed Mets
+home runs and wins.
 
-Live site: [metsapple.com](https://metsapple.com/).
+Live site: [metsapple.com](https://metsapple.com/)
 
-To run it locally:
+## Run it locally
+
+From the repository root:
 
 ```bash
 pnpm dev:virtual
 ```
 
-Open [http://localhost:4174](http://localhost:4174).
+Open <http://localhost:4174>.
 
-## Live game flow
+## What it does
 
-The site checks the Mets schedule when it loads. Between games, it can show the next three matchups. During a live game—including delays, challenges, and reviews—it follows MLB feed updates through `@apple/mlb-live-feed`. The feed adapter extracts a canonical update, the compiled C++ game-state layer produces the scoreboard snapshot and smaller decision envelope, and the separate compiled C++ decision core accepts or rejects celebrations.
+- Shows the score, inning, count, runners, and current Mets batter or pitcher
+- Lists upcoming games and handles doubleheaders
+- Names delays, reviews, suspensions, postponements, and cancellations
+- Takes over the stadium board for home runs and Mets wins
+- Offers optional Mets Radio and celebration sound
+- Supports mobile layouts, reduced motion, screen readers, and keyboard use
 
-The deployed site reads MLB data through a small same-origin Cloudflare Pages Function. It only relays the schedule, season, and live-game routes the app uses; there is no database or continuously running server. Local Vite development exposes the same `/api/mlb` path through its development proxy. If that route is temporarily unavailable, the browser can fall back to MLB directly.
+Focus view removes the surrounding page on desktop. On browsers with Document
+Picture-in-Picture support, Mini Apple moves the same live view into a small
+always-on-top window. Phones use the regular responsive page.
 
-The initial game history normally seeds the core without celebrating old plays. For a fresh visit, Virtual Apple makes one presentation-only exception: a Mets home run or Mets win completed within the previous five minutes is re-submitted through the same decision core and, if accepted, plays its full sequence from the beginning. Older events stay historical, and an event is replayed at most once per page session. This path controls only the simulated browser Apple; Virtual Apple has no route to a physical device.
+## How live games work
 
-## Scoreboards and celebrations
+The browser checks the Mets schedule, follows the active MLB feed, and sends
+normalized updates through the shared C++ game-state and decision code. That
+code decides whether an event is new. The React app decides how to present it.
 
-- The compact scorebug shows the Mets batter and line while New York bats, or the Mets pitcher and pitch count while New York fields.
-- The stadium line score keeps runs, hits, and errors fixed while its nine-inning window advances in extra innings.
-- Rains in the Citi Field scene during a Mets home-game rain delay. 
-- Home runs take over the stadium board with **HOME RUN** and the hitter's name.
-- Mets wins get a separate final-score takeover and confetti after the Apple is fully raised.
-- The Apple uses the same 30-second raised hold targeted by the physical firmware.
+Production requests go through a small same-origin Cloudflare relay. Local Vite
+development exposes the same `/api/mlb` route through a proxy. The relay has no
+database and contains no game rules. The browser can fall back to MLB directly
+if the relay is unavailable.
 
-Active games also include a compact link to MLB Gameday.
+On first load, earlier plays normally establish state without triggering a
+celebration. There is one exception: a Mets home run or win completed in the
+previous five minutes can replay once per page session. This gives late
+visitors the full sequence without turning old games into new events.
 
-## Desktop views
+Virtual Apple has no connection to physical hardware.
 
-**Focus view** keeps the field and compact scorebug in the current tab, hiding the rest of the UI.
+## Sound
 
-On browsers with Document Picture-in-Picture support, **Mini Apple** moves that same live presentation into a small always-on-top window. It includes the compact scorebug, a short game-status area, scene-sound control, and a Return button. 
-
-## Mobile layout
-
-Phones use the regular page instead of Focus or Mini Apple. The radio stacks beneath the header, the scene-sound button remains easy to reach, and the scorebug sits in the bottom-right of the field without overlapping the large stadium board. Game status, upcoming games, and local demo controls flow beneath the scene when they apply.
-
-An **Add to home screen** card sits at the end of the mobile page. Supported Android browsers open their native install prompt; other mobile browsers show the Share or browser-menu steps. The card is hidden when Virtual Apple is already running from the home screen.
-
-## Local demo controls
-
-The **Demo** bar is available only from a Vite development build on a loopback address with an explicit flag:
-
-- [http://localhost:4174/?demo=1](http://localhost:4174/?demo=1)
-- [http://localhost:4174/?debug=1](http://localhost:4174/?debug=1)
-
-A fixture temporarily replaces the live presentation. Choose **Live data** to return. Production builds and non-loopback hosts cannot expose the bar, even with the parameter.
-
-## Radio and scene sound
-
-The radio card plays the official Mets Radio stream published by Audacy. The radio icon and **Listen live** button control the same player. It also links to the Audacy station page if direct playback is unavailable.
-
-A deployment can supply another authorized browser-playable feed:
+Radio and celebration sound are separate controls. Radio uses the official
+Mets stream published by Audacy. A deployment can point to another authorized,
+browser-playable stream:
 
 ```bash
 VITE_METS_AUDIO_STREAM_URL=https://audio-provider.example/authorized-stream
 ```
 
-Radio audio is loaded directly from the configured provider and does not pass through the MLB feed relay.
+Browsers require a user action before playing audio, so celebration sound starts
+off.
 
-Radio playback and celebration sound are separate controls. The speaker button enables home-run and win clips; it does not mute the radio. A radio stream that is already playing continues when Focus view or Mini Apple hides the radio card.
+## Local demo controls
 
-Celebration sound is opt-in. A home run chooses one of four supplied clips; a win chooses one of two longer recordings. Each accepted event sounds once. Stopping sound, changing a local fixture, or returning to live data stops the current clip and releases any presentation-only hold. See [`THIRD_PARTY_AUDIO.md`](./THIRD_PARTY_AUDIO.md) for checksums and provenance.
+Demo controls are available only in a Vite development build on a loopback
+address:
+
+- <http://localhost:4174/?demo=1>
+- <http://localhost:4174/?debug=1>
+
+A demo fixture replaces the live presentation until **Live data** is selected.
+Production builds do not expose this bar, even when the URL contains the flag.
+
+## Deploying
+
+metsapple.com is a direct-upload Cloudflare Pages project (`virtual-mets-apple`),
+so pushing to GitHub alone changes nothing on the site. The "Public checks"
+workflow publishes it: on every push to `main` that touches the site (this
+app, `packages/`, `public/`, or the workspace files) it runs the lint,
+typecheck, tests, and build, then uploads that same build with wrangler. Two
+repository settings make that possible:
+
+- `CLOUDFLARE_API_TOKEN`, an Actions secret holding a Cloudflare API token
+  with **Cloudflare Pages: Edit** on the account (My Profile, API Tokens,
+  Create Token, "Edit Cloudflare Workers" template or a custom token).
+- `CLOUDFLARE_ACCOUNT_ID`, an Actions variable with the account id shown by
+  `wrangler whoami`.
+
+Without them the deploy job prints a warning and skips, and the checks still
+pass. "Run workflow" on the Actions page with **deploy_site** ticked publishes
+even when nothing under the site changed. After every publish the job fetches
+`/`, `/setup/`, and the MLB relay and fails if the relay does not answer JSON.
+
+To publish by hand, build and then run wrangler **from this directory**, so
+the Pages Function under `functions/` ships with the site:
+
+```sh
+pnpm --filter @apple/virtual-apple build
+cd apps/virtual-apple && wrangler pages deploy dist --project-name virtual-mets-apple --branch main
+```
+
+Every deployment stays in the Pages project, so a bad one can be rolled back
+from the Cloudflare dashboard.
+
+## Code map
+
+| Path | Contents |
+| --- | --- |
+| `src/useLiveMetsGame.ts` | Live feed and shared-core lifecycle |
+| `src/LiveGamedayWidget.tsx` | Game status and scoreboard presentation |
+| `src/SharedAppleStage.tsx` | 3D Apple and field scene |
+| `src/useCelebrationSound.ts` | Home run and win audio |
+| `src/demoMode.ts` | Local-only fixture controls |
+| `functions/api/mlb/` | Cloudflare MLB relay |

@@ -1,22 +1,17 @@
-import { useEffect, useMemo, useRef, useState } from "react";
 import {
   DEVICE_DISPLAY_HEIGHT,
   DEVICE_DISPLAY_WIDTH,
-  DeviceCelebrationRenderer,
+  DeviceDisplayRenderer,
   rgb565ToRgba,
 } from "@apple/device-display-wasm";
 import {
-  toDeviceDisplayState,
   type AppleCoreEvent,
   type GameSnapshot,
   type PresentationSnapshot,
+  toDeviceDisplayState,
 } from "@apple/protocol";
-import {
-  describeDeviceDisplay,
-  drawDeviceDisplayFrame,
-  PHYSICAL_DISPLAY_HEIGHT,
-  PHYSICAL_DISPLAY_WIDTH,
-} from "./physicalDisplayCanvas";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { describeDeviceDisplay } from "./physicalDisplayCanvas";
 
 interface PhysicalOutputPreviewProps {
   snapshot: PresentationSnapshot;
@@ -42,7 +37,7 @@ export function PhysicalOutputPreview({
   motionState,
 }: PhysicalOutputPreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const rendererRef = useRef<DeviceCelebrationRenderer | undefined>(undefined);
+  const rendererRef = useRef<DeviceDisplayRenderer | undefined>(undefined);
   const activeCelebrationKey = useRef<string | undefined>(undefined);
   const [rendererReady, setRendererReady] = useState(false);
   const [rendererError, setRendererError] = useState<string>();
@@ -53,7 +48,7 @@ export function PhysicalOutputPreview({
 
   useEffect(() => {
     let cancelled = false;
-    void DeviceCelebrationRenderer.create()
+    void DeviceDisplayRenderer.create()
       .then((renderer) => {
         if (cancelled) {
           renderer.dispose();
@@ -101,21 +96,17 @@ export function PhysicalOutputPreview({
     const context = canvas?.getContext("2d");
     if (!canvas || !context) return;
     context.imageSmoothingEnabled = false;
-    if (!rendererReady) {
-      drawDeviceDisplayFrame(context, displayState, elapsedMs);
-      return;
-    }
+    if (!rendererReady) return;
     const renderer = rendererRef.current;
+    if (!renderer) return;
+    let frame: Uint16Array;
     if (celebration && renderer && activeCelebrationKey.current === celebration.eventKey) {
-      const rgba = rgb565ToRgba(renderer.renderRgb565(celebrationElapsedMs));
-      context.putImageData(
-        new ImageData(new Uint8ClampedArray(rgba), DEVICE_DISPLAY_WIDTH, DEVICE_DISPLAY_HEIGHT),
-        0,
-        0,
-      );
-      return;
+      frame = renderer.renderRgb565(celebrationElapsedMs);
+    } else {
+      frame = renderer.renderScreenRgb565(displayState, elapsedMs);
     }
-    drawDeviceDisplayFrame(context, displayState, elapsedMs);
+    const rgba = rgb565ToRgba(frame);
+    context.putImageData(new ImageData(new Uint8ClampedArray(rgba), DEVICE_DISPLAY_WIDTH, DEVICE_DISPLAY_HEIGHT), 0, 0);
   }, [celebration, celebrationElapsedMs, displayState, elapsedMs, rendererReady]);
 
   const audioLabel = !celebration
@@ -137,9 +128,9 @@ export function PhysicalOutputPreview({
         </div>
         <small>
           {rendererError
-            ? "Animation renderer unavailable"
+            ? "Display renderer unavailable"
             : rendererReady
-              ? "C++ animation renderer ready"
+              ? "C++ display renderer ready"
               : "Loading C++ renderer…"}
         </small>
       </div>
@@ -147,8 +138,8 @@ export function PhysicalOutputPreview({
         <div className="physical-screen-shell">
           <canvas
             ref={canvasRef}
-            width={PHYSICAL_DISPLAY_WIDTH}
-            height={PHYSICAL_DISPLAY_HEIGHT}
+            width={DEVICE_DISPLAY_WIDTH}
+            height={DEVICE_DISPLAY_HEIGHT}
             role="img"
             aria-label={
               celebration

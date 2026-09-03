@@ -164,3 +164,81 @@ describe("USB motion commissioning protocol", () => {
     expect(parseUsbBenchLine('APPLE_MOTION:{"type":"run","status":"MAYBE"}')).toBeUndefined();
   });
 });
+
+describe("USB audio protocol", () => {
+  it("parses the hello, state, card listing, checksum, playback, gain, and test receipts", () => {
+    expect(
+      parseUsbBenchLine(
+        'APPLE_AUDIO:{"type":"hello","profile":"audio_test","firmwareVersion":"0.1.0","sdChipSelect":"A0","i2s":{"bclk":"A1","lrc":"A2","din":"A3"},"gainPercent":10,"gainCapPercent":35,"fixture":"/tone.wav"}',
+      ),
+    ).toEqual({
+      type: "audio-hello",
+      profile: "audio_test",
+      firmwareVersion: "0.1.0",
+      sdChipSelect: "A0",
+      i2s: { bclk: "A1", lrc: "A2", din: "A3" },
+      gainPercent: 10,
+      gainCapPercent: 35,
+      fixture: "/tone.wav",
+    });
+    expect(
+      parseUsbBenchLine(
+        'APPLE_AUDIO:{"type":"state","sdMounted":true,"cardMb":7580,"playing":"TONE 440 Hz","status":"STARTED","gainPercent":20}',
+      ),
+    ).toEqual({
+      type: "audio-state",
+      sdMounted: true,
+      cardMb: 7580,
+      playing: "TONE 440 Hz",
+      status: "STARTED",
+      gainPercent: 20,
+    });
+    expect(
+      parseUsbBenchLine(
+        'APPLE_AUDIO:{"type":"sd","status":"MOUNTED","cardMb":7580,"files":[{"name":"tone.wav","bytes":88244},{"name":"walkup.wav","bytes":1234567}]}',
+      ),
+    ).toEqual({
+      type: "audio-sd",
+      status: "MOUNTED",
+      cardMb: 7580,
+      files: [
+        { name: "tone.wav", bytes: 88244 },
+        { name: "walkup.wav", bytes: 1234567 },
+      ],
+    });
+    expect(
+      parseUsbBenchLine(
+        'APPLE_AUDIO:{"type":"checksum","status":"OK","file":"/tone.wav","bytes":88244,"crc32":"1a2b3c4d"}',
+      ),
+    ).toEqual({ type: "audio-checksum", status: "OK", file: "/tone.wav", bytes: 88244, crc32: "1a2b3c4d" });
+    expect(parseUsbBenchLine('APPLE_AUDIO:{"type":"checksum","status":"NO_CARD"}')).toEqual({
+      type: "audio-checksum",
+      status: "NO_CARD",
+    });
+    expect(parseUsbBenchLine('APPLE_AUDIO:{"type":"play","status":"STARTED","source":"SD /tone.wav"}')).toEqual({
+      type: "audio-play",
+      status: "STARTED",
+      source: "SD /tone.wav",
+    });
+    expect(parseUsbBenchLine('APPLE_AUDIO:{"type":"gain","percent":35}')).toEqual({ type: "audio-gain", percent: 35 });
+    expect(
+      parseUsbBenchLine(
+        'APPLE_AUDIO:{"type":"test","name":"display_sd_alternation","status":"PASSED","passes":100,"fails":0}',
+      ),
+    ).toEqual({ type: "audio-test", name: "display_sd_alternation", status: "PASSED", passes: 100, fails: 0 });
+  });
+
+  it("rejects unknown statuses and malformed card listings", () => {
+    expect(parseUsbBenchLine('APPLE_AUDIO:{"type":"play","status":"LOUD","source":"SD /tone.wav"}')).toBeUndefined();
+    expect(
+      parseUsbBenchLine('APPLE_AUDIO:{"type":"test","name":"display_sd_alternation","status":"MAYBE"}'),
+    ).toBeUndefined();
+    expect(
+      parseUsbBenchLine('APPLE_AUDIO:{"type":"sd","status":"MOUNTED","cardMb":7580,"files":[{"name":"tone.wav"}]}'),
+    ).toBeUndefined();
+    expect(
+      parseUsbBenchLine('APPLE_AUDIO:{"type":"checksum","status":"OK","file":"/tone.wav","bytes":88244}'),
+    ).toBeUndefined();
+    expect(parseUsbBenchLine("AUDIO_TEST=READY COMMANDS=m:mount_sd k:checksum t:tone")).toBeUndefined();
+  });
+});

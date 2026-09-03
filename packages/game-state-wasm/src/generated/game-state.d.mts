@@ -16,6 +16,7 @@ interface GameStateEmscriptenModule {
   _apple_game_state_last_error(handle: number): number;
   _apple_game_state_snapshot_json(handle: number): number;
   _apple_game_state_decision_json(handle: number): number;
+  _apple_game_status_classify(abstractState: number, detailedState: number, statusCode: number, reason: number, latestAdvisory: number, reviewPending: number): number;
 }
 
 export default function createGameStateModule(): Promise<GameStateEmscriptenModule>;

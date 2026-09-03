@@ -12,6 +12,33 @@ interface DeviceDisplayEmscriptenModule {
   _apple_display_render_key(handle: number, elapsedMs: number): number;
   _apple_display_loop_ms(handle: number): number;
   _apple_display_framebuffer(handle: number): number;
+  _apple_display_set_screen(
+    handle: number,
+    screenState: number,
+    gameNumber: number,
+    awayPointer: number,
+    awayRuns: number,
+    homePointer: number,
+    homeRuns: number,
+    finalResult: number,
+    inning: number,
+    half: number,
+    outs: number,
+    occupiedBases: number,
+    balls: number,
+    strikes: number,
+    batterPointer: number,
+    batterLinePointer: number,
+    pitcherPointer: number,
+    pitchCount: number,
+    eventPointer: number,
+    venuePointer: number,
+    datePointer: number,
+    timePointer: number,
+    timezonePointer: number,
+    seasonPointer: number,
+  ): number;
+  _apple_display_render_screen(handle: number, rainFrame: number): number;
 }
 
 export default function createDeviceDisplayModule(): Promise<DeviceDisplayEmscriptenModule>;

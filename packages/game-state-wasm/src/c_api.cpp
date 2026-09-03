@@ -1,4 +1,5 @@
 #include "apple/game_state/projector.hpp"
+#include "apple/game_state/status.hpp"
 
 #include <cstdint>
 #include <optional>
@@ -512,6 +513,34 @@ APPLE_EXPORT const char *apple_game_state_snapshot_json(const void *raw) {
 APPLE_EXPORT const char *apple_game_state_decision_json(const void *raw) {
   const auto *handle = as_handle(raw);
   return handle == nullptr ? "" : handle->decision_json.c_str();
+}
+
+/// Classifies MLB's status fields (plus the newest Game Advisory on the
+/// current play) into the phase, label, and weather-delay flag every Apple
+/// uses. Returns JSON that stays valid until the next call.
+APPLE_EXPORT const char *apple_game_status_classify(
+    const char *abstract_state, const char *detailed_state,
+    const char *status_code, const char *reason, const char *latest_advisory,
+    int review_pending) {
+  static std::string result;
+  apple::game_state::StatusFacts facts;
+  facts.abstract_state = abstract_state == nullptr ? "" : abstract_state;
+  facts.detailed_state = detailed_state == nullptr ? "" : detailed_state;
+  facts.status_code = status_code == nullptr ? "" : status_code;
+  facts.reason = reason == nullptr ? "" : reason;
+  facts.latest_advisory = latest_advisory == nullptr ? "" : latest_advisory;
+  facts.review_pending = review_pending != 0;
+  const apple::game_state::StatusClassification out =
+      apple::game_state::classify_status(facts);
+  result.clear();
+  result += "{\"phase\":";
+  append_quoted(result, phase_name(out.phase));
+  result += ",\"label\":";
+  append_quoted(result, out.label);
+  result += ",\"weatherDelay\":";
+  result += out.weather_delay ? "true" : "false";
+  result.push_back('}');
+  return result.c_str();
 }
 
 } // extern "C"

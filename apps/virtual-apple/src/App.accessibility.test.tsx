@@ -272,6 +272,10 @@ describe("Virtual Apple accessibility", () => {
     ["grand-slam", 1],
     ["review-confirmed", 1],
     ["rain-delay", 0],
+    ["game-delay", 0],
+    ["game-suspended", 0],
+    ["game-postponed", 0],
+    ["game-cancelled", 0],
     ["mets-win", 2],
     ["offseason", 0],
   ] as const)("has no semantic accessibility violations in the %s presentation", async (scenarioId, frameIndex) => {
@@ -536,6 +540,25 @@ describe("Virtual Apple accessibility", () => {
     ).toBe("CLEAR");
     expect(container.querySelector(".moment-card h2")?.textContent).toBe("RAIN DELAY");
     expect(soundTestState.rainActive).toBe(true);
+  });
+
+  it.each([
+    ["game-delay", "DELAY", "DELAY"],
+    ["game-suspended", "SUSPENDED", "SUSP"],
+    ["game-postponed", "POSTPONED", "PPD"],
+    ["game-cancelled", "CANCELLED", "CANC"],
+  ] as const)("names a %s as %s without rain", (scenarioId, headline, scorebugInning) => {
+    liveTestState.game = { venue: "Citi Field" };
+    liveTestState.snapshot = getScenario(scenarioId).frames[0].snapshot;
+    liveTestState.status = "POLLING";
+    const { container, getByRole } = render(<App />);
+
+    expect(
+      getByRole("img", { name: "Virtual Home Run Apple behind the center-field wall" }).getAttribute("data-weather"),
+    ).toBe("CLEAR");
+    expect(container.querySelector(".moment-card h2")?.textContent).toBe(headline);
+    expect(container.textContent).toContain(scorebugInning);
+    expect(soundTestState.rainActive).toBe(false);
   });
 
   it("uses a plain delay widget without rain weather for other delays", () => {

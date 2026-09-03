@@ -33,7 +33,7 @@ export function OverviewWorkspace({
             <span className="read-only-badge">Read only</span>
           </header>
           <div className="overview-game__body">
-            <Scoreboard snapshot={device.snapshot} variant="lab" />
+            <Scoreboard snapshot={device.snapshot} announceUpdates={false} />
             <div className="current-play">
               <span>Current at-bat</span>
               <strong>{device.snapshot.atBat?.batter ?? "Mets batting"}</strong>

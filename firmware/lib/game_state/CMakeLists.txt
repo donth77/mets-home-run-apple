@@ -1,5 +1,6 @@
 add_library(apple_game_state STATIC
   src/projector.cpp
+  src/status.cpp
 )
 
 target_include_directories(apple_game_state

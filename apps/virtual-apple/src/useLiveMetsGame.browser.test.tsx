@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const testState = vi.hoisted(() => ({
   clientArguments: [] as unknown[],
+  gameStateClassify: vi.fn(),
   gameStateDispose: vi.fn(),
   gameStateProject: vi.fn(),
   ingest: vi.fn(),
@@ -20,6 +21,7 @@ vi.mock("@apple/game-state-wasm", () => ({
     create: async () => ({
       dispose: testState.gameStateDispose,
       project: (...arguments_: unknown[]) => testState.gameStateProject(...arguments_),
+      classifyStatus: (...arguments_: unknown[]) => testState.gameStateClassify(...arguments_),
     }),
   },
 }));
@@ -119,6 +121,7 @@ async function flush() {
 beforeEach(() => {
   vi.useFakeTimers();
   testState.clientArguments = [];
+  testState.gameStateClassify.mockReset();
   testState.gameStateDispose.mockReset();
   testState.gameStateProject.mockReset();
   testState.ingest.mockReset().mockReturnValue({ celebration: undefined, targetPositionMm: 0 });
@@ -139,8 +142,9 @@ describe("live mobile recovery", () => {
     const { unmount } = renderHook(() => useLiveMetsGame());
     await flush();
 
-    expect(testState.clientArguments).toHaveLength(3);
+    expect(testState.clientArguments).toHaveLength(4);
     expect(testState.clientArguments[2]).toBeTypeOf("function");
+    expect(testState.clientArguments[3]).toBeTypeOf("function");
     const canonicalFrame = { gamePk: 823583 };
     testState.gameStateProject.mockReturnValue({ coreInput, gameSnapshot: snapshot });
     expect((testState.clientArguments[2] as (value: unknown) => unknown)(canonicalFrame)).toEqual({
@@ -148,6 +152,12 @@ describe("live mobile recovery", () => {
       gameSnapshot: snapshot,
     });
     expect(testState.gameStateProject).toHaveBeenCalledWith(canonicalFrame);
+    // The status classifier (delays, suspended, postponed, cancelled) is the same C++.
+    const facts = { abstractState: "Live", detailedState: "Delayed", statusCode: "IO" };
+    const classification = { phase: "DELAYED", label: "RAIN DELAY", weatherDelay: true };
+    testState.gameStateClassify.mockReturnValue(classification);
+    expect((testState.clientArguments[3] as (value: unknown) => unknown)(facts)).toEqual(classification);
+    expect(testState.gameStateClassify).toHaveBeenCalledWith(facts);
 
     unmount();
     expect(testState.gameStateDispose).toHaveBeenCalledOnce();
@@ -344,6 +354,53 @@ describe("fresh-entry celebration replay", () => {
 
     expect(result.current.status).toBe("FINAL");
     expect(result.current.celebration).toEqual(activePresentation.celebration);
+  });
+
+  it("inspects an expired completed game without flashing its final scoreboard", async () => {
+    vi.setSystemTime(new Date("2026-08-29T02:10:01.000Z"));
+    const completedGame = { ...activeGame, abstractState: "Final", detailedState: "Final" };
+    const finalSnapshot: GameSnapshot = {
+      ...snapshot,
+      away: { ...snapshot.away, runs: 3 },
+      home: { ...snapshot.home, runs: 4 },
+      half: "END",
+      label: "FINAL",
+      phase: "FINAL",
+    };
+    const finalInput = {
+      ...coreInput,
+      awayRuns: 3,
+      homeRuns: 4,
+      cursor: "20260829_020000",
+      half: "END" as const,
+      phase: "FINAL" as const,
+    };
+    testState.schedule.mockResolvedValue([completedGame]);
+    testState.poll.mockResolvedValue({
+      capture: {
+        coreInput: finalInput,
+        gameSnapshot: finalSnapshot,
+        replayCandidates: [
+          { eventKey: `${snapshot.gamePk}:final`, kind: "FINAL", occurredAt: "2026-08-29T02:00:00.000Z" },
+        ],
+      },
+      waitMs: 10_000,
+    });
+
+    const { result } = renderHook(() => useLiveMetsGame());
+    await flush();
+
+    expect(testState.poll).toHaveBeenCalledOnce();
+    expect(result.current.game).toBeUndefined();
+    expect(result.current.snapshot).toBeUndefined();
+    expect(result.current.celebration).toBeUndefined();
+    expect(result.current.status).toBe("CONNECTING");
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.status).toBe("BETWEEN_GAMES");
+    expect(result.current.snapshot).toBeUndefined();
   });
 });
 

@@ -11,6 +11,9 @@
       "!**/node_modules",
       "!user-assets",
       "!packages/apple-3d/assets",
+      "!firmware/fixtures",
+      "!firmware/third_party",
+      "!firmware/build",
       "!packages/device-display-wasm/src/generated",
       "!packages/game-state-wasm/src/generated",
       "!packages/game-core-wasm/src/generated"

@@ -9,6 +9,7 @@ const outputDirectory = resolve(packageRoot, "src/generated");
 const outputFile = resolve(outputDirectory, "device-display.mjs");
 const cacheDirectory = resolve(repositoryRoot, ".cache/emscripten");
 const rendererRoot = resolve(repositoryRoot, "firmware/lib/home_run_loop");
+const screenRoot = resolve(repositoryRoot, "firmware/lib/device_screens");
 
 await mkdir(outputDirectory, { recursive: true });
 await mkdir(cacheDirectory, { recursive: true });
@@ -45,6 +46,8 @@ const exportedFunctions = [
   "_apple_display_render_key",
   "_apple_display_loop_ms",
   "_apple_display_framebuffer",
+  "_apple_display_set_screen",
+  "_apple_display_render_screen",
 ];
 
 const compiler = process.env.EMXX ?? "em++";
@@ -56,7 +59,11 @@ const result = spawnSync(
     resolve(rendererRoot, "src/text_engine.cpp"),
     resolve(rendererRoot, "src/home_run_loop.cpp"),
     resolve(rendererRoot, "src/mets_win_loop.cpp"),
+    resolve(screenRoot, "src/screens.cpp"),
+    resolve(screenRoot, "src/offseason_art.cpp"),
+    `-I${resolve(packageRoot, "src/gfx_compat")}`,
     `-I${resolve(rendererRoot, "include")}`,
+    `-I${resolve(screenRoot, "include")}`,
     "-DAPPLE_FORCE_PUBLIC_FONT=1",
     "-std=c++17",
     "-O2",

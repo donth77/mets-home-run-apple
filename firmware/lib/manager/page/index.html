@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#002d72">
+<title>Home Run Apple Manager</title>
+<link rel="icon" type="image/png" href="/logo.png">
+<link rel="apple-touch-icon" href="/logo.png">
+<style>
+:root{--blue:#002d72;--blue-deep:#071a3d;--blue-card:#10275a;--blue-line:#2a4680;--orange:#ff5910;--orange-soft:#ffb28a;--text:#f4f6fb;--muted:#aebbd8;--good:#8ce99a;--bad:#ffa8a8}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--blue-deep);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+header{background:var(--blue);border-bottom:4px solid var(--orange)}
+.bar{max-width:560px;margin:0 auto;padding:14px 18px;display:flex;align-items:center;gap:14px}
+.bar img{width:52px;height:52px;flex:none;filter:drop-shadow(0 2px 6px rgba(0,0,0,.35))}
+h1{margin:0;font-size:21px;font-weight:700;letter-spacing:.01em}
+#mode{display:inline-flex;align-items:center;gap:6px;margin-top:5px;padding:2px 9px;border-radius:999px;background:rgba(255,89,16,.18);color:var(--orange-soft);font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+main{max-width:560px;margin:0 auto;padding:16px 18px 36px}
+section{background:var(--blue-card);border:1px solid var(--blue-line);border-radius:14px;padding:18px;margin-bottom:14px}
+h2{font-size:16px;margin:0 0 8px}
+p{line-height:1.5;margin:0 0 10px}
+label{display:block;font-size:13px;color:var(--muted);margin:12px 0 5px}
+select,input{width:100%;font-size:16px;padding:11px 12px;border-radius:9px;border:1px solid var(--blue-line);background:var(--blue-deep);color:var(--text)}
+select:focus,input:focus{outline:2px solid var(--orange);outline-offset:1px}
+.field{position:relative}
+.field input{padding-right:46px}
+.eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);margin:0;padding:6px;background:none;border:0;color:var(--muted);cursor:pointer;line-height:0}
+.eye svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.eye svg.off{display:none}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+button{font:inherit;font-size:15px;font-weight:600;padding:11px 16px;border-radius:9px;border:0;background:var(--orange);color:#fff;margin-top:12px;cursor:pointer;display:inline-flex;align-items:center;gap:8px}
+button.quiet{background:transparent;border:1px solid var(--blue-line);color:var(--text)}
+button[disabled]{opacity:.55;cursor:default}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.25);border-top-color:currentColor;border-radius:50%;animation:spin .8s linear infinite;flex:none}
+@keyframes spin{to{transform:rotate(360deg)}}
+.hint{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);margin-top:12px}
+.switch{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-top:1px solid var(--blue-line)}
+.switch:first-of-type{border-top:0}
+.switch b{display:block;font-size:15px}
+.switch small{display:block;color:var(--muted);font-size:13px;margin-top:2px}
+.toggle{position:relative;width:48px;height:28px;flex:none}
+.toggle input{position:absolute;inset:0;opacity:0;margin:0;cursor:pointer}
+.toggle i{position:absolute;inset:0;border-radius:999px;background:#33507f;transition:background .15s}
+.toggle i::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;transition:transform .15s}
+.toggle input:checked+i{background:var(--orange)}
+.toggle input:checked+i::after{transform:translateX(20px)}
+.toggle input:focus-visible+i{outline:2px solid var(--orange);outline-offset:2px}
+.range{display:flex;align-items:center;gap:12px;margin-top:6px}
+.range input[type=range]{flex:1;padding:0;accent-color:var(--orange)}
+.range output{min-width:52px;text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin:12px 0 0}
+.tile{background:rgba(0,0,0,.18);border:1px solid var(--blue-line);border-radius:10px;padding:12px 14px;min-width:0}
+.tile span{display:block;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+.tile strong{display:block;font-size:17px;font-weight:700;overflow-wrap:anywhere}
+.tile small{display:block;font-size:13px;color:var(--muted);margin-top:3px;overflow-wrap:anywhere}
+.tile strong.ok{color:var(--good)}.tile strong.bad{color:var(--bad)}
+.note{font-size:13px;color:var(--muted)}.ok{color:var(--good)}.bad{color:var(--bad)}
+#toasts{position:fixed;left:0;right:0;bottom:0;z-index:20;display:flex;flex-direction:column;align-items:center;gap:8px;padding:0 14px 14px;pointer-events:none}
+.toast{pointer-events:auto;display:flex;align-items:flex-start;gap:10px;width:100%;max-width:560px;box-sizing:border-box;border-radius:12px;padding:12px 10px 12px 14px;font-size:14px;line-height:1.45;border:1px solid var(--blue-line);background:var(--blue-card);color:var(--text);box-shadow:0 10px 30px rgba(0,0,0,.45);animation:toast-in .25s ease-out}
+.toast.ok{border-color:rgba(140,233,154,.5);color:var(--good)}
+.toast.bad{border-color:rgba(255,168,168,.5);color:var(--bad)}
+.toast.warn{border-color:rgba(255,178,138,.5);color:var(--orange-soft)}
+.toast.out{animation:toast-out .2s ease-in forwards}
+.toast>div{flex:1;min-width:0}
+.toast a{color:inherit;text-decoration:underline;font-weight:600}
+.toast button{flex:none;margin:-4px 0 0 auto;padding:2px 6px;background:none;border:0;color:inherit;font-size:22px;line-height:1;font-weight:400;opacity:.75;cursor:pointer}
+.toast button:hover{opacity:1}
+input[type=file]{padding:9px 12px;font-size:14px;color:var(--muted);margin-top:8px}
+input[type=file]::file-selector-button{font:inherit;font-weight:600;padding:7px 12px;border-radius:7px;border:1px solid var(--blue-line);background:transparent;color:var(--text);margin-right:10px;cursor:pointer}
+.progress{height:8px;border-radius:4px;background:rgba(0,0,0,.28);margin-top:12px;overflow:hidden}.progress i{display:block;height:100%;width:0;background:var(--orange);transition:width .2s}
+.modal{position:fixed;inset:0;z-index:30;background:rgba(2,10,30,.6);display:flex;align-items:center;justify-content:center;padding:20px}
+.modal-card{background:var(--blue-card);border:1px solid var(--blue-line);border-radius:14px;padding:18px;width:100%;max-width:420px;box-shadow:0 16px 40px rgba(0,0,0,.5);animation:toast-in .2s ease-out}
+.modal-card h3{margin:0 0 8px;font-size:17px}
+.modal-text{font-size:15px;color:var(--muted);line-height:1.45}
+.modal-text .code{margin:10px 0 2px;font-size:30px;letter-spacing:.14em;font-weight:800;color:var(--text);font-variant-numeric:tabular-nums}
+.modal-card input{margin-top:12px}
+@keyframes toast-in{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@keyframes toast-out{to{opacity:0;transform:translateY(12px)}}
+.combo{position:relative;margin-top:8px}.combo-list{position:absolute;left:0;right:0;top:100%;z-index:5;margin-top:4px;background:var(--blue-deep);border:1px solid var(--blue-line);border-radius:9px;max-height:230px;overflow:auto;box-shadow:0 8px 24px rgba(0,0,0,.35)}.combo-list div{padding:9px 12px;cursor:pointer;font-size:15px;line-height:1.3}.combo-list div small{display:block;color:var(--muted);font-size:12px}.combo-list div.on,.combo-list div:hover{background:var(--blue-card)}
+.note a{color:#fff}
+#joined h2{display:flex;align-items:center;gap:9px;font-size:18px}
+.check{display:inline-flex;width:24px;height:24px;border-radius:50%;background:var(--good);color:#06301a;font-size:14px;font-weight:800;align-items:center;justify-content:center;flex:none}
+a.btn{display:inline-block;font-size:15px;font-weight:600;padding:11px 16px;border-radius:9px;background:var(--orange);color:#fff;text-decoration:none;margin:4px 0 10px}
+</style>
+</head>
+<body>
+<header><div class="bar"><img src="/logo.png" alt=""><div><h1>Home Run Apple Manager</h1><span id="mode"><span class="spin"></span>Connecting</span></div></div></header>
+<main>
+<section id="setup" hidden>
+<div id="join-form">
+<h2>Connect to Wi-Fi</h2>
+<p>Pick your home network and enter its password. Use a 2.4 GHz network. The Apple follows the Mets on its own once it's connected.</p>
+<label for="ssid">Network</label>
+<select id="ssid"><option value="">Scanning…</option></select>
+<input id="ssid-other" type="text" placeholder="Network name" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Network name" hidden style="margin-top:8px">
+<span id="scan-hint" class="hint"><span class="spin"></span>Looking for networks</span>
+<label for="password">Password</label>
+<div class="field">
+<input id="password" type="password" autocomplete="off" autocapitalize="off">
+<button id="eye" class="eye" type="button" aria-label="Show password" aria-pressed="false">
+<svg id="eye-open" class="off" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+<svg id="eye-closed" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 3l18 18"/><path d="M10.6 5.3A10.4 10.4 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3.2 4.1"/><path d="M6.6 6.6A16.7 16.7 0 0 0 2 12s3.5 7 10 7c1.6 0 3-.4 4.3-1"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>
+</button>
+</div>
+<div class="row"><button id="join" type="button">Join</button><button id="rescan" class="quiet" type="button">Scan again</button></div>
+</div>
+<div id="joined" hidden>
+<h2><span class="check" aria-hidden="true">✓</span>Connected</h2>
+<p>The Apple is on <strong id="joined-ssid"></strong>. This setup network closes in about 20 seconds, and your device goes back to your home Wi-Fi on its own.</p>
+<a id="joined-link" class="btn" href="/">Open the Apple</a>
+<p class="note">Once you're back on your home Wi-Fi: <span id="joined-ip"></span> or <span id="joined-host"></span></p>
+</div>
+</section>
+<section id="status" hidden>
+<h2>Apple</h2>
+<div class="tiles">
+<div class="tile"><span>Wi-Fi</span><strong id="wifi">…</strong><small id="wifi-2"></small><small id="wifi-3"></small></div>
+<div class="tile"><span>Game</span><strong id="game">…</strong><small id="game-2"></small></div>
+<div class="tile"><span>Game feed</span><strong id="feed">…</strong><small id="feed-2"></small></div>
+<div class="tile"><span>Lift</span><strong id="lift">…</strong><small id="lift-2"></small></div>
+<div class="tile"><span>Last celebration</span><strong id="last">…</strong><small id="last-2"></small></div>
+<div class="tile"><span>Firmware</span><strong id="fw">…</strong><small id="fw-2"></small></div>
+</div>
+<div class="row"><button id="change" class="quiet" type="button">Change Wi-Fi</button><button id="forget" class="quiet" type="button">Forget Wi-Fi</button></div>
+</section>
+<section id="settings" hidden>
+<h2>Settings</h2>
+<div class="switch"><div><b>Raised time</b><small>How long the Apple stays up</small><div class="range"><input id="raised" type="range" min="5" max="120" step="5" value="30" aria-label="Raised time in seconds"><output id="raised-out">30 s</output></div></div></div>
+<div class="switch"><div><b>Motor</b><small>Off keeps the Apple still; celebrations still show on the screen</small></div><label class="toggle"><input id="motor" type="checkbox" aria-label="Motor"><i></i></label></div>
+<div class="switch"><div><b>Pause the Apple</b><small>Stops following games and celebrating until you turn it off</small></div><label class="toggle"><input id="pause" type="checkbox" aria-label="Pause the Apple"><i></i></label></div>
+<div class="switch"><div><b>Sleep screen between games</b><small>Screen off until the next game starts</small></div><label class="toggle"><input id="sleep" type="checkbox" aria-label="Sleep screen between games"><i></i></label></div>
+<div class="switch"><div><b>Screen brightness</b><small>Dims the display without turning it off</small><div class="range"><input id="bright" type="range" min="10" max="100" step="10" value="100" aria-label="Screen brightness in percent"><output id="bright-out">100%</output></div></div></div>
+<div class="switch"><div style="flex:1"><b>Time zone</b><small>Game times on the Apple's screen and on this page</small><div class="combo"><input id="tz" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="City, zone, or abbreviation" aria-label="Time zone" aria-autocomplete="list"><div id="tz-list" class="combo-list" hidden></div></div><small id="tz-hint"></small></div></div>
+<div class="switch"><div><b>Password lock</b><small>Off: anyone on your Wi-Fi can change settings. On: changes need the Apple's eight-digit password</small></div><label class="toggle"><input id="lock" type="checkbox" aria-label="Password lock"><i></i></label></div>
+<div class="row"><button id="save" type="button" disabled>Save</button><button id="revert" class="quiet" type="button" hidden>Cancel</button></div>
+</section>
+<section id="update" hidden>
+<h2>Update</h2>
+<p class="note">Installed <strong id="fw-installed">…</strong>. Pick a firmware file from the project's releases page and install it. The Apple restarts and is back in about a minute. If the new firmware fails to start, the Apple goes back to this version on its own.</p>
+<div class="row"><button id="check-updates" type="button" class="quiet">Check for updates</button><span id="check-note" class="note"></span></div>
+<div id="latest" class="note" hidden></div>
+<input id="fw-file" type="file" accept=".bin" aria-label="Firmware file">
+<div class="progress" id="fw-bar" hidden><i id="fw-bar-fill"></i></div>
+<div class="row"><button id="install" type="button" disabled>Install</button><span id="fw-note" class="note"></span></div>
+<div class="row"><button id="restart" type="button" class="quiet">Restart the Apple</button></div>
+</section>
+</main>
+<div id="toasts" aria-live="polite"></div>
+<div id="modal" class="modal" hidden><div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title"><h3 id="modal-title">Confirm</h3><div id="modal-text" class="modal-text"></div><input id="modal-input" type="text" inputmode="numeric" autocomplete="off" hidden><div class="row"><button id="modal-ok" type="button">OK</button><button id="modal-cancel" class="quiet" type="button">Cancel</button></div></div></div>
+<script>
+(function(){
+var $=function(id){return document.getElementById(id)};
+var joining=false,joinStarted=0,wantSetup=false,scanTimer=null,settingsDirty=false,lastSettings=null;
+function text(id,value,cls){var el=$(id);el.textContent=value;el.className=cls||""}
+var noticeTimer=null,unreachable=0;
+function dismissToast(el){if(typeof el==="string")el=$("toasts").querySelector('[data-id="'+el+'"]');if(!el||!el.parentNode)return;clearTimeout(el._t);el.classList.add("out");setTimeout(function(){if(el.parentNode)el.parentNode.removeChild(el)},200)}
+// toast(message, ok|bad|warn, {id, sticky, ms}). Settings results fade out on their own;
+// Wi-Fi results stay, with a close button, until the owner closes them. A toast with
+// the same id replaces the earlier one so a flow shows one message at a time.
+function toast(msg,cls,opts){opts=opts||{};var box=$("toasts"),id=opts.id||"",prev=null,x=null;if(id){prev=box.querySelector('[data-id="'+id+'"]');if(prev){clearTimeout(prev._t);prev.parentNode.removeChild(prev)}}if(!msg)return null;var el=document.createElement("div");el.className="toast "+(cls||"");el.setAttribute("role","status");if(id)el.dataset.id=id;var body=document.createElement("div");if(typeof msg==="string")body.textContent=msg;else body.appendChild(msg);el.appendChild(body);if(opts.sticky){x=document.createElement("button");x.type="button";x.setAttribute("aria-label","Close");x.textContent="\u00d7";x.addEventListener("click",function(){dismissToast(el)});el.appendChild(x)}box.appendChild(el);if(!opts.sticky)el._t=setTimeout(function(){dismissToast(el)},opts.ms||4000);return el}
+function notice(msg,cls){return toast(msg,cls,{id:"wifi",sticky:true})}
+function spin(id,label){var el=$(id);el.className="";el.innerHTML="";var s=document.createElement("span");s.className="spin";el.appendChild(s);el.appendChild(document.createTextNode(" "+label))}
+function mode(m){return {SETUP:"Setup",OFFLINE:"Offline",BETWEEN_GAMES:"Between games",BOOTSTRAPPING:"Loading game",UPCOMING:"Next game",PAUSED:"Paused",PREGAME:"Pregame",LIVE:"Live",REVIEW:"Under review",DELAYED:"Delayed",FINAL:"Final",SLEEP:"Idle",CELEBRATING:"Celebrating",REPLAY:"Replay",SAFE_FAULT:"Stopped: fault",SAFE_MODE:"Safe mode"}[m]||m||""}
+function when(iso){if(!iso)return "";var o={weekday:"short",month:"short",day:"numeric",hour:"numeric",minute:"2-digit"};if(lastSettings&&lastSettings.timeZone)o.timeZone=lastSettings.timeZone;try{return new Date(iso).toLocaleString([],o)}catch(e){delete o.timeZone;return new Date(iso).toLocaleString([],o)}}
+var zones=[],browserZone="";try{browserZone=Intl.DateTimeFormat().resolvedOptions().timeZone||""}catch(e){}
+function zoneFor(name){var i,z;if(!name)return null;for(i=0;i<zones.length;i++){z=zones[i];if(z.id===name||(" "+z.aliases+" ").indexOf(" "+name+" ")>=0)return z}return null}
+var tzSelected="",tzCursor=-1;
+function zoneText(z){return (z.label+" "+z.id+" "+z.aliases).toLowerCase()}
+function zoneMatches(q){q=q.trim().toLowerCase();if(!q)return zones.slice(0,8);var words=q.split(/\s+/),exact=[],rest=[];zones.forEach(function(z){var t=zoneText(z);if(!words.every(function(w){return t.indexOf(w)>=0}))return;var toks=(z.id+" "+z.aliases).toLowerCase().split(" ");(toks.indexOf(q)>=0||z.label.toLowerCase()===q?exact:rest).push(z)});return exact.concat(rest).slice(0,8)}
+function resolveText(v){var z,lv,i,t,m;v=v.trim();if(!v)return null;z=zoneFor(v);if(z)return z;lv=v.toLowerCase();for(i=0;i<zones.length;i++){t=zones[i];if(t.label.toLowerCase()===lv||t.id.toLowerCase()===lv||(" "+t.aliases.toLowerCase()+" ").indexOf(" "+lv+" ")>=0)return t}m=zoneMatches(v);return m.length===1?m[0]:null}
+function pickZone(z){tzSelected=z.id;$("tz").value=z.label;$("tz-list").hidden=true;markDirty();zoneHint()}
+function showZoneList(){var box=$("tz-list"),q=$("tz").value;if(tzSelected&&zoneFor(tzSelected)&&zoneFor(tzSelected).label===q)q="";var m=zoneMatches(q);box.innerHTML="";tzCursor=-1;if(!m.length){box.hidden=true;return}m.forEach(function(z){var d=document.createElement("div");d.textContent=z.label;var sm=document.createElement("small");sm.textContent=z.id;d.appendChild(sm);d.addEventListener("mousedown",function(ev){ev.preventDefault();pickZone(z)});box.appendChild(d)});box.hidden=false}
+function zoneHint(typing){var mine=zoneFor(browserZone),el=$("tz-hint");el.className="";el.innerHTML="";if(!zones.length)return;if(!tzSelected){if($("tz").value.trim()&&!typing){el.className="bad";el.textContent="Not a time zone we know. Pick one from the list."}return}if(!mine||mine.id===tzSelected)return;el.appendChild(document.createTextNode("This device is on "+mine.label+". "));var a=document.createElement("a");a.href="#";a.textContent="Use it";a.addEventListener("click",function(ev){ev.preventDefault();pickZone(mine)});el.appendChild(a)}
+function loadZones(){fetch("/api/timezones").then(function(r){return r.json()}).then(function(list){zones=list;if(lastSettings)fillSettings(lastSettings)}).catch(function(){})}
+function render(s){
+  var w=s.wifi||{},b,host;
+  text("mode",mode(s.mode));
+  var sig=w.rssi>=-60?"Strong signal":w.rssi>=-70?"Good signal":w.rssi>=-80?"Fair signal":"Weak signal";
+  if(w.state==="CONNECTING"){spin("wifi","Joining "+(w.ssid||""));text("wifi-2","");text("wifi-3","")}
+  else if(w.state==="CONNECTED"){text("wifi",w.ssid||"Connected","ok");text("wifi-2",sig+" ("+w.rssi+" dBm)");text("wifi-3","http://"+w.ip)}
+  else if(w.state==="FAILED"){text("wifi","Could not join "+(w.ssid||""),"bad");text("wifi-2","Check the password");text("wifi-3","")}
+  else if(w.state==="LOST"){text("wifi","Lost "+(w.ssid||""),"bad");text("wifi-2","Trying again");text("wifi-3","")}
+  else{text("wifi","Not set up");text("wifi-2",w.setupNetwork?"Setup network open":"");text("wifi-3","")}
+  var g=s.game,snap=s.snapshot;
+  text("game",g?(g.away+" at "+g.home):(w.state==="CONNECTED"?"No Mets game this week":"Set up Wi-Fi first"));
+  text("game-2",g?(when(g.scheduled)+(g.gameNumber===2?" · Game 2":"")):(w.state==="CONNECTED"?"Checks the schedule every 10 minutes":""));
+  var p=s.poll||{},nextS=Math.max(0,Math.round(p.nextInMs/1000));
+  if(p.lastError){text("feed","Problem","bad");text("feed-2",p.lastError)}
+  else if(p.ok){text("feed",snap?mode(snap.phase):(g&&g.state?g.state:"Following the game"),"ok");text("feed-2","Updated "+p.ok+" times, next check in "+nextS+" s")}
+  else{text("feed",g?"Waiting for the first update":"No game to follow");text("feed-2",g?"":"Checks the schedule every 10 minutes")}
+  var seq=(s.sequence||"IDLE"),liftWord={IDLE:"Home",LEAD_IN:"Getting ready",REVIEW_HOLD:"Waiting on a review",EXTENDING:"Rising",RAISED:"Raised",RETRACTING:"Lowering",FAULT:"Stopped"}[seq]||seq;
+  text("lift",s.fault?"Stopped: fault":liftWord,s.fault?"bad":"");
+  text("lift-2",(s.motion==="L298N"?"Motor on":"Motor off")+(s.positionMm?", "+s.positionMm+" mm up":""));
+  var lc=s.lastCelebration;if(lc&&lc.at){text("last",(lc.kind==="WIN"?"Mets win":"Home run")+(lc.subject?", "+lc.subject:""));text("last-2",when(new Date(lc.at*1000).toISOString())+(lc.moved?" · the Apple rose":" · screen only"))}else{text("last","None yet");text("last-2","")}
+  text("fw",s.firmwareVersion||"");if(s.firmwareVersion)installedVersion=s.firmwareVersion;text("fw-installed",s.firmwareVersion||"");text("fw-2",(s.hostname||"home-run-apple")+".local");
+  var st=s.settings;
+  if(st){lastSettings=st;if(!settingsDirty)fillSettings(st)}
+  var connected=w.state==="CONNECTED";
+  var setupOnly=!connected&&(!w.configured||w.setupNetwork);
+  var showSetup=setupOnly||wantSetup||w.setupNetwork;
+  $("setup").hidden=!showSetup;$("change").hidden=showSetup;$("forget").hidden=!w.configured;
+  $("status").hidden=setupOnly;$("settings").hidden=setupOnly;$("update").hidden=setupOnly;
+  if(joining){
+    b=$("join");
+    if(w.state==="CONNECTED"){joining=false;b.disabled=false;b.textContent="Join";notice("");host=(s.hostname||"home-run-apple")+".local";text("joined-ssid",w.ssid||"your Wi-Fi");$("joined-link").href="http://"+w.ip+"/";text("joined-ip","http://"+w.ip);text("joined-host","http://"+host);$("join-form").hidden=true;$("joined").hidden=false}
+    else if(w.state==="FAILED"){joining=false;notice("Could not join "+(w.ssid||"that network")+". Check the password and try again.","bad");b.disabled=false;b.textContent="Join"}
+    else if(Date.now()-joinStarted>60000){joining=false;notice("Still trying to join. Rejoin the setup network to see the result.","");b.disabled=false;b.textContent="Join"}
+  }
+}
+function code(){try{return localStorage.getItem("apple-code")||""}catch(e){return ""}}
+// dialog({title, text, input, ok}) resolves true (or the typed value) on OK and null on Cancel.
+function dialog(o){return new Promise(function(res){var m=$("modal"),inp=$("modal-input"),body=$("modal-text");text("modal-title",o.title||"");body.innerHTML="";if(typeof o.text==="string")body.textContent=o.text;else if(o.text)body.appendChild(o.text);inp.hidden=!o.input;inp.value="";$("modal-ok").textContent=o.ok||"OK";m.hidden=false;if(o.input)setTimeout(function(){inp.focus()},60);function done(v){m.hidden=true;$("modal-ok").onclick=null;$("modal-cancel").onclick=null;inp.onkeydown=null;res(v)}$("modal-ok").onclick=function(){done(o.input?inp.value.trim():true)};$("modal-cancel").onclick=function(){done(null)};inp.onkeydown=function(ev){if(ev.key==="Enter")$("modal-ok").onclick();else if(ev.key==="Escape")done(null)}})}
+function askCode(){return dialog({title:"Apple password",text:"The eight digits from the Apple's setup screen.",input:true,ok:"Continue"}).then(function(v){if(v===null)return null;try{localStorage.setItem("apple-code",v)}catch(e){}return v})}
+function authFetch(url,opts,retry){
+  opts=opts||{};opts.headers=Object.assign({},opts.headers||{},{"X-Apple-Code":code()});
+  return fetch(url,opts).then(function(r){
+    if(r.status===401&&retry!==false){return askCode().then(function(v){if(v===null)return r;return authFetch(url,opts,false)})}
+    if(r.status===429)toast("Too many wrong passwords. Wait a minute and try again.","bad",{id:"code",sticky:true});
+    return r;
+  });
+}
+function status(){fetch("/api/status",{cache:"no-store"}).then(function(r){return r.json()}).then(function(s){if(unreachable>=2)notice("");unreachable=0;render(s)}).catch(function(){unreachable++;spin("mode","Not reachable, retrying");if(unreachable===2&&!forgetting)notice("Can't reach the Apple. If you just changed its Wi-Fi, switch your phone to the same network and reload. If the Apple is in setup mode, join its setup network and open http://192.168.4.1.","warn")})}
+function networks(){clearTimeout(scanTimer);fetch("/api/networks",{cache:"no-store"}).then(function(r){return r.json()}).then(function(n){
+  var sel=$("ssid"),current=sel.value,list=n.networks||[],best=null;
+  $("scan-hint").hidden=!n.scanning;$("rescan").disabled=!!n.scanning;
+  if(n.scanning&&!list.length){sel.innerHTML="";sel.appendChild(new Option("Scanning…",""));scanTimer=setTimeout(networks,2000);return}
+  sel.innerHTML="";
+  list.forEach(function(e){sel.appendChild(new Option(e.ssid+(e.secure?"":" (open)"),e.ssid))});
+  sel.appendChild(new Option("Other…","__other"));
+  if(current){sel.value=current;if(sel.value!==current)sel.value=list.length?"":"__other"}
+  else{best=list.filter(function(e){return e.secure})[0]||list[0];if(best){sel.value=best.ssid;if(!$("setup").hidden&&!$("password").value)$("password").focus()}}
+  $("ssid-other").hidden=sel.value!=="__other";
+  if(n.scanning)scanTimer=setTimeout(networks,2000);
+}).catch(function(){scanTimer=setTimeout(networks,3000)})}
+$("ssid").addEventListener("change",function(){var other=this.value==="__other";$("ssid-other").hidden=!other;if(other)$("ssid-other").focus()});
+$("rescan").addEventListener("click",function(){$("scan-hint").hidden=false;$("rescan").disabled=true;fetch("/api/networks?rescan=1").then(function(){scanTimer=setTimeout(networks,1500)})});
+$("eye").addEventListener("click",function(){var pw=$("password"),show=pw.type==="password";pw.type=show?"text":"password";$("eye-open").classList.toggle("off",!show);$("eye-closed").classList.toggle("off",show);this.setAttribute("aria-pressed",show?"true":"false");this.setAttribute("aria-label",show?"Hide password":"Show password")});
+$("join").addEventListener("click",function(){
+  var ssid=$("ssid").value,pw=$("password").value;if(ssid==="__other")ssid=$("ssid-other").value.trim();
+  if(!ssid){notice("Choose a network first.","bad");return}
+  if(pw&&pw.length<8){notice("Wi-Fi passwords have at least 8 characters.","bad");return}
+  var b=$("join");b.disabled=true;b.innerHTML="";var sp=document.createElement("span");sp.className="spin";b.appendChild(sp);b.appendChild(document.createTextNode("Joining"));
+  joining=true;joinStarted=Date.now();
+  authFetch("/api/wifi",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:"ssid="+encodeURIComponent(ssid)+"&password="+encodeURIComponent(pw)+(browserZone?"&tz="+encodeURIComponent(browserZone):"")})
+    .then(function(r){if(!r.ok)throw new Error();}).catch(function(){joining=false;b.disabled=false;b.textContent="Join";notice("Failed to start joining. Try again.","bad")});
+});
+function fillSettings(st){var z=null;$("raised").value=st.raisedSeconds;$("raised-out").value=st.raisedSeconds+" s";if(st.brightness){$("bright").value=st.brightness;$("bright-out").value=st.brightness+"%"}$("motor").checked=!!st.motor;$("pause").checked=!st.follow;$("sleep").checked=!!st.sleepDisplay;$("lock").checked=!!st.requireCode;if(zones.length){z=zoneFor(st.timeZone||"");tzSelected=z?z.id:"";$("tz").value=z?z.label:"";zoneHint()}}
+function markDirty(){settingsDirty=true;$("save").disabled=false;$("revert").hidden=false;}
+["motor","pause","sleep","lock"].forEach(function(id){$(id).addEventListener("change",markDirty)});
+$("tz").addEventListener("input",function(){var z=resolveText(this.value);tzSelected=z&&(z.label.toLowerCase()===this.value.trim().toLowerCase()||zoneFor(this.value.trim()))?z.id:"";showZoneList();markDirty();zoneHint(true)});
+$("tz").addEventListener("focus",showZoneList);
+$("tz").addEventListener("blur",function(){var self=this;setTimeout(function(){var z,cur;$("tz-list").hidden=true;z=resolveText(self.value);if(z){tzSelected=z.id;self.value=z.label}else if(!self.value.trim()&&lastSettings){cur=zoneFor(lastSettings.timeZone||"");tzSelected=cur?cur.id:"";self.value=cur?cur.label:""}zoneHint()},150)});
+$("tz").addEventListener("keydown",function(ev){var box=$("tz-list"),items=box.querySelectorAll("div");if(box.hidden||!items.length)return;if(ev.key==="ArrowDown"||ev.key==="ArrowUp"){ev.preventDefault();tzCursor=(tzCursor+(ev.key==="ArrowDown"?1:items.length-1))%items.length;items.forEach(function(d,i){d.className=i===tzCursor?"on":""})}else if(ev.key==="Enter"&&tzCursor>=0){ev.preventDefault();items[tzCursor].dispatchEvent(new Event("mousedown"))}else if(ev.key==="Escape"){box.hidden=true}});
+$("raised").addEventListener("input",function(){$("raised-out").value=this.value+" s";markDirty()});
+$("bright").addEventListener("input",function(){$("bright-out").value=this.value+"%";markDirty()});
+$("revert").addEventListener("click",function(){settingsDirty=false;if(lastSettings)fillSettings(lastSettings);$("save").disabled=true;$("revert").hidden=true;});
+$("save").addEventListener("click",function(){
+  if($("tz").value.trim()&&!tzSelected){toast("Time zone not recognized. Pick one from the list.","bad",{id:"settings"});return}
+  var steps=Promise.resolve(true);
+  if($("motor").checked&&lastSettings&&!lastSettings.motor)steps=steps.then(function(ok){return ok&&dialog({title:"Turn the motor on?",text:"The Apple will rise on the next home run or win. Keep hands and cords clear of it.",ok:"Turn it on"})});
+  if($("lock").checked&&lastSettings&&!lastSettings.requireCode)steps=steps.then(function(ok){if(!ok)return ok;var k=lastSettings.setupKey||"";var f=document.createDocumentFragment();f.appendChild(document.createTextNode("From now on, changing settings or Wi-Fi needs this password. Write it down."));var c=document.createElement("div");c.className="code";c.textContent=k||"see the setup screen";f.appendChild(c);return dialog({title:"Apple password",text:f,ok:"I wrote it down"}).then(function(v){if(v&&k){try{localStorage.setItem("apple-code",k)}catch(e){}}return v})});
+  steps.then(function(ok){if(ok)saveSettings()});
+});
+function saveSettings(){
+  var b=$("save");b.disabled=true;b.innerHTML="";var sp=document.createElement("span");sp.className="spin";b.appendChild(sp);b.appendChild(document.createTextNode("Saving"));
+  var body="raised="+$("raised").value+"&motor="+($("motor").checked?"on":"off")+"&follow="+($("pause").checked?"paused":"auto")+"&sleep="+($("sleep").checked?"on":"off")+"&lock="+($("lock").checked?"on":"off")+"&bright="+$("bright").value+(tzSelected?"&tz="+encodeURIComponent(tzSelected):"");
+  authFetch("/api/settings",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:body})
+    .then(function(r){b.textContent="Save";if(!r.ok){b.disabled=false;toast(r.status===401?"Not saved: the password is needed.":"Failed to save.","bad",{id:"settings"});return}settingsDirty=false;$("revert").hidden=true;toast("Saved.","ok",{id:"settings"});status()})
+    .catch(function(){b.textContent="Save";b.disabled=false;toast("Failed to save.","bad",{id:"settings"})});
+}
+$("change").addEventListener("click",function(){wantSetup=true;$("joined").hidden=true;$("join-form").hidden=false;networks();status()});
+var forgetting=false;
+$("forget").addEventListener("click",function(){
+  dialog({title:"Forget the saved Wi-Fi?",text:"The Apple opens its setup network again, and this page stops answering until it is set up.",ok:"Forget Wi-Fi"}).then(function(ok){if(!ok)return;
+  var b=$("forget");b.disabled=true;forgetting=true;
+  notice("Forgetting Wi-Fi\u2026","");
+  var ctl=new AbortController(),timer=setTimeout(function(){ctl.abort()},5000);
+  authFetch("/api/wifi/forget",{method:"POST",signal:ctl.signal}).then(function(r){
+    clearTimeout(timer);b.disabled=false;
+    if(r.ok){wantSetup=false;notice("Wi-Fi forgotten. The Apple's screen now shows the setup QR code. Join that network from your phone or computer to set it up again; this page stops answering until then.","ok")}
+    else if(r.status===401){forgetting=false;notice("")}
+    else{forgetting=false;notice("Failed to forget the network. Try again.","bad",6000)}
+    status();
+  }).catch(function(){clearTimeout(timer);b.disabled=false;notice("No answer from the Apple. If its screen shows WI-FI SETUP, it worked: join the setup network from your phone or computer. Otherwise check that you're on the same Wi-Fi and try again.","warn")});
+})});
+var installedVersion="";
+function updateMessage(err){return {GAME_IN_PROGRESS:"A game is in progress. Install it after the game.",CELEBRATING:"The Apple is celebrating. Try again in a minute.",BUSY:"The Apple just started. Try again in a minute.",BAD_SIGNATURE:"That file is not signed by the project. Download it again from the releases page.",NOT_SIGNED:"That file is not a signed Apple firmware file.",TOO_SMALL:"That file is not a firmware file.",NO_SPACE:"No room for the update.",CODE:"Not installed: the password is needed."}[err]||("Install failed"+(err?" ("+err+")":"")+".")}
+function waitForRestart(before){var started=Date.now();(function poll(){fetch("/api/status",{cache:"no-store"}).then(function(r){return r.json()}).then(function(s){if(s.firmwareVersion&&s.firmwareVersion!==before){toast("Updated to "+s.firmwareVersion+".","ok",{id:"update"});$("fw-bar").hidden=true;$("fw-file").value="";$("install").disabled=true;text("fw-note","");return}throw 0}).catch(function(){if(Date.now()-started<120000)setTimeout(poll,3000);else toast("The Apple has not come back yet. Give it a minute, then reload this page.","warn",{id:"update",sticky:true})})})()}
+function sendFirmware(f,retry){var b=$("install"),bar=$("fw-bar"),fill=$("fw-bar-fill"),before=installedVersion;b.disabled=true;bar.hidden=false;fill.style.width="0%";text("fw-note","Sending\u2026");var fd=new FormData();fd.append("firmware",f,f.name);var x=new XMLHttpRequest();x.open("POST","/api/update");x.setRequestHeader("X-Apple-Code",code());x.upload.onprogress=function(e){if(e.lengthComputable)fill.style.width=Math.round(100*e.loaded/e.total)+"%"};x.onload=function(){if(x.status===200){fill.style.width="100%";text("fw-note","Installed");toast("Installed. The Apple is restarting\u2026","ok",{id:"update",sticky:true});waitForRestart(before);return}b.disabled=false;bar.hidden=true;text("fw-note","");if(x.status===401&&retry!==false){askCode().then(function(v){if(v!==null)sendFirmware(f,false)});return}var err="";try{err=JSON.parse(x.responseText).error}catch(e){}toast(updateMessage(err),"bad",{id:"update",sticky:true})};x.onerror=function(){b.disabled=false;bar.hidden=true;text("fw-note","");toast("The upload did not go through. Check that you're on the same Wi-Fi and try again.","bad",{id:"update",sticky:true})};x.send(fd)}
+var REPO="donth77/mets-home-run-apple",latestAsset=null;
+function versionParts(v){return String(v||"").replace(/^firmware-v/,"").split(".").map(function(n){return parseInt(n,10)||0})}
+function newer(a,b){var x=versionParts(a),y=versionParts(b),i;for(i=0;i<3;i++){if((x[i]||0)>(y[i]||0))return true;if((x[i]||0)<(y[i]||0))return false}return false}
+$("check-updates").addEventListener("click",function(){var b=this;b.disabled=true;text("check-note","Checking\u2026");$("latest").hidden=true;latestAsset=null;
+  fetch("https://api.github.com/repos/"+REPO+"/releases?per_page=15",{headers:{Accept:"application/vnd.github+json"}}).then(function(r){if(r.status===404)return [];if(!r.ok)throw new Error("github "+r.status);return r.json()}).then(function(list){
+    var rel=(list||[]).filter(function(r){return !r.draft&&!r.prerelease&&/^firmware-v\d/.test(r.tag_name)}).sort(function(p,q){return newer(p.tag_name,q.tag_name)?-1:1})[0];
+    b.disabled=false;
+    if(!rel){text("check-note","No public firmware releases yet.");return}
+    var v=rel.tag_name.replace(/^firmware-v/,""),asset=(rel.assets||[]).filter(function(a){return /\.bin$/.test(a.name)})[0];
+    if(!newer(v,installedVersion)){text("check-note","Up to date ("+installedVersion+").");return}
+    if(!asset){text("check-note","Version "+v+" has no firmware file.");return}
+    latestAsset={version:v,url:asset.url,name:asset.name,page:rel.html_url};text("check-note","");
+    var box=$("latest");box.innerHTML="";box.appendChild(document.createTextNode("Version "+v+" is available. "));var a=document.createElement("a");a.href="#";a.textContent="Install "+v;a.addEventListener("click",function(ev){ev.preventDefault();installLatest()});box.appendChild(a);box.hidden=false;
+  }).catch(function(){b.disabled=false;text("check-note","Could not reach GitHub. Check that this device has internet.")});
+});
+function installLatest(){var l=latestAsset;if(!l)return;dialog({title:"Install "+l.version+"?",text:"The file downloads from GitHub through this device, then the Apple restarts and is back in about a minute.",ok:"Install"}).then(function(ok){if(!ok)return;text("check-note","Downloading "+l.name+"\u2026");
+  fetch(l.url,{headers:{Accept:"application/octet-stream"}}).then(function(r){if(!r.ok)throw new Error("download "+r.status);return r.blob()}).then(function(blob){text("check-note","");sendFirmware(new File([blob],l.name,{type:"application/octet-stream"}))}).catch(function(){text("check-note","");var box=$("latest");box.innerHTML="";box.appendChild(document.createTextNode("The download did not go through. "));var a=document.createElement("a");a.href=l.page;a.target="_blank";a.rel="noopener";a.textContent="Get the file from GitHub";box.appendChild(a);box.appendChild(document.createTextNode(" and pick it below."));box.hidden=false})})}
+$("restart").addEventListener("click",function(){dialog({title:"Restart the Apple?",text:"It is back in about 30 seconds. Settings and Wi-Fi are kept.",ok:"Restart"}).then(function(ok){if(!ok)return;authFetch("/api/restart",{method:"POST"}).then(function(r){if(r.ok){toast("Restarting. This page reconnects on its own.","ok",{id:"update",sticky:true});return}var err="";try{}catch(e){}r.json().then(function(j){toast(j&&j.error==="CELEBRATING"?"The Apple is celebrating. Try again in a minute.":"Could not restart.","bad",{id:"update",sticky:true})}).catch(function(){toast("Could not restart.","bad",{id:"update",sticky:true})})}).catch(function(){toast("No answer from the Apple.","bad",{id:"update",sticky:true})})})});
+$("fw-file").addEventListener("change",function(){var f=this.files[0];$("install").disabled=!f;text("fw-note",f?Math.round(f.size/1024)+" KB":"")});
+$("install").addEventListener("click",function(){var f=$("fw-file").files[0];if(!f)return;dialog({title:"Install this firmware?",text:f.name+". The Apple restarts and is back in about a minute.",ok:"Install"}).then(function(ok){if(ok)sendFirmware(f)})});
+status();setInterval(status,4000);networks();loadZones();
+})();
+</script>
+</body>
+</html>

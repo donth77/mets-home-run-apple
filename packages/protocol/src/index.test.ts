@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { clampPositionMm, type GameSnapshot, mlbTeamNickname, toDeviceDisplayState } from "./index";
+import {
+  clampPositionMm,
+  compactBatterLine,
+  compactPlayerName,
+  type GameSnapshot,
+  inningLabel,
+  interruptionKind,
+  mlbTeamNickname,
+  toDeviceDisplayState,
+} from "./index";
 
 describe("clampPositionMm", () => {
   it("keeps recording motion inside the 50 mm envelope", () => {
@@ -19,6 +28,28 @@ describe("mlbTeamNickname", () => {
 
   it("preserves the supplied name for an unknown team", () => {
     expect(mlbTeamNickname({ abbreviation: "TBD", name: "Next opponent" })).toBe("Next opponent");
+  });
+});
+
+describe("compactPlayerName", () => {
+  it("uses a first initial and preserves the complete surname", () => {
+    expect(compactPlayerName("Francisco Lindor")).toBe("F. Lindor");
+    expect(compactPlayerName("Ronald Acuña Jr.")).toBe("R. Acuña Jr.");
+    expect(compactPlayerName("Elly De La Cruz")).toBe("E. De La Cruz");
+  });
+
+  it("is idempotent and preserves mononyms", () => {
+    expect(compactPlayerName("F. Lindor")).toBe("F. Lindor");
+    expect(compactPlayerName("Ichiro")).toBe("Ichiro");
+    expect(compactPlayerName("   ")).toBeUndefined();
+  });
+});
+
+describe("compactBatterLine", () => {
+  it("uses the readable hits-for-at-bats form", () => {
+    expect(compactBatterLine("0–1 · HR")).toBe("0 FOR 1");
+    expect(compactBatterLine("12-13")).toBe("12 FOR 13");
+    expect(compactBatterLine("-")).toBe("-");
   });
 });
 
@@ -65,9 +96,9 @@ describe("toDeviceDisplayState", () => {
       bases: { first: true, second: false, third: true },
       balls: 2,
       strikes: 1,
-      batter: "Juan Soto",
-      batterLine: "2–3 · HR",
-      pitcher: "Spencer Strider",
+      batter: "J. Soto",
+      batterLine: "2 FOR 3",
+      pitcher: "S. Strider",
       pitchCount: 74,
     });
   });
@@ -119,5 +150,9 @@ describe("toDeviceDisplayState", () => {
     } satisfies GameSnapshot;
 
     expect(toDeviceDisplayState(snapshot).kind).toBe(kind);
+    expect(interruptionKind(snapshot)).toBe(kind);
+    expect(inningLabel(snapshot)).toBe(
+      { DELAY: "DELAY", RAIN_DELAY: "DELAY", SUSPENDED: "SUSP", POSTPONED: "PPD", CANCELLED: "CANC" }[kind],
+    );
   });
 });

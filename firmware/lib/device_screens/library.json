@@ -1,0 +1,14 @@
+{
+  "$schema": "https://raw.githubusercontent.com/platformio/platformio-core/develop/platformio/assets/schema/library.json",
+  "name": "apple-device-screens",
+  "version": "0.1.0",
+  "description": "Nano-only ST7789 scoreboard and status screens shared by the USB bridge and the autonomous target.",
+  "dependencies": [
+    { "owner": "adafruit", "name": "Adafruit GFX Library", "version": "1.12.1" },
+    { "owner": "adafruit", "name": "Adafruit ST7735 and ST7789 Library", "version": "1.11.0" }
+  ],
+  "build": {
+    "includeDir": "include",
+    "srcDir": "src"
+  }
+}

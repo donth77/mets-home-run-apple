@@ -57,3 +57,43 @@ elseif(MSVC)
 endif()
 
 add_test(NAME apple_motion_tests COMMAND apple_motion_tests)
+
+add_executable(apple_mlb_feed_tests mlb_feed_tests.cpp)
+target_link_libraries(apple_mlb_feed_tests PRIVATE apple_mlb_feed apple_game_core)
+target_include_directories(apple_mlb_feed_tests PRIVATE ${CMAKE_SOURCE_DIR}/fixtures/mlb)
+target_compile_features(apple_mlb_feed_tests PRIVATE cxx_std_17)
+
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+  target_compile_options(apple_mlb_feed_tests PRIVATE -Wall -Wextra -Wpedantic -Werror)
+elseif(MSVC)
+  target_compile_options(apple_mlb_feed_tests PRIVATE /W4 /WX)
+endif()
+
+add_test(NAME apple_mlb_feed_tests COMMAND apple_mlb_feed_tests)
+
+add_executable(apple_player_name_tests player_name_tests.cpp)
+target_include_directories(
+  apple_player_name_tests
+  PRIVATE ${CMAKE_SOURCE_DIR}/lib/device_screens/include
+)
+target_compile_features(apple_player_name_tests PRIVATE cxx_std_17)
+
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+  target_compile_options(apple_player_name_tests PRIVATE -Wall -Wextra -Wpedantic -Werror)
+elseif(MSVC)
+  target_compile_options(apple_player_name_tests PRIVATE /W4 /WX)
+endif()
+
+add_test(NAME apple_player_name_tests COMMAND apple_player_name_tests)
+
+add_executable(apple_time_zone_tests time_zone_tests.cpp)
+target_link_libraries(apple_time_zone_tests PRIVATE apple_time_zones)
+target_compile_features(apple_time_zone_tests PRIVATE cxx_std_17)
+
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+  target_compile_options(apple_time_zone_tests PRIVATE -Wall -Wextra -Wpedantic -Werror)
+elseif(MSVC)
+  target_compile_options(apple_time_zone_tests PRIVATE /W4 /WX)
+endif()
+
+add_test(NAME apple_time_zone_tests COMMAND apple_time_zone_tests)

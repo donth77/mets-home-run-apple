@@ -1,6 +1,7 @@
 #include "apple/display/home_run_loop.hpp"
 #include "apple/display/mets_win_loop.hpp"
 #include "apple/firmware/board_pins.hpp"
+#include "apple/firmware/offseason_art.hpp"
 #include "apple/firmware/scan_lock.hpp"
 #include "apple/firmware/team_colors.hpp"
 
@@ -38,7 +39,6 @@ constexpr std::uint16_t kMetsOrange = 0xFAC2;
 constexpr std::uint16_t kDarkBlue = 0x0008;
 constexpr std::uint16_t kPanelBlue = 0x08D3;
 constexpr std::uint16_t kMutedBlue = 0x5B2E;
-constexpr std::uint16_t kFieldGreen = 0x2C86;
 constexpr std::uint16_t kGold = 0xFEA0;
 constexpr std::uint16_t kDelayYellow = 0xF628;
 constexpr std::uint16_t kRainBlue = 0x75DD;
@@ -328,31 +328,7 @@ void draw_upcoming_layout() {
 }
 
 void draw_offseason_layout() {
-  display.fillScreen(kDarkBlue);
-  display.fillRect(0, 0, 320, 42, kMetsBlue);
-  display.fillRect(0, 38, 320, 4, kMetsOrange);
-  draw_centered("OFFSEASON", 160, 10, 2, ST77XX_WHITE);
-
-  display.fillCircle(145, 79, 21, ST77XX_RED);
-  display.fillCircle(174, 79, 21, ST77XX_RED);
-  display.fillTriangle(125, 80, 194, 80, 160, 110, ST77XX_RED);
-  display.fillRoundRect(160, 48, 4, 19, 2, kGold);
-  display.fillTriangle(159, 60, 140, 58, 150, 70, kFieldGreen);
-  display.fillCircle(175, 68, 5, 0xFDCF);
-  draw_centered("Z", 211, 62, 1, kMutedBlue);
-  draw_centered("Z", 228, 48, 2, kMutedBlue);
-
-  display.fillRect(120, 98, 78, 17, kPanelBlue);
-  display.fillRect(72, 115, 174, 14, 0x32C9);
-  display.fillRect(72, 129, 174, 4, kMetsOrange);
-  display.fillRect(72, 133, 174, 45, kMetsBlue);
-  for (std::int16_t x = 82; x < 246; x += 39) {
-    display.fillTriangle(x, 133, x + 28, 178, x, 178, kPanelBlue);
-  }
-
-  draw_centered("SEE YOU NEXT SEASON", 160, 195, 2, ST77XX_WHITE);
-  display.fillRect(0, 220, 320, 20, kPanelBlue);
-  draw_centered("2027 SEASON", 160, 227, 1, kMetsOrange);
+  apple::firmware::draw_offseason_art(display, "2027 SEASON");
 }
 
 void draw_delay_layout(bool rain, std::uint8_t rain_frame = 0) {

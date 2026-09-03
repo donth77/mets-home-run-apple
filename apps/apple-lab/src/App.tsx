@@ -1,20 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  createRecordedDiagnosticEvent,
-  fakeDeviceTimeline,
-  fakeManagedDevice,
-  type DeviceTimelineEvent,
-} from "./fakeDevice";
+import { createRecordedDiagnosticEvent, type DeviceTimelineEvent, fakeDeviceTimeline } from "./fakeDevice";
+import { useUsbBenchDevice } from "./useUsbBenchDevice";
 import { DiagnosticsWorkspace } from "./workspaces/DiagnosticsWorkspace";
 import { HardwareTestsWorkspace } from "./workspaces/HardwareTestsWorkspace";
 import { HistoricalReplayWorkspace } from "./workspaces/HistoricalReplayWorkspace";
 import { LiveWorkspace } from "./workspaces/LiveWorkspace";
 import { OverviewWorkspace } from "./workspaces/OverviewWorkspace";
-import { SettingsWorkspace } from "./workspaces/SettingsWorkspace";
 import { SimulatorWorkspace } from "./workspaces/SimulatorWorkspace";
-import { useUsbBenchDevice } from "./useUsbBenchDevice";
 
-type WorkspaceId = "overview" | "live" | "replay" | "simulator" | "tests" | "diagnostics" | "settings";
+type WorkspaceId = "overview" | "live" | "replay" | "simulator" | "tests" | "diagnostics";
 
 const workspaces: readonly {
   id: WorkspaceId;
@@ -23,12 +17,11 @@ const workspaces: readonly {
   description: string;
 }[] = [
   { id: "overview", index: "01", label: "Overview", description: "Lab and device preview" },
-  { id: "live", index: "02", label: "Live game", description: "Read-only device timeline" },
+  { id: "live", index: "02", label: "Live game", description: "Demo device or MLB recording" },
   { id: "replay", index: "03", label: "Historical replay", description: "Archived MLB game playback" },
   { id: "simulator", index: "04", label: "Simulator", description: "Offline fixture replay" },
   { id: "tests", index: "05", label: "Hardware tests", description: "Gated service controls" },
-  { id: "diagnostics", index: "06", label: "Diagnostics", description: "Telemetry and ledger" },
-  { id: "settings", index: "07", label: "Settings", description: "Device configuration" },
+  { id: "diagnostics", index: "06", label: "Diagnostics", description: "Demo telemetry model" },
 ];
 
 export function App() {
@@ -107,7 +100,7 @@ export function App() {
         <header className="manager-topbar">
           <div>
             <span>APPLE LAB / {activeWorkspace.label.toUpperCase()}</span>
-            <strong>{fakeManagedDevice.name}</strong>
+            <strong>{benchConnected ? "Nano ESP32 · USB bench" : "Reference device · demo"}</strong>
           </div>
           <div className="topbar-status">
             <span>
@@ -140,7 +133,6 @@ export function App() {
             />
           )}
           {workspace === "diagnostics" && <DiagnosticsWorkspace events={allEvents} />}
-          {workspace === "settings" && <SettingsWorkspace />}
         </div>
       </section>
     </main>

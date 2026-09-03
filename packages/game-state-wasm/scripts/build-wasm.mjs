@@ -49,6 +49,7 @@ const exportedFunctions = [
   "_apple_game_state_last_error",
   "_apple_game_state_snapshot_json",
   "_apple_game_state_decision_json",
+  "_apple_game_status_classify",
 ];
 
 const compiler = process.env.EMXX ?? "em++";
@@ -57,6 +58,7 @@ const result = spawnSync(
   [
     resolve(packageRoot, "src/c_api.cpp"),
     resolve(stateRoot, "src/projector.cpp"),
+    resolve(stateRoot, "src/status.cpp"),
     `-I${resolve(stateRoot, "include")}`,
     "-std=c++17",
     "-O2",

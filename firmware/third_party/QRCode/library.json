@@ -1,0 +1,12 @@
+{
+  "$schema": "https://raw.githubusercontent.com/platformio/platformio-core/develop/platformio/assets/schema/library.json",
+  "name": "QRCode",
+  "version": "0.0.1",
+  "description": "Vendored ricmoo/QRCode (MIT): small QR code generator used for the Wi-Fi setup screen.",
+  "license": "MIT",
+  "headers": "qrcode.h",
+  "build": {
+    "srcDir": "src",
+    "includeDir": "src"
+  }
+}

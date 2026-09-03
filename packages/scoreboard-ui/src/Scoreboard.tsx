@@ -78,7 +78,15 @@ function BroadcastScorebug({
   const inning = standby
     ? compactInningLabel(snapshot)
     : isLiveInning
-      ? `${snapshot.half === "TOP" ? "▲" : snapshot.half === "BOTTOM" ? "▼" : ""}${snapshot.inning}`
+      ? `${
+          snapshot.half === "TOP"
+            ? "▲"
+            : snapshot.half === "BOTTOM"
+              ? "▼"
+              : snapshot.half === "MIDDLE"
+                ? "MID "
+                : "END "
+        }${snapshot.inning}`
       : inningLabel(snapshot);
   const matchupRole = metsMatchupRole(snapshot);
   const showMatchup = !standby && ["LIVE", "REVIEW", "DELAYED"].includes(snapshot.phase) && matchupRole !== null;

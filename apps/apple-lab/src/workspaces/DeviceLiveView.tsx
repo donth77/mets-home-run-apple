@@ -10,12 +10,12 @@ export function DeviceLiveView({ events }: { events: readonly DeviceTimelineEven
       <article className="manager-panel live-score-panel">
         <header className="panel-title">
           <div>
-            <span>Device display</span>
-            <h2>Current game state</h2>
+            <span>Example device display</span>
+            <h2>Reference game state</h2>
           </div>
-          <span className="state-badge state-badge--live">Live</span>
+          <span className="state-badge state-badge--live">Demo</span>
         </header>
-        <Scoreboard snapshot={device.snapshot} variant="lab" />
+        <Scoreboard snapshot={device.snapshot} announceUpdates={false} />
         <div className="live-game-detail">
           <div>
             <span>At bat</span>
@@ -30,8 +30,8 @@ export function DeviceLiveView({ events }: { events: readonly DeviceTimelineEven
       <aside className="manager-panel feed-panel">
         <header className="panel-title">
           <div>
-            <span>Transport</span>
-            <h2>Feed health</h2>
+            <span>Reference transport</span>
+            <h2>Example feed health</h2>
           </div>
         </header>
         <dl className="detail-list">
@@ -62,8 +62,8 @@ export function DeviceLiveView({ events }: { events: readonly DeviceTimelineEven
       <article className="manager-panel event-timeline-panel">
         <header className="panel-title panel-title--timeline">
           <div>
-            <span>Persistent device history</span>
-            <h2>Game and Apple timeline</h2>
+            <span>Example device history</span>
+            <h2>Reference timeline</h2>
           </div>
           <small>Meaningful changes only—not every pitch</small>
         </header>

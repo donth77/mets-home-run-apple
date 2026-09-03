@@ -4,60 +4,25 @@
 
 <h1 align="center">Mets Home Run Apple</h1>
 
-<p align="center"><strong>An autonomous Wi-Fi Home Run Apple, a local builder's lab, and a live virtual gameday experience.</strong></p>
+<p align="center"><strong>A Wi-Fi Home Run Apple, a builder's lab, and a live virtual gameday site.</strong></p>
 
 <p align="center">
   <a href="https://nodejs.org/"><img alt="Node.js 22.13 or newer" src="https://img.shields.io/badge/Node.js-22.13%2B-339933?style=flat-square&logo=nodedotjs&logoColor=white" /></a>
   <img alt="C++17" src="https://img.shields.io/badge/C%2B%2B-17-00599C?style=flat-square&logo=cplusplus&logoColor=white" />
 </p>
 
+This fan project is inspired by the Home Run Apple at Citi Field. The physical
+build follows Mets games live, shows the score, and raises for confirmed Mets home
+runs and wins. Once it has Wi-Fi, it runs on its own without a computer or browser.
 
-This is a fan project inspired by the Home Run Apple at Citi Field. The build is designed to follow Mets games, show the score, and raise the Apple for confirmed home runs and wins.
+| | |
+| --- | --- |
+| [Physical Apple](firmware/README.md) | Autonomous Nano ESP32 firmware, display, and lift control |
+| [Apple Manager](https://metsapple.com/setup/) | Setup and settings page served by the physical Apple |
+| [Apple Lab](apps/apple-lab/README.md) | Local simulator, replay tool, diagnostics, and hardware tests |
+| [Virtual Apple](apps/virtual-apple/README.md) | [Public gameday site](https://metsapple.com/) with a 3D field, scoreboards, radio, and celebrations |
 
-The project separates everyday ownership from development and debugging:
-
-- **Apple Manager** is the planned phone-friendly setup and settings page served directly by the physical Apple. It will not need a cloud service or a running PC.
-- **Apple Lab** is the local simulator, replay, diagnostics, and hardware-testing tool for builders and maintainers.
-- **Virtual Apple** is a [public gameday experience](https://metsapple.com/) with a 3D center-field scene, live scoreboards, radio, celebrations, and desktop Focus and Mini views. See the [Virtual Apple guide](apps/virtual-apple/README.md).
-
-After initial setup, the physical Apple will follow games and control its display, speaker, lights, and lift on its own. Apple Manager and Apple Lab are optional while it runs.
-
-<p align="center"><a href="https://metsapple.com/"><strong>Live Virtual Mets Apple</strong></a></p>
-
-## Project status
-
-Working today:
-
-- the portable C++ game-state and decision layers, native tests, and WebAssembly builds;
-- Apple Lab recording/replay and Virtual Apple live games through both C++ layers;
-- the same C++ home-run and win display animations on the Nano and in Apple Lab;
-- live schedule/feed reading and completed-game replay;
-- review, delay, doubleheader, win, duplicate-event, and between-game handling;
-- Apple Lab's simulator, diagnostics, CSV exports, 3D preview, and USB-only Nano logic test;
-- Virtual Apple's live presentation, Focus and Mini views, local demo mode, audio, rain, and accessibility features.
-
-Still to build:
-
-- repeatable Nano setup with per-device identity, Wi-Fi provisioning, storage, display, audio, lighting, and motor adapters;
-- the device-hosted Apple Manager, ownership transfer, and a safe signed update path;
-- optional future owner claiming and remote telemetry that never replaces local management or autonomous operation;
-- an approved parts list and a physical assembly, calibration, and acceptance process;
-- measured, printable Apple and base files that eliminate the need for a giveaway donor;
-- reference measurements and initial physical calibration after the giveaway Apple arrives;
-- a complete donor-free validation build using the printable Apple and base;
-- unloaded and guarded actuator tests before the Apple is attached.
-
-The browser apps cannot command raw motion. Apple Lab identifies the dedicated
-commissioning firmware profiles, reads their output state, and after physical-presence
-confirmations can request one bounded action per arm: the no-power signal self-test,
-a single short actuator jog, or one engine-driven celebration sequence. Each profile
-arms one action at a time, stops itself on a deadline, and disarms afterward; the
-Nano remains in charge of motion safety.
-
-Physical assembly and printable-part instructions will be published after the
-real build has been measured and validated.
-
-## Quick start
+## Run the browser apps
 
 You need Node.js 22.13 or newer and pnpm 10.
 
@@ -66,23 +31,18 @@ pnpm install
 pnpm dev:lab
 ```
 
-Run Virtual Apple:
+Apple Lab opens at <http://localhost:4173>.
+
+Run Virtual Apple separately:
 
 ```bash
 pnpm dev:virtual
 ```
 
-- Apple Lab: `http://localhost:4173`
-- Virtual Apple: `http://localhost:4174`
-- Virtual Apple demo controls: `http://localhost:4174/?demo=1`
+Virtual Apple opens at <http://localhost:4174>. Add `?demo=1` to use the local
+demo controls.
 
-## Architecture
-
-Portable C++ code is split by responsibility. The game-state layer keeps the score, inning, runners, count, players, line score, and game status, then produces a complete scoreboard snapshot and a smaller decision envelope. The decision core receives only the evidence needed to accept a new home run or win and return safe sequence commands. Native, WebAssembly, historical-replay, and browser tests cover the boundary. Apple Lab's direct MLB sources and Virtual Apple's live path both use the C++ projector and decision core. Apple Manager will configure and inspect the Nano over the local network; it will not run the game loop or make celebration decisions.
-
-[Architecture guide](docs/ARCHITECTURE.md).
-
-## Test and build
+## Check 
 
 ```bash
 pnpm lint
@@ -91,25 +51,37 @@ pnpm test
 pnpm build
 ```
 
-The full test command also needs CMake, a C++17 compiler, and Emscripten. Generated WebAssembly is checked in, so normal browser development does not require rebuilding it by hand.
+The full test suite also needs CMake, a C++17 compiler, and Emscripten. Browser
+development uses the committed WebAssembly builds, so you do not need to
+rebuild them for every change.
 
-## Repository structure
+## Project Structure
 
-| Path | What lives there |
-|---|---|
-| `apps/apple-lab/` | Local simulator, historical replay, diagnostics, and hardware tests |
-| `apps/virtual-apple/` | Public game-day website |
-| `firmware/` | Shared C++ core, native tests, autonomous ESP32 adapters, and the future device-hosted Manager |
-| `packages/apple-3d/` | Apple model, scene, textures, and actuator animation |
-| `packages/device-display-wasm/` | Browser wrapper around the C++ physical-display animations |
-| `packages/game-core-wasm/` | Browser wrapper around the C++ core |
-| `packages/game-state-wasm/` | Browser wrapper around the C++ game-state projector |
-| `packages/mlb-live-feed/` | Schedule, live-feed, and archive handling |
-| `packages/protocol/` | Game, core, display, event, and motion contracts |
-| `packages/scoreboard-ui/` | Reusable accessible scoreboard |
-| `packages/test-fixtures/` | Offline game scenarios |
+| Path | Contents |
+| --- | --- |
+| `apps/` | Apple Lab and Virtual Apple |
+| `firmware/` | Shared C++, Nano firmware, native tests, and Apple Manager |
+| `packages/` | Browser libraries, UI, 3D scene, protocol, and test fixtures |
+| `docs/ARCHITECTURE.md` | [System map and code boundaries](docs/ARCHITECTURE.md) |
 
+## Inspiration
 
-## Inspiration and credit
+A March 2025 exchange about a Wi-Fi-enabled Home Run Apple sparked online
+interest and helped inspire several fan builds. The image links to the
+[r/NewYorkMets discussion](https://www.reddit.com/r/NewYorkMets/comments/1jixetv/are_we_pro_or_anti_wifi_enabled_apple_for_2025/).
 
-Special thanks to Reddit user [u/jboogie1844](https://www.reddit.com/user/jboogie1844/) for sharing his WiFi Home Run Apple in [this r/NewYorkMets post](https://www.reddit.com/r/NewYorkMets/comments/1v96vfz/1_year_later_and_my_wifi_home_run_apple_has/).
+<p align="center">
+  <a href="https://www.reddit.com/r/NewYorkMets/comments/1jixetv/are_we_pro_or_anti_wifi_enabled_apple_for_2025/">
+    <img src="docs/assets/wifi-enabled-home-run-apple-2025.webp" width="900" alt="A 2025 tweet exchange in which Block Adam asks for a Wi-Fi-enabled Home Run Apple and Mets owner Steven Cohen asks what it is" />
+  </a>
+</p>
+
+<!--
+Asset: docs/assets/wifi-enabled-home-run-apple-2025.webp
+Source: https://www.reddit.com/media?url=https%3A%2F%2Fpreview.redd.it%2Fare-we-pro-or-anti-wifi-enabled-apple-for-2025-v0-d6gfx846hoqe1.png%3Fwidth%3D1080%26crop%3Dsmart%26auto%3Dwebp%26s%3D89030919abb8bb63ab297146b42f770c55a47e58
+SHA-256: b71af4295a38ff9d7e303908b7c75f9569440067f431372f3c765227993a6f24
+-->
+
+Thanks to Reddit user
+[u/jboogie1844](https://www.reddit.com/user/jboogie1844/) for sharing another
+[Wi-Fi Home Run Apple build](https://www.reddit.com/r/NewYorkMets/comments/1v96vfz/1_year_later_and_my_wifi_home_run_apple_has/).

@@ -42,6 +42,7 @@ constexpr int kLogoW = gen::kLogoWidth;
 constexpr int kLogoH = gen::kLogoHeight;
 constexpr int kLogoX = gen::kLogoX;
 constexpr int kLogoY = gen::kLogoY;
+constexpr char kFinalCall[] = "PUT IT IN THE BOOKS!";
 // The quick pop, in quarters of the final size: no rings to wait for here.
 constexpr int kQuickPop[5] = {1, 2, 3, 5, 4};
 // Turning to face you: widths 110*sin(pi/2 * (k+1)/11), a quarter turn from edge-on.
@@ -546,7 +547,11 @@ void MetsWinLoop::build_card(CardBlock blocks[4]) const {
   blocks[0].cy = 12;
   line(blocks[1], away_, away_runs, mets_home_ ? kWhite : kLogoOrange, 44);
   line(blocks[2], home_, home_runs, mets_home_ ? kLogoOrange : kWhite, 80);
-  blocks[3].parts[0] = {text::fit_line("PUT IT IN THE BOOKS!", 1, 1, 1), kCx};
+  // The public fallback font is one pixel too wide with added tracking and
+  // would otherwise trim the final exclamation point. Preserve the roomier
+  // tracking when it fits and tighten only the fallback-font build.
+  const int call_tracking = text::text_width(kFinalCall, 1) <= text::kMaxLineWidth ? 1 : 0;
+  blocks[3].parts[0] = {text::fit_line(kFinalCall, 1, 1, call_tracking), kCx};
   blocks[3].part_count = 1;
   blocks[3].role = kGlint;
   blocks[3].cy = 108;

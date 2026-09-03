@@ -21,9 +21,6 @@
   .telemetry-list div {
     padding-inline: 10px;
   }
-  .test-control-grid {
-    grid-template-columns: 1fr 1fr;
-  }
   .commissioning-grid {
     grid-template-columns: 1fr 1fr;
   }
@@ -93,7 +90,7 @@
     scrollbar-width: thin;
   }
   .workspace-nav button {
-    flex: 0 0 156px;
+    flex: 0 0 176px;
     min-height: 50px;
   }
   .workspace-nav button small {
@@ -133,8 +130,7 @@
     border-top: 1px solid #29404f;
     padding: 16px 0 0;
   }
-  .health-list,
-  .settings-grid {
+  .health-list {
     grid-template-columns: 1fr;
   }
   .live-game-detail {
@@ -246,7 +242,6 @@
   .health-list,
   .scenario-list,
   .interlock-grid,
-  .test-control-grid,
   .usb-bench-facts,
   .commissioning-grid {
     grid-template-columns: 1fr;

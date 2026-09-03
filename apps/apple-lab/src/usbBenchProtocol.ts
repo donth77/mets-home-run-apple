@@ -1,6 +1,7 @@
 export const USB_BENCH_PROTOCOL_PREFIX = "APPLE_BENCH:";
 export const USB_JOG_PROTOCOL_PREFIX = "APPLE_JOG:";
 export const USB_MOTION_PROTOCOL_PREFIX = "APPLE_MOTION:";
+export const USB_AUDIO_PROTOCOL_PREFIX = "APPLE_AUDIO:";
 const JOG_RECEIPT_PREFIX = "ACTUATOR_JOG=";
 
 export type UsbBenchLogicState = "STOP" | "RAISE" | "LOWER";
@@ -11,7 +12,11 @@ export type UsbJogReceipt = "ARMED" | "DISARMED" | "AUTO_STOP" | "ARM_EXPIRED" |
 export type UsbMotionSequence = "IDLE" | "LEAD_IN" | "REVIEW_HOLD" | "EXTENDING" | "RAISED" | "RETRACTING" | "FAULT";
 export type UsbMotionDrive = "OFF" | "EXTEND" | "RETRACT";
 export type UsbMotionRunStatus = "STARTED" | "COMPLETED" | "FAULTED" | "STOPPED";
-export type UsbFirmwareProfile = "motor_logic_test" | UsbJogProfile | "motion_commissioning";
+export type UsbAudioCardStatus = "MOUNTED" | "MISSING";
+export type UsbAudioChecksumStatus = "OK" | "MISSING" | "NO_CARD";
+export type UsbAudioPlayStatus = "STARTED" | "FAILED" | "STOPPED" | "FINISHED";
+export type UsbAudioTestStatus = "PASSED" | "FAILED" | "NO_CARD" | "MISSING_FIXTURE";
+export type UsbFirmwareProfile = "motor_logic_test" | UsbJogProfile | "motion_commissioning" | "audio_test";
 
 export interface UsbBenchHelloMessage {
   type: "hello";
@@ -99,6 +104,65 @@ export interface UsbMotionRunMessage {
   status: UsbMotionRunStatus;
 }
 
+export interface UsbAudioHelloMessage {
+  type: "audio-hello";
+  profile: "audio_test";
+  firmwareVersion: string;
+  sdChipSelect: string;
+  i2s: { bclk: string; lrc: string; din: string };
+  gainPercent: number;
+  gainCapPercent: number;
+  fixture: string;
+}
+
+export interface UsbAudioStateMessage {
+  type: "audio-state";
+  sdMounted: boolean;
+  cardMb: number;
+  playing: string;
+  status: string;
+  gainPercent: number;
+}
+
+export interface UsbAudioCardFile {
+  name: string;
+  bytes: number;
+}
+
+export interface UsbAudioCardMessage {
+  type: "audio-sd";
+  status: UsbAudioCardStatus;
+  cardMb: number;
+  files: UsbAudioCardFile[];
+}
+
+export interface UsbAudioChecksumMessage {
+  type: "audio-checksum";
+  status: UsbAudioChecksumStatus;
+  file?: string;
+  bytes?: number;
+  crc32?: string;
+}
+
+export interface UsbAudioPlayMessage {
+  type: "audio-play";
+  status: UsbAudioPlayStatus;
+  source: string;
+}
+
+export interface UsbAudioGainMessage {
+  type: "audio-gain";
+  percent: number;
+}
+
+export interface UsbAudioTestMessage {
+  type: "audio-test";
+  name: "display_sd_alternation";
+  status: UsbAudioTestStatus;
+  passes?: number;
+  fails?: number;
+}
+
 export type UsbBenchMessage =
   | UsbBenchHelloMessage
   | UsbBenchStateMessage
@@ -109,7 +173,14 @@ export type UsbBenchMessage =
   | UsbMotionHelloMessage
   | UsbMotionStateMessage
   | UsbMotionTraceMessage
-  | UsbMotionRunMessage;
+  | UsbMotionRunMessage
+  | UsbAudioHelloMessage
+  | UsbAudioStateMessage
+  | UsbAudioCardMessage
+  | UsbAudioChecksumMessage
+  | UsbAudioPlayMessage
+  | UsbAudioGainMessage
+  | UsbAudioTestMessage;
 
 const JOG_PROFILES: readonly UsbJogProfile[] = ["actuator_jog_test", "l298n_output_meter_test"];
 const JOG_MOTIONS: readonly UsbJogMotion[] = ["STOP", "EXTEND", "RETRACT"];
@@ -125,6 +196,10 @@ const MOTION_SEQUENCES: readonly UsbMotionSequence[] = [
 ];
 const MOTION_DRIVES: readonly UsbMotionDrive[] = ["OFF", "EXTEND", "RETRACT"];
 const MOTION_RUN_STATUSES: readonly UsbMotionRunStatus[] = ["STARTED", "COMPLETED", "FAULTED", "STOPPED"];
+const AUDIO_CARD_STATUSES: readonly UsbAudioCardStatus[] = ["MOUNTED", "MISSING"];
+const AUDIO_CHECKSUM_STATUSES: readonly UsbAudioChecksumStatus[] = ["OK", "MISSING", "NO_CARD"];
+const AUDIO_PLAY_STATUSES: readonly UsbAudioPlayStatus[] = ["STARTED", "FAILED", "STOPPED", "FINISHED"];
+const AUDIO_TEST_STATUSES: readonly UsbAudioTestStatus[] = ["PASSED", "FAILED", "NO_CARD", "MISSING_FIXTURE"];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -303,6 +378,94 @@ function parseMotion(value: Record<string, unknown>): UsbBenchMessage | undefine
   return undefined;
 }
 
+function parseAudio(value: Record<string, unknown>): UsbBenchMessage | undefined {
+  if (
+    value.type === "hello" &&
+    value.profile === "audio_test" &&
+    typeof value.firmwareVersion === "string" &&
+    typeof value.sdChipSelect === "string" &&
+    isRecord(value.i2s) &&
+    typeof value.i2s.bclk === "string" &&
+    typeof value.i2s.lrc === "string" &&
+    typeof value.i2s.din === "string" &&
+    isCount(value.gainPercent) &&
+    isCount(value.gainCapPercent) &&
+    typeof value.fixture === "string"
+  ) {
+    return {
+      type: "audio-hello",
+      profile: value.profile,
+      firmwareVersion: value.firmwareVersion,
+      sdChipSelect: value.sdChipSelect,
+      i2s: { bclk: value.i2s.bclk, lrc: value.i2s.lrc, din: value.i2s.din },
+      gainPercent: value.gainPercent,
+      gainCapPercent: value.gainCapPercent,
+      fixture: value.fixture,
+    };
+  }
+
+  if (
+    value.type === "state" &&
+    typeof value.sdMounted === "boolean" &&
+    isCount(value.cardMb) &&
+    typeof value.playing === "string" &&
+    typeof value.status === "string" &&
+    isCount(value.gainPercent)
+  ) {
+    return {
+      type: "audio-state",
+      sdMounted: value.sdMounted,
+      cardMb: value.cardMb,
+      playing: value.playing,
+      status: value.status,
+      gainPercent: value.gainPercent,
+    };
+  }
+
+  if (value.type === "sd" && isOneOf(value.status, AUDIO_CARD_STATUSES) && isCount(value.cardMb)) {
+    const rawFiles = Array.isArray(value.files) ? value.files : undefined;
+    if (!rawFiles) return undefined;
+    const files: UsbAudioCardFile[] = [];
+    for (const file of rawFiles) {
+      if (!isRecord(file) || typeof file.name !== "string" || !isCount(file.bytes)) return undefined;
+      files.push({ name: file.name, bytes: file.bytes });
+    }
+    return { type: "audio-sd", status: value.status, cardMb: value.cardMb, files };
+  }
+
+  if (value.type === "checksum" && isOneOf(value.status, AUDIO_CHECKSUM_STATUSES)) {
+    if (value.status === "OK") {
+      if (typeof value.file !== "string" || !isCount(value.bytes) || typeof value.crc32 !== "string") return undefined;
+      return { type: "audio-checksum", status: value.status, file: value.file, bytes: value.bytes, crc32: value.crc32 };
+    }
+    return {
+      type: "audio-checksum",
+      status: value.status,
+      ...(typeof value.file === "string" ? { file: value.file } : {}),
+    };
+  }
+
+  if (value.type === "play" && isOneOf(value.status, AUDIO_PLAY_STATUSES) && typeof value.source === "string") {
+    return { type: "audio-play", status: value.status, source: value.source };
+  }
+
+  if (value.type === "gain" && isCount(value.percent)) {
+    return { type: "audio-gain", percent: value.percent };
+  }
+
+  if (value.type === "test" && value.name === "display_sd_alternation" && isOneOf(value.status, AUDIO_TEST_STATUSES)) {
+    return {
+      type: "audio-test",
+      name: value.name,
+      status: value.status,
+      ...(isCount(value.passes) ? { passes: value.passes } : {}),
+      ...(isCount(value.fails) ? { fails: value.fails } : {}),
+    };
+  }
+
+  return undefined;
+}
+
 export function parseUsbBenchLine(line: string): UsbBenchMessage | undefined {
   if (line.startsWith(USB_BENCH_PROTOCOL_PREFIX)) {
     const value = parseJson(line, USB_BENCH_PROTOCOL_PREFIX);
@@ -315,6 +478,10 @@ export function parseUsbBenchLine(line: string): UsbBenchMessage | undefined {
   if (line.startsWith(USB_MOTION_PROTOCOL_PREFIX)) {
     const value = parseJson(line, USB_MOTION_PROTOCOL_PREFIX);
     return value ? parseMotion(value) : undefined;
+  }
+  if (line.startsWith(USB_AUDIO_PROTOCOL_PREFIX)) {
+    const value = parseJson(line, USB_AUDIO_PROTOCOL_PREFIX);
+    return value ? parseAudio(value) : undefined;
   }
   if (line.startsWith(JOG_RECEIPT_PREFIX)) return parseJogReceipt(line);
   return undefined;

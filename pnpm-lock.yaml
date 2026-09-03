@@ -149,7 +149,11 @@ importers:
         specifier: ^0.185.1
         version: 0.185.1
 
-  packages/device-display-wasm: {}
+  packages/device-display-wasm:
+    dependencies:
+      '@apple/protocol':
+        specifier: workspace:*
+        version: link:../protocol
 
   packages/game-core-wasm:
     dependencies:

@@ -1,72 +1,89 @@
 # Apple Lab
 
-Apple Lab is the local workshop for builders and maintainers. It can inspect live game data, replay completed games, run controlled scenarios, and eventually connect to a physical Apple for telemetry and guarded tests. The device remains autonomous when the Lab is closed.
+Apple Lab is the local workshop for building and testing the project. It can
+simulate games, replay MLB history, inspect feed behavior, preview the physical
+display, and talk to guarded commissioning firmware over USB.
 
-Apple Lab is not the owner's everyday setup page. The planned **Apple Manager** will be a smaller, phone-friendly interface served directly by each physical Apple for Wi-Fi setup, track uploads, settings, status, and firmware updates.
+The physical Apple does not depend on Apple Lab. It keeps following games when
+the Lab is closed.
+
+## Run it
+
+From the repository root:
 
 ```bash
 pnpm dev:lab
 ```
 
-Open [http://localhost:4173](http://localhost:4173).
+Open <http://localhost:4173>.
 
 ## Workspaces
 
-| Workspace | What it is for |
+| Workspace | Use it for |
 | --- | --- |
-| Overview | Device, game, and safety health |
-| Live Game | A read-only event timeline and opt-in MLB feed recorder |
-| Historical Replay | Playback of completed MLB games through the C++ core |
-| Simulator | Fast, repeatable test scenarios |
-| Hardware Tests | USB bench commissioning and future guarded component tests |
-| Diagnostics | Telemetry and the event ledger |
-| Settings | Development defaults and future paired-device inspection |
+| Overview | Quick device, game, and safety previews |
+| Live Game | An opt-in MLB recording and a demo device timeline |
+| Historical Replay | Completed MLB games with play, pause, seek, and speed controls |
+| Simulator | Fast, repeatable game scenarios |
+| Hardware Tests | Guarded USB commissioning and receipts from the Nano |
+| Diagnostics | A preview of autonomous-device telemetry and event history |
 
-## What works without hardware
+## No hardware required
 
-Live Game and Historical Replay never contact MLB just because their page opened. Choose a date or start a recording to make a request. Incoming JSON is normalized first, projected into display state and decision evidence by C++/WebAssembly, and then evaluated by the separate C++ decision core. Only that decision core can accept a home run or win.
+Live Game does not contact MLB until you start a recording. Historical Replay
+waits until you choose a date and game. Both use the shared C++ game-state and
+decision code.
 
-To replay a completed game:
+Seeking backward in a replay resets that code before rebuilding the state. An
+old home run therefore cannot become a new celebration. The timeline and CSV
+export show the decisions and commands for the full filtered result, not just
+the visible page.
 
-1. Open **Historical Replay** in the sidebar.
-2. Discover games for a date.
-3. Choose a game and load its archive.
-4. Use play, pause, speed, stepping, and event bookmarks to inspect it.
+Simulator scenarios use the same decision code and 320 × 240 display renderer
+as the Nano. The browser records motion commands; it cannot drive an actuator.
 
-Seeking backward resets and bootstraps the core, so revisiting an old home run cannot create a new celebration. The workspace shows normalized state, command receipts, and a bounded delivery log. It is always available in Apple Lab and needs no query flag.
+## USB hardware tests
 
-Simulator scenarios also pass through the real C++ decision code. The browser records the commands it would have sent, but it cannot move hardware. **Run on device** stays disabled until an authenticated Nano ESP32 connection exists.
+Hardware Tests uses Web Serial and works from localhost in Chrome, Edge, or
+Brave. It recognizes these firmware profiles:
 
-The Simulator previews the 320 x 240 physical screen alongside the selected audio slot, LED state, and actuator sequence. Home-run, grand-slam, and Mets-win frames come from the same portable C++ renderer compiled for the Nano. Live recording and Historical Replay use the C++ game-state projector; its WebAssembly is loaded only when one of those sources starts. Browser audio remains opt-in.
+| Profile | Bounded action |
+| --- | --- |
+| `nano_esp32_motor_logic_test` | One no-power ENA/IN1/IN2 signal test |
+| `nano_esp32_actuator_jog_test` | One short actuator jog per arm |
+| `nano_esp32_l298n_meter_test` | One longer meter window per arm |
+| `nano_esp32_motion_commissioning` | One engine-driven celebration per arm |
+| `nano_esp32_audio_test` | Storage, amplifier, and display/SD bus checks |
 
-Timeline tables are filtered and paginated, with 5, 10, and 25-row page sizes. CSV exports include every row matching the filter, not only the current page. They include browser-local, IANA-zone, and UTC timestamps and neutralize spreadsheet-formula prefixes.
+The Nano owns every deadline, stop, and fault. The browser never gets raw motor
+controls. Each motion request needs a new short-lived arm and returns a receipt.
+Follow the Hardware Tests instructions in order before connecting motor power
+or an actuator.
 
-## USB bench connection
+## What is still a preview
 
-Hardware Tests can connect to the dedicated `nano_esp32_motor_logic_test`
-firmware over Web Serial from localhost in Brave, Chrome, or Edge. The Lab reads
-a versioned device identity, the current ENA/IN1/IN2 state, and bounded test
-receipts. Serial evidence can be exported, while the commissioning checklist is
-stored only in the current browser.
+Overview and Diagnostics use representative device data. Hardware Tests' USB
+receipts are live; local-network pairing with the game-running firmware is not
+wired up yet. The disabled **Run fixture on device** button belongs to that
+separate connection.
 
-The logic self-test requires a new 60-second session and explicit confirmation
-that 12 V, the actuator, and both motor outputs are disconnected. It runs one
-fixed raise/stop/lower/stop signal pattern and returns all outputs LOW. The Lab
-does not expose the firmware's raw direction commands, and this connection
-cannot run a powered actuator test.
+## Apple Lab and Apple Manager
 
-## Physical-device boundary
+Apple Manager is the owner page served by the Nano. It changes the physical
+Apple's Wi-Fi and device settings.
 
-Outside the USB commissioning panel, device telemetry remains a fake preview. A future connection will pair with a Nano on the same local network, fetch a status snapshot, and subscribe to authenticated live telemetry. The Nano can keep a bounded event and fault ledger so the Lab can recover useful history after reconnecting; it does not need to store every animation frame or rapid sensor sample.
+Apple Lab is for development. Any Lab settings affect only the local Lab
+browser. They never configure the physical Apple, and neither browser interface
+makes motion-safety decisions.
 
-Telemetry is optional and only runs while Apple Lab is connected. The normal development setup is a local `pnpm dev:lab` session on the same network as the Apple—no hosted Lab or cloud relay is required. A public HTTPS deployment is not the preferred path because browsers may block it from connecting to a local HTTP device.
+## Code map
 
-A physical test will require a confirmed home position, paused live automation, an idle sequence, and an expiring maintenance lease from the firmware. Apple Lab will never be the source of truth for autonomous game tracking, and it will not expose unrestricted motor controls.
-
-## Apple Manager boundary
-
-Apple Manager and Apple Lab may share configuration contracts and small UI controls, but they serve different people. Apple Manager handles the short, safe owner workflow and is available from the device itself. Apple Lab keeps historical replay, feed inspection, debug traces, simulator controls, and advanced diagnostics. Neither interface makes celebration or motion-safety decisions for the Nano.
-
-## Code layout
-
-The app shell stays small. Shared manager components live in `src/managerComponents.tsx`, workspaces live in `src/workspaces/`, and feature styles live in `src/styles/`. New feed or device connections should enter through workspace hooks and adapters instead of adding transport logic to `App.tsx`.
+| Path | Contents |
+| --- | --- |
+| `src/workspaces/` | Main Lab screens |
+| `src/HistoricalReplayPanel.tsx` | Replay controls and event timeline |
+| `src/UsbBenchPanel.tsx` | Guarded serial test UI |
+| `src/useUsbBenchDevice.ts` | Web Serial connection |
+| `src/mlbRecordingRuntime.ts` | Live recording pipeline |
+| `src/physicalDisplayCanvas.ts` | Shared physical-display preview |
+| `src/styles/` | Workspace styles |

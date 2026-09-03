@@ -315,43 +315,68 @@ describe("MLB recording transport", () => {
     core.dispose();
   });
 
-  it("labels an MLB-reported rain delay without guessing other delay reasons", async () => {
+  it("labels every weather delay RAIN DELAY, including a bare 'Delayed' explained by a game advisory", async () => {
     const currentPlay = play({
       atBatIndex: 10,
       halfInning: "bottom",
       isComplete: false,
     });
-    const rainFeed = feed("20260827_190000", [currentPlay], "Delayed", {}, { reason: "Rain", statusCode: "IR" });
-    const genericFeed = feed("20260827_190010", [currentPlay], "Delayed", {}, { statusCode: "IO" });
-    const suspendedFeed = feed(
-      "20260827_190020",
-      [currentPlay],
-      "Suspended: Rain",
-      {},
-      { reason: "Rain", statusCode: "TR" },
-    );
-    const fetcher = vi
-      .fn<typeof fetch>()
-      .mockResolvedValueOnce(response(rainFeed))
-      .mockResolvedValueOnce(response(genericFeed))
-      .mockResolvedValueOnce(response(suspendedFeed));
+    // MLB's real mid-game shape: status "Delayed" (IO), reason on the advisory.
+    const advisedPlay = {
+      ...currentPlay,
+      playEvents: [
+        ...currentPlay.playEvents,
+        {
+          details: { description: "Status Change - Delayed: Rain", event: "Game Advisory", eventType: "game_advisory" },
+        },
+      ],
+    };
+    const feeds = [
+      feed("20260827_190000", [currentPlay], "Delayed", {}, { reason: "Rain", statusCode: "IR" }),
+      feed("20260827_190010", [currentPlay], "Delayed", {}, { statusCode: "IO" }),
+      feed("20260827_190020", [advisedPlay], "Delayed", {}, { statusCode: "IO" }),
+      feed("20260827_190030", [currentPlay], "Delayed: Lightning", {}, { reason: "Lightning", statusCode: "IL" }),
+      feed("20260827_190040", [currentPlay], "Suspended: Rain", {}, { reason: "Rain", statusCode: "TR" }),
+    ];
+    const fetcher = vi.fn<typeof fetch>();
+    for (const value of feeds) fetcher.mockResolvedValueOnce(response(value));
     const client = new MlbRecordingClient(fetcher);
-
-    const rain = await client.poll({ gamePk: 777001, gameNumber: 1 });
-    const generic = await client.poll({ gamePk: 777001, gameNumber: 1 });
-    const suspended = await client.poll({ gamePk: 777001, gameNumber: 1 });
-
-    expect(rain.capture?.gameSnapshot).toMatchObject({ phase: "DELAYED", label: "RAIN DELAY" });
-    expect(generic.capture?.gameSnapshot).toMatchObject({ phase: "DELAYED", label: "Delayed" });
-    expect(suspended.capture?.gameSnapshot).toMatchObject({ phase: "DELAYED", label: "Suspended: Rain" });
+    const labels: string[] = [];
+    for (let index = 0; index < feeds.length; index += 1) {
+      const result = await client.poll({ gamePk: 777001, gameNumber: 1 });
+      expect(result.capture?.gameSnapshot.phase).toBe("DELAYED");
+      labels.push(result.capture?.gameSnapshot.label ?? "");
+    }
+    expect(labels).toEqual(["RAIN DELAY", "Delayed", "RAIN DELAY", "RAIN DELAY", "Suspended: Rain"]);
   });
 
   it("preserves postponed and cancelled labels while treating completed-early games as final", async () => {
     const currentPlay = play({ atBatIndex: 11, halfInning: "bottom", isComplete: false });
     const fetcher = vi
       .fn<typeof fetch>()
-      .mockResolvedValueOnce(response(feed("20260827_190000", [currentPlay], "Postponed")))
-      .mockResolvedValueOnce(response(feed("20260827_190010", [currentPlay], "Cancelled")))
+      // MLB marks postponed and cancelled games abstractly Final; they must not read as a final score.
+      .mockResolvedValueOnce(
+        response(
+          feed(
+            "20260827_190000",
+            [currentPlay],
+            "Postponed",
+            {},
+            { abstractGameState: "Final", reason: "Rain", statusCode: "DR" },
+          ),
+        ),
+      )
+      .mockResolvedValueOnce(
+        response(
+          feed(
+            "20260827_190010",
+            [currentPlay],
+            "Cancelled",
+            {},
+            { abstractGameState: "Final", reason: "Rain", statusCode: "CR" },
+          ),
+        ),
+      )
       .mockResolvedValueOnce(response(feed("20260827_190020", [currentPlay], "Completed Early: Rain")));
     const client = new MlbRecordingClient(fetcher);
 
@@ -418,7 +443,7 @@ describe("MLB recording transport", () => {
     expect(result.capture?.coreInput.outs).toBe(3);
   });
 
-  it("treats MLB's end-of-inning state as a live changeover, not a final game", async () => {
+  it("labels MLB's end-of-inning state as END rather than MID", async () => {
     const completedPlay = play({
       atBatIndex: 19,
       halfInning: "bottom",
@@ -436,9 +461,209 @@ describe("MLB recording transport", () => {
 
     expect(result.capture?.gameSnapshot).toMatchObject({
       atBat: undefined,
-      half: "MIDDLE",
+      half: "END",
+      inning: 2,
       label: "LIVE",
       outs: 0,
+      phase: "LIVE",
+    });
+  });
+
+  it("labels only the changeover after the top half as MID", async () => {
+    const completedPlay = play({
+      atBatIndex: 20,
+      halfInning: "top",
+      inning: 3,
+    });
+    const payload = feed("20260827_190006", [completedPlay], "In Progress", {
+      currentInning: 3,
+      inningHalf: "Top",
+      inningState: "Middle",
+      outs: 3,
+    });
+    const client = new MlbRecordingClient(vi.fn<typeof fetch>().mockResolvedValue(response(payload)));
+
+    const result = await client.poll({ gamePk: 777001, gameNumber: 1 });
+
+    expect(result.capture?.gameSnapshot).toMatchObject({
+      atBat: undefined,
+      half: "MIDDLE",
+      inning: 3,
+      label: "LIVE",
+      outs: 0,
+      phase: "LIVE",
+    });
+  });
+
+  it("goes straight to FINAL when a decisive bottom ninth reaches End before status catches up", async () => {
+    const walkOff = play({
+      atBatIndex: 72,
+      halfInning: "bottom",
+      inning: 9,
+      resultDescription: "Mets win on a walk-off single.",
+    });
+    const payload = feed("20260827_220000", [walkOff], "In Progress", {
+      currentInning: 9,
+      inningHalf: "Bottom",
+      inningState: "End",
+      outs: 3,
+    });
+    const client = new MlbRecordingClient(vi.fn<typeof fetch>().mockResolvedValue(response(payload)));
+
+    const result = await client.poll({ gamePk: 777001, gameNumber: 1 });
+
+    expect(result.capture?.gameSnapshot).toMatchObject({
+      atBat: undefined,
+      half: "END",
+      inning: 9,
+      label: "FINAL",
+      outs: 0,
+      phase: "FINAL",
+    });
+    expect(result.capture?.coreInput).toMatchObject({ half: "END", inning: 9, phase: "FINAL" });
+  });
+
+  it("sends one Mets-win event when the inferred FINAL follows a tracked live frame", async () => {
+    const priorPlay = play({
+      atBatIndex: 71,
+      halfInning: "bottom",
+      inning: 9,
+      isComplete: false,
+    });
+    const walkOff = play({
+      atBatIndex: 71,
+      halfInning: "bottom",
+      inning: 9,
+      resultDescription: "Mets win on a walk-off single.",
+    });
+    const tiedScore = {
+      away: { runs: 2, hits: 7, errors: 0 },
+      home: { runs: 2, hits: 8, errors: 0 },
+    };
+    const winningScore = {
+      away: { runs: 2, hits: 7, errors: 0 },
+      home: { runs: 3, hits: 9, errors: 0 },
+    };
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        response(
+          feed("20260827_215950", [priorPlay], "In Progress", {
+            currentInning: 9,
+            inningHalf: "Bottom",
+            inningState: "Bottom",
+            outs: 2,
+            teams: tiedScore,
+          }),
+        ),
+      )
+      .mockResolvedValueOnce(
+        response(
+          feed("20260827_220000", [walkOff], "In Progress", {
+            currentInning: 9,
+            inningHalf: "Bottom",
+            inningState: "End",
+            outs: 2,
+            teams: winningScore,
+          }),
+        ),
+      );
+    const client = new MlbRecordingClient(fetcher);
+    const core = await GameCore.create();
+
+    try {
+      const bootstrap = await client.poll({ gamePk: 777001, gameNumber: 1 });
+      if (!bootstrap.capture) throw new Error("Expected a live bootstrap capture.");
+      expect(core.ingest(bootstrap.capture.coreInput, 0).events).toEqual([]);
+
+      const final = await client.poll({ gamePk: 777001, gameNumber: 1 });
+      if (!final.capture) throw new Error("Expected an inferred-final capture.");
+      expect(final.capture.gameSnapshot).toMatchObject({ half: "END", label: "FINAL", phase: "FINAL" });
+      expect(core.ingest(final.capture.coreInput, 1_000).events).toMatchObject([
+        { type: "CELEBRATION_STARTED", celebration: "METS_WIN", subject: "Mets Win!" },
+      ]);
+    } finally {
+      core.dispose();
+    }
+  });
+
+  it("goes straight to FINAL when the home team leads after the top ninth", async () => {
+    const finalOut = play({
+      atBatIndex: 71,
+      halfInning: "top",
+      inning: 9,
+      resultDescription: "Flyout ends the game.",
+    });
+    const payload = feed("20260827_215959", [finalOut], "In Progress", {
+      currentInning: 9,
+      inningHalf: "Top",
+      inningState: "Middle",
+      outs: 3,
+    });
+    const client = new MlbRecordingClient(vi.fn<typeof fetch>().mockResolvedValue(response(payload)));
+
+    const result = await client.poll({ gamePk: 777001, gameNumber: 1 });
+
+    expect(result.capture?.gameSnapshot).toMatchObject({
+      half: "END",
+      inning: 9,
+      label: "FINAL",
+      phase: "FINAL",
+    });
+  });
+
+  it("keeps the top-ninth changeover live when the home team still must bat", async () => {
+    const completedPlay = play({
+      atBatIndex: 71,
+      halfInning: "top",
+      inning: 9,
+    });
+    const payload = feed("20260827_215959", [completedPlay], "In Progress", {
+      currentInning: 9,
+      inningHalf: "Top",
+      inningState: "Middle",
+      outs: 3,
+      teams: {
+        away: { runs: 4, hits: 8, errors: 0 },
+        home: { runs: 3, hits: 7, errors: 0 },
+      },
+    });
+    const client = new MlbRecordingClient(vi.fn<typeof fetch>().mockResolvedValue(response(payload)));
+
+    const result = await client.poll({ gamePk: 777001, gameNumber: 1 });
+
+    expect(result.capture?.gameSnapshot).toMatchObject({
+      half: "MIDDLE",
+      inning: 9,
+      label: "LIVE",
+      phase: "LIVE",
+    });
+  });
+
+  it("keeps a tied End 9 live for extra innings", async () => {
+    const completedPlay = play({
+      atBatIndex: 72,
+      halfInning: "bottom",
+      inning: 9,
+    });
+    const payload = feed("20260827_220001", [completedPlay], "In Progress", {
+      currentInning: 9,
+      inningHalf: "Bottom",
+      inningState: "End",
+      outs: 3,
+      teams: {
+        away: { runs: 3, hits: 8, errors: 0 },
+        home: { runs: 3, hits: 9, errors: 0 },
+      },
+    });
+    const client = new MlbRecordingClient(vi.fn<typeof fetch>().mockResolvedValue(response(payload)));
+
+    const result = await client.poll({ gamePk: 777001, gameNumber: 1 });
+
+    expect(result.capture?.gameSnapshot).toMatchObject({
+      half: "END",
+      inning: 9,
+      label: "LIVE",
       phase: "LIVE",
     });
   });

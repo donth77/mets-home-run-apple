@@ -1,0 +1,70 @@
+name: Firmware release
+
+# Tag a commit `firmware-vX.Y.Z` (matching kFirmwareVersion in
+# firmware/src/apple_live.cpp) to build, sign, and publish the Apple firmware
+# as a GitHub release. Owners install the .bin from the Manager's Update
+# section. The signing key lives in the FIRMWARE_SIGNING_KEY repository
+# secret (the PEM made by tools/sign_firmware.py keygen).
+
+on:
+  push:
+    tags:
+      - "firmware-v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: firmware
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install PlatformIO
+        run: pip install --quiet platformio==6.1.16
+      - name: Check the tag against kFirmwareVersion
+        id: version
+        run: |
+          tag="${GITHUB_REF_NAME#firmware-v}"
+          source=$(grep -o 'kFirmwareVersion\[\] = "[^"]*"' src/apple_live.cpp | sed 's/.*"\(.*\)"/\1/' | tail -1)
+          echo "tag=$tag source=$source"
+          if [ "$tag" != "$source" ]; then
+            echo "Tag firmware-v$tag does not match kFirmwareVersion $source" >&2
+            exit 1
+          fi
+          echo "version=$tag" >> "$GITHUB_OUTPUT"
+      - name: Build
+        run: pio run -e nano_esp32_apple
+      - name: Sign
+        env:
+          FIRMWARE_SIGNING_KEY: ${{ secrets.FIRMWARE_SIGNING_KEY }}
+        run: |
+          if [ -z "$FIRMWARE_SIGNING_KEY" ]; then
+            echo "FIRMWARE_SIGNING_KEY secret is not set" >&2
+            exit 1
+          fi
+          umask 077
+          printf '%s\n' "$FIRMWARE_SIGNING_KEY" > "$RUNNER_TEMP/signing-key.pem"
+          out="home-run-apple-${{ steps.version.outputs.version }}.bin"
+          python3 tools/sign_firmware.py sign .pio/build/nano_esp32_apple/firmware.bin \
+            --key "$RUNNER_TEMP/signing-key.pem" --out "$out"
+          openssl ec -in "$RUNNER_TEMP/signing-key.pem" -pubout -out "$RUNNER_TEMP/public.pem"
+          python3 tools/sign_firmware.py verify "$out" --public "$RUNNER_TEMP/public.pem"
+          sha256sum "$out" > "$out.sha256"
+          rm -f "$RUNNER_TEMP/signing-key.pem"
+      - name: Publish the release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Apple firmware ${{ steps.version.outputs.version }}
+          body: |
+            Signed firmware for the physical Home Run Apple (Arduino Nano ESP32).
+            Install it from the Manager page: open home-run-apple.local on your
+            home Wi-Fi, scroll to Update, pick the .bin file, tap Install.
+          files: |
+            firmware/home-run-apple-${{ steps.version.outputs.version }}.bin
+            firmware/home-run-apple-${{ steps.version.outputs.version }}.bin.sha256

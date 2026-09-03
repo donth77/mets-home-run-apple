@@ -70,3 +70,24 @@ export interface GameSnapshot extends SnapshotBase {
 export interface PresentationSnapshot extends SnapshotBase {
   phase: PresentationPhase;
 }
+
+/** MLB status facts an adapter reads from one live feed before classification. */
+export interface GameStatusFacts {
+  abstractState: string;
+  detailedState: string;
+  statusCode: string;
+  reason: string;
+  /** Description of the newest "Game Advisory" event on the current play, or "". */
+  latestAdvisory: string;
+  reviewPending: boolean;
+}
+
+export interface GameStatusClassification {
+  phase: GamePhase;
+  /** "LIVE", "FINAL", "PLAY UNDER REVIEW", "RAIN DELAY", else MLB's detailed state. */
+  label: string;
+  /** A delay MLB attributes to rain, inclement weather, lightning, or wet grounds. */
+  weatherDelay: boolean;
+}
+
+export type GameStatusClassifier = (facts: GameStatusFacts) => GameStatusClassification;

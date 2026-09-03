@@ -45,9 +45,52 @@ export function mlbTeamNickname(team: Pick<TeamScore, "abbreviation" | "name">) 
   return MLB_TEAM_NICKNAMES[team.abbreviation.trim().toUpperCase()] ?? (suppliedName || team.abbreviation.trim());
 }
 
-export function inningLabel(snapshot: Pick<PresentationSnapshot, "phase" | "half" | "inning">): string {
+/** Formats a player label for the compact physical screen. */
+export function compactPlayerName(name: string | undefined): string | undefined {
+  const parts = name?.trim().split(/\s+/u).filter(Boolean) ?? [];
+  if (parts.length === 0) return undefined;
+  if (parts.length === 1) return parts[0];
+  const initial = Array.from(parts[0])[0];
+  return initial ? `${initial}. ${parts.slice(1).join(" ")}` : parts.join(" ");
+}
+
+/** Formats the physical screen's batter line without optional HR suffixes. */
+export function compactBatterLine(line: string | undefined): string | undefined {
+  const normalized = line?.trim();
+  if (!normalized) return undefined;
+  const match = normalized.match(/(\d+)\D+(\d+)/u);
+  return match ? `${match[1]} FOR ${match[2]}` : normalized;
+}
+
+export type InterruptionKind = "DELAY" | "RAIN_DELAY" | "SUSPENDED" | "POSTPONED" | "CANCELLED";
+
+/**
+ * Which interruption a DELAYED snapshot represents. The label comes from the
+ * shared status classifier, which already folds rain, inclement weather,
+ * lightning, and wet grounds into "RAIN DELAY"; suspended, postponed, and
+ * cancelled games keep MLB's own wording.
+ */
+export function interruptionKind(snapshot: Pick<PresentationSnapshot, "label">): InterruptionKind {
+  const status = snapshot.label.trim().toLowerCase();
+  if (status.includes("postpon")) return "POSTPONED";
+  if (status.includes("cancel")) return "CANCELLED";
+  if (status.includes("suspend")) return "SUSPENDED";
+  if (status === "rain delay") return "RAIN_DELAY";
+  return "DELAY";
+}
+
+/** Short scorebug word for each interruption, in the space an inning number takes. */
+const INTERRUPTION_INNING_LABELS: Record<InterruptionKind, string> = {
+  DELAY: "DELAY",
+  RAIN_DELAY: "DELAY",
+  SUSPENDED: "SUSP",
+  POSTPONED: "PPD",
+  CANCELLED: "CANC",
+};
+
+export function inningLabel(snapshot: Pick<PresentationSnapshot, "phase" | "half" | "inning" | "label">): string {
   if (snapshot.phase === "FINAL") return "FINAL";
-  if (snapshot.phase === "DELAYED") return "DELAY";
+  if (snapshot.phase === "DELAYED") return INTERRUPTION_INNING_LABELS[interruptionKind(snapshot)];
   if (snapshot.phase === "SLEEP") return "OFF";
   const half = snapshot.half === "TOP" ? "TOP" : snapshot.half === "BOTTOM" ? "BOT" : snapshot.half;
   return `${half} ${snapshot.inning}`;
@@ -81,12 +124,7 @@ function displayKind(snapshot: GameSnapshot): DeviceDisplayKind {
     return snapshot.label.toUpperCase().includes("OFFSEASON") ? "OFFSEASON" : "UPCOMING";
   }
 
-  const status = `${snapshot.label} ${snapshot.lastEvent}`.toLowerCase();
-  if (status.includes("postpon")) return "POSTPONED";
-  if (status.includes("cancel")) return "CANCELLED";
-  if (status.includes("suspend")) return "SUSPENDED";
-  if (/\brain\b|weather|inclement/.test(status)) return "RAIN_DELAY";
-  return "DELAY";
+  return interruptionKind(snapshot);
 }
 
 function finalResult(snapshot: GameSnapshot): DeviceFinalResult | undefined {
@@ -153,9 +191,9 @@ export function toDeviceDisplayState(snapshot: GameSnapshot): DeviceDisplayState
     bases: snapshot.atBat?.bases ?? { first: false, second: false, third: false },
     balls: snapshot.atBat?.balls,
     strikes: snapshot.atBat?.strikes,
-    batter: snapshot.atBat?.batter,
-    batterLine: snapshot.atBat?.batterLine,
-    pitcher: snapshot.atBat?.pitcher,
+    batter: compactPlayerName(snapshot.atBat?.batter),
+    batterLine: compactBatterLine(snapshot.atBat?.batterLine),
+    pitcher: compactPlayerName(snapshot.atBat?.pitcher),
     pitchCount: snapshot.atBat?.pitchCount,
   };
 }

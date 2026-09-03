@@ -9,6 +9,43 @@ import {
   normalizedInput,
 } from "../builders";
 
+function interruptionScenario(
+  id: string,
+  title: string,
+  shortLabel: string,
+  label: string,
+  lastEvent: string,
+): FixtureScenario {
+  return {
+    id,
+    title,
+    shortLabel,
+    description: `${title} remains display-only while all recording motion stays disabled.`,
+    frames: [
+      frame(0, { phase: "DELAYED", label, lastEvent }, 0, `${title} status received from the schedule feed.`),
+      frame(
+        3500,
+        { phase: "DELAYED", label, lastEvent: "Waiting for official update" },
+        0,
+        "Bounded backoff active; no live-feed motion.",
+      ),
+    ],
+    deviceFixture: deviceFixture(
+      [
+        inputFrame(
+          0,
+          normalizedInput("20260826_211500", {
+            updateMode: "BOOTSTRAP",
+            phase: "DELAYED",
+          }),
+        ),
+        inputFrame(3500, normalizedInput("20260826_211510", { phase: "DELAYED" })),
+      ],
+      0,
+    ),
+  };
+}
+
 export const passiveScenarios: readonly FixtureScenario[] = [
   {
     id: "rain-delay",
@@ -43,6 +80,16 @@ export const passiveScenarios: readonly FixtureScenario[] = [
       0,
     ),
   },
+  interruptionScenario("game-delay", "Game delay", "Game delay", "GAME DELAYED", "Delay in progress"),
+  interruptionScenario("game-suspended", "Game suspended", "Suspended", "GAME SUSPENDED", "Play stopped"),
+  interruptionScenario(
+    "game-postponed",
+    "Game postponed",
+    "Postponed",
+    "GAME POSTPONED",
+    "Next game time to be determined",
+  ),
+  interruptionScenario("game-cancelled", "Game cancelled", "Cancelled", "GAME CANCELLED", "Schedule update pending"),
   {
     id: "mets-win",
     title: "Mets win",
@@ -80,14 +127,14 @@ export const passiveScenarios: readonly FixtureScenario[] = [
           half: "END",
           outs: 3,
           home: { ...baseSnapshot.home, runs: 4 },
-          lastEvent: "Mets win · actuator extending at 15.24 mm/s",
+          lastEvent: "Mets win · actuator extending at 9.80 mm/s",
         },
         50,
         "Victory extend recorded after the display lead-in.",
         [command("MOTION_EXTEND", "777686:final", 50)],
       ),
       frame(
-        6500,
+        8300,
         {
           phase: "CELEBRATION",
           label: "METS WIN!",
@@ -101,7 +148,7 @@ export const passiveScenarios: readonly FixtureScenario[] = [
         "Extended limit reached; thirty-second win dwell begins.",
       ),
       frame(
-        36500,
+        38300,
         {
           phase: "FINAL",
           label: "FINAL",
@@ -116,7 +163,7 @@ export const passiveScenarios: readonly FixtureScenario[] = [
         [command("MOTION_RETRACT", "777686:final", 0)],
       ),
       frame(
-        39800,
+        43400,
         {
           phase: "FINAL",
           label: "FINAL",
@@ -162,30 +209,119 @@ export const passiveScenarios: readonly FixtureScenario[] = [
     id: "doubleheader",
     title: "Doubleheader handoff",
     shortLabel: "G1 → G2",
-    description: "Game one completes while game two remains independently armed.",
+    description:
+      "A Game 1 walk-off celebration resolves to its final card, then hands off to the scheduled Game 2 card.",
     frames: [
       frame(
         0,
-        { phase: "FINAL", label: "G1 FINAL", inning: 9, half: "END", outs: 3, lastEvent: "Game one complete" },
+        {
+          inning: 9,
+          half: "BOTTOM",
+          outs: 2,
+          away: { ...baseSnapshot.away, runs: 4 },
+          home: { ...baseSnapshot.home, runs: 4 },
+          lastEvent: "Two outs, bottom ninth of Game 1",
+        },
         0,
-        "Game 1 context finalized.",
+        "Game 1 remains live and tied before the walk-off.",
       ),
       frame(
-        2200,
+        1200,
+        {
+          phase: "CELEBRATION",
+          label: "METS WIN!",
+          inning: 9,
+          half: "END",
+          outs: 3,
+          away: { ...baseSnapshot.away, runs: 4 },
+          home: { ...baseSnapshot.home, runs: 5 },
+          lastEvent: "Mets walk off Game 1",
+        },
+        0,
+        "Game 1 final transition starts the Mets-win celebration.",
+        [],
+        [celebrationEvent("METS_WIN", "777686:final", "Mets Win!")],
+      ),
+      frame(
+        3200,
+        {
+          phase: "CELEBRATION",
+          label: "METS WIN!",
+          inning: 9,
+          half: "END",
+          outs: 3,
+          away: { ...baseSnapshot.away, runs: 4 },
+          home: { ...baseSnapshot.home, runs: 5 },
+          lastEvent: "Mets win · actuator extending at 9.80 mm/s",
+        },
+        50,
+        "Victory extend recorded after the display lead-in.",
+        [command("MOTION_EXTEND", "777686:final", 50)],
+      ),
+      frame(
+        8300,
+        {
+          phase: "CELEBRATION",
+          label: "METS WIN!",
+          inning: 9,
+          half: "END",
+          outs: 3,
+          away: { ...baseSnapshot.away, runs: 4 },
+          home: { ...baseSnapshot.home, runs: 5 },
+          lastEvent: "Mets win · victory dwell",
+        },
+        50,
+        "Extended limit reached; thirty-second win dwell begins.",
+      ),
+      frame(
+        38300,
+        {
+          phase: "FINAL",
+          label: "FINAL",
+          inning: 9,
+          half: "END",
+          outs: 3,
+          away: { ...baseSnapshot.away, runs: 4 },
+          home: { ...baseSnapshot.home, runs: 5 },
+          lastEvent: "Game 1 final · Apple returning home",
+        },
+        0,
+        "The Game 1 final card appears as retraction begins.",
+        [command("MOTION_RETRACT", "777686:final", 0)],
+      ),
+      frame(
+        43400,
+        {
+          phase: "FINAL",
+          label: "FINAL",
+          inning: 9,
+          half: "END",
+          outs: 3,
+          away: { ...baseSnapshot.away, runs: 4 },
+          home: { ...baseSnapshot.home, runs: 5 },
+          lastEvent: "Game 1 final card hold",
+        },
+        0,
+        "Retracted limit reached while the Game 1 final card remains visible.",
+      ),
+      frame(
+        48300,
         {
           gamePk: 777687,
           gameNumber: 2,
           phase: "PREGAME",
-          label: "GAME 2 · 7:10 PM",
+          label: "DOUBLEHEADER GAME 2",
           inning: 1,
           half: "TOP",
           outs: 0,
           away: { id: 144, abbreviation: "ATL", name: "Atlanta", runs: 0 },
           home: { id: 121, abbreviation: "NYM", name: "Mets", runs: 0 },
+          scheduledStart: "2026-08-26T23:10:00Z",
+          venue: "Citi Field",
           lastEvent: "Game two scheduled",
         },
         0,
-        "Game 2 context selected without replaying Game 1.",
+        "Ten-second Game 1 final hold complete; the scheduled Game 2 card takes over.",
       ),
     ],
     deviceFixture: deviceFixture(
@@ -196,16 +332,29 @@ export const passiveScenarios: readonly FixtureScenario[] = [
             updateMode: "BOOTSTRAP",
             gamePk: 777686,
             gameNumber: 1,
+            phase: "LIVE",
+            inning: 9,
+            half: "BOTTOM",
+            outs: 2,
+            awayRuns: 4,
+            homeRuns: 4,
+          }),
+        ),
+        inputFrame(
+          1200,
+          normalizedInput("20260826_180010", {
+            gamePk: 777686,
+            gameNumber: 1,
             phase: "FINAL",
             inning: 9,
             half: "END",
             outs: 3,
             awayRuns: 4,
-            homeRuns: 3,
+            homeRuns: 5,
           }),
         ),
         inputFrame(
-          2200,
+          48300,
           normalizedInput("20260826_220000", {
             updateMode: "BOOTSTRAP",
             gamePk: 777687,
@@ -219,7 +368,7 @@ export const passiveScenarios: readonly FixtureScenario[] = [
           }),
         ),
       ],
-      0,
+      1,
     ),
   },
   {
@@ -238,6 +387,8 @@ export const passiveScenarios: readonly FixtureScenario[] = [
           outs: 0,
           away: { id: 146, abbreviation: "MIA", name: "Miami", runs: 0 },
           home: { id: 121, abbreviation: "NYM", name: "Mets", runs: 0 },
+          scheduledStart: "2026-08-28T23:10:00Z",
+          venue: "Citi Field",
           lastEvent: "Low-duty schedule sleep",
         },
         0,

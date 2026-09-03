@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#002d72">
+<meta name="description" content="Set up your Home Run Apple in two minutes: join its setup network from any phone, tablet, or computer, pick your Wi-Fi, and it follows the Mets on its own.">
+<title>Home Run Apple Setup</title>
+<link rel="icon" type="image/png" href="/favicon.png">
+<style>
+:root{--blue:#002d72;--blue-deep:#071a3d;--blue-card:#10275a;--blue-line:#2a4680;--orange:#ff5910;--orange-soft:#ffb28a;--text:#f4f6fb;--muted:#b8c4dc}
+*{box-sizing:border-box}
+body{margin:0;background:var(--blue-deep);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased;font-size:17px;line-height:1.55}
+header{background:var(--blue);border-bottom:4px solid var(--orange)}
+.bar{max-width:600px;margin:0 auto;padding:18px;display:flex;align-items:center;gap:14px}
+.bar img{width:56px;height:56px;flex:none;filter:drop-shadow(0 2px 6px rgba(0,0,0,.35))}
+h1{margin:0;font-size:22px}
+.sub{margin:4px 0 0;color:var(--orange-soft);font-size:15px}
+main{max-width:600px;margin:0 auto;padding:20px 18px 6px}
+.lead{font-size:18px;margin:0 0 6px}
+.need{color:var(--muted);font-size:15px;margin:0 0 22px}
+h2{font-size:15px;letter-spacing:.08em;text-transform:uppercase;color:var(--orange-soft);margin:26px 0 12px}
+ol.steps{list-style:none;padding:0;margin:0;counter-reset:step}
+ol.steps li{position:relative;background:var(--blue-card);border:1px solid var(--blue-line);border-radius:14px;padding:16px 18px 16px 64px;margin:0 0 12px;counter-increment:step}
+ol.steps li::before{content:counter(step);position:absolute;left:16px;top:16px;width:34px;height:34px;border-radius:50%;background:var(--orange);color:#fff;font-weight:800;font-size:17px;display:flex;align-items:center;justify-content:center}
+ol.steps b{display:block;font-size:18px;margin:2px 0 4px}
+ol.steps p{margin:0}
+.tip{margin:8px 0 0;font-size:15px;color:var(--muted)}
+.tip strong{color:var(--text)}
+/* Screenshots are the Apple's real 320x240 frames. They stay at native size so
+   every pixel maps to whole screen pixels; a smaller phone scales them smoothly. */
+.screens{display:flex;flex-wrap:wrap;gap:12px;margin-top:10px}
+.shot{display:block;width:min(320px,100%);height:auto;image-rendering:pixelated;border-radius:6px;border:2px solid var(--blue-line);background:#00081f}
+.done{background:rgba(255,89,16,.12);border:1px solid rgba(255,89,16,.4);border-radius:14px;padding:16px 18px;margin:18px 0 6px}
+.done b{display:block;font-size:18px;margin-bottom:4px}
+details{background:var(--blue-card);border:1px solid var(--blue-line);border-radius:14px;margin:0 0 10px;padding:0 18px}
+summary{cursor:pointer;list-style:none;padding:16px 0;font-size:18px;font-weight:700;display:flex;align-items:center;justify-content:space-between;gap:12px}
+summary::-webkit-details-marker{display:none}
+summary::after{content:"+";color:var(--orange-soft);font-size:26px;font-weight:400;line-height:1}
+details[open] summary::after{content:"\2013"}
+details .body{padding:0 0 16px}
+details .body p{margin:0 0 10px}
+ul.plain{list-style:none;padding:0;margin:0}
+ul.plain li{padding:10px 0;border-top:1px solid var(--blue-line)}
+ul.plain li:first-child{border-top:0}
+ul.plain b{display:block;margin-bottom:2px}
+ul.plain span{color:var(--muted);font-size:15px}
+.fix{padding:12px 0;border-top:1px solid var(--blue-line)}
+.fix:first-child{border-top:0;padding-top:2px}
+.fix b{display:block;margin-bottom:2px}
+.fix p{margin:0;color:var(--muted);font-size:15px}
+.fix .shot{margin-top:10px}
+@media (max-width:360px){.shot{image-rendering:auto}}
+code{background:rgba(0,0,0,.25);padding:2px 7px;border-radius:6px;font-size:15px}
+a{color:#fff}
+.warn{border-left:4px solid var(--orange);padding:10px 14px;background:rgba(255,89,16,.12);border-radius:8px;margin:12px 0 4px;font-size:15px}
+footer{max-width:600px;margin:0 auto;padding:0 18px 40px;color:var(--muted);font-size:13px}
+</style>
+</head>
+<body>
+<header><div class="bar"><img src="/favicon.png" alt=""><div><h1>Home Run Apple</h1><p class="sub">Setup guide</p></div></div></header>
+<main>
+<p class="lead">Two minutes with a phone, tablet, or computer, then the Apple follows the Mets by itself.</p>
+<p class="need">You need the Apple plugged in, any device with Wi-Fi, and your home Wi-Fi password.</p>
+
+<h2>Set up Wi-Fi</h2>
+<ol class="steps">
+<li><b>Plug in the Apple.</b><p>Its screen shows a QR code, then the same details typed out. It switches every ten seconds.</p>
+<div class="screens"><img class="shot" src="/setup/screen-wifi-qr.png" width="320" height="240" alt="The Apple's screen: WI-FI SETUP with a QR code and SCAN HERE"><img class="shot" src="/setup/screen-wifi-setup.png" width="320" height="240" alt="The Apple's screen: join Home Run Apple, an eight-digit password, then open http://192.168.4.1"></div>
+<p class="tip">Your Apple shows its own password; this one is an example.</p></li>
+<li><b>Join the Wi-Fi network Home Run Apple.</b><p>Phone or tablet: <br/> scan the code and tap the prompt. <br/> <br /> Computer, or no prompt: <br/> open your Wi-Fi settings, pick <strong>Home Run Apple</strong>, and type the password from the screen.</p>
+<p class="tip">If your device says "no internet", stay connected.</p></li>
+<li><b>Open the setup page.</b><p>Phones and Macs open it on their own. Android, Windows, and Chromebooks: tap the sign-in notification.</p>
+<p class="tip"><strong>Nothing opened?</strong> Type <code>192.168.4.1</code> into your browser.</p></li>
+<li><b>Enter your home Wi-Fi password and tap Join.</b><p>Your network is already picked. Wait for the page to say <strong>Connected</strong>.</p>
+<p class="tip"><strong>Could not join?</strong> Check the password. The Apple only joins 2.4 GHz networks; most home routers have one.</p></li>
+</ol>
+<div class="done"><b>Done.</b>The Apple's setup network closes, your device goes back to your home Wi-Fi, and the screen shows the next Mets game. It does not need a phone or computer from here on.</div>
+
+<h2>After setup</h2>
+<details open>
+<summary>Game day</summary>
+<div class="body">
+<div class="fix"><b>Before the game</b><p>The next matchup and start time.</p><img class="shot" src="/setup/screen-next-game.png" width="320" height="240" alt="The Apple's screen showing the next Mets game"></div>
+<div class="fix"><b>During the game</b><p>Score, inning, count, runners, batter, and pitcher, a few seconds behind the broadcast.</p><img class="shot" src="/setup/screen-live-game.png" width="320" height="240" alt="The Apple's screen showing a live game"></div>
+<div class="fix"><b>Mets home run or Mets win</b><p>The celebration plays and the Apple rises for the Raised time setting, 30 seconds unless you change it.</p></div>
+<div class="warn">Keep hands, cords, and small objects away from the Apple while it moves. Unplug it before opening the case.</div>
+</div>
+</details>
+
+<details>
+<summary>Configure Settings</summary>
+<div class="body">
+<p>On your home Wi-Fi, open <a href="http://home-run-apple.local">home-run-apple.local</a> in a browser. If that does not load, use the numeric address the setup page showed you.</p>
+<ul class="plain">
+<li><b>Raised time</b><span>How long the Apple stays up, 5 to 120 seconds.</span></li>
+<li><b>Motor</b><span>Off keeps the Apple still. Celebrations still play on the screen.</span></li>
+<li><b>Pause the Apple</b><span>Off unless you turn it on. On stops following games and celebrating until you turn it off.</span></li>
+<li><b>Screen brightness</b><span>Dims the display without turning it off.</span></li>
+<li><b>Sleep screen between games</b><span>Turns the screen off until the next game starts. Covers off days and the offseason.</span></li>
+<li><b>Time zone</b><span>Game times on the screen. Set from the device you used for setup; change it here if you move.</span></li>
+<li><b>Password lock</b><span>Off unless you turn it on, which means anyone on your Wi-Fi can change settings. When you turn it on, the page shows the password once. Write it down.</span></li>
+</ul>
+<p class="tip">Tap <strong>Save</strong> after changing anything.</p>
+</div>
+</details>
+
+<details>
+<summary>Reset button</summary>
+<div class="body">
+<ul class="plain">
+<li><b>Short press</b><span>Shows the Apple's address and password on the screen for a minute.</span></li>
+<li><b>Hold for ten seconds</b><span>Counts down, then forgets the Wi-Fi network and starts setup again. Let go early to keep everything.</span></li>
+</ul>
+</div>
+</details>
+
+<details>
+<summary>Updates</summary>
+<div class="body">
+<p>New firmware comes as a file from the project's <a href="https://github.com/donth77/mets-home-run-apple/releases">releases page</a>. On your home Wi-Fi, open the Apple's settings page, scroll to <strong>Update</strong>, and tap <strong>Check for updates</strong>. If there is a newer version, tap Install. You can also pick a downloaded file there, or restart the Apple.</p>
+<p class="tip">The Apple restarts and is back in about a minute. It will not install during a game. If the new firmware fails to start, the Apple goes back to the old one on its own.</p>
+</div>
+</details>
+
+<details>
+<summary>Troubleshooting</summary>
+<div class="body">
+<div class="fix"><div><b>WI-FI LOST</b><p>The Apple is reconnecting on its own. If your Wi-Fi password changed, hold the button ten seconds and set it up again.</p></div><img class="shot" src="/setup/screen-wifi-lost.png" width="320" height="240" alt="Wi-Fi lost screen"></div>
+<div class="fix"><div><b>MOTOR STOPPED</b><p>The Apple stopped its motor for safety. Make sure nothing blocks it, then unplug it and plug it back in.</p></div><img class="shot" src="/setup/screen-motor-stopped.png" width="320" height="240" alt="Motor stopped screen"></div>
+<div class="fix"><b>The settings page won't load</b><p>Make sure your device is on the same Wi-Fi as the Apple. On Android and Windows, use the numeric address instead of the <code>.local</code> name.</p></div>
+<div class="fix"><b>The setup page says it could not join</b><p>Check the Wi-Fi password and that the network is 2.4 GHz. The Apple reopens its setup network so you can try again.</p></div>
+</div>
+</details>
+</main>
+<footer>Home Run Apple is a fan project, not affiliated with the New York Mets or Major League Baseball. Source and build notes: <a href="https://github.com/donth77/mets-home-run-apple#mets-home-run-apple">GitHub</a></footer>
+</body>
+</html>

@@ -184,7 +184,10 @@ export function useLiveMetsGame(enabled = true): LiveMetsGameState {
       stopTracking();
       const token = runToken;
       const inspectingCompletedGame = isFinalScheduleGame(selectedGame);
-      setGame(selectedGame);
+      // A recently completed game may only be getting opened to inspect its
+      // event timestamps. Keep that background inspection out of the public
+      // presentation unless the core actually starts a fresh replay.
+      if (!inspectingCompletedGame) setGame(selectedGame);
       setStatus(recoveringFromError ? "ERROR" : "CONNECTING");
       if (!recoveringFromError) setError(undefined);
       let gameStateProjector: GameStateProjectorInstance | undefined;
@@ -206,6 +209,7 @@ export function useLiveMetsGame(enabled = true): LiveMetsGameState {
           mlbApiFetch,
           () => new Date(),
           (frame) => activeGameStateProjector.project(frame),
+          (facts) => activeGameStateProjector.classifyStatus(facts),
         );
 
         const stopCoreTicking = () => {
@@ -290,24 +294,34 @@ export function useLiveMetsGame(enabled = true): LiveMetsGameState {
                 Date.now(),
                 presentedEventKeysRef.current,
               );
+              let bootstrapPresentation: LiveCorePresentation | undefined;
               let corePresentation: LiveCorePresentation;
               if (replayPlan) {
                 for (const eventKey of replayPlan.eventKeys) presentedEventKeysRef.current.add(eventKey);
-                const bootstrapPresentation = activeCore.ingest(replayPlan.bootstrapInput, performance.now());
-                acceptCorePresentation(bootstrapPresentation, result.capture.gameSnapshot);
+                bootstrapPresentation = activeCore.ingest(replayPlan.bootstrapInput, performance.now());
                 corePresentation = activeCore.ingest(replayPlan.replayInput, performance.now());
               } else {
                 corePresentation = activeCore.ingest(result.capture.coreInput, performance.now());
               }
-              acceptCorePresentation(corePresentation, result.capture.gameSnapshot);
-              syncCoreTicking(corePresentation);
+              const replayStarted =
+                corePresentation.celebration !== undefined ||
+                coreSequenceNeedsTicking(corePresentation.decision?.sequenceState);
+              const silentCompletedInspection =
+                inspectingCompletedGame && continuation.kind === "DISCOVER" && !replayStarted;
+              if (!silentCompletedInspection) {
+                if (inspectingCompletedGame) setGame(selectedGame);
+                if (bootstrapPresentation) {
+                  acceptCorePresentation(bootstrapPresentation, result.capture.gameSnapshot);
+                }
+                acceptCorePresentation(corePresentation, result.capture.gameSnapshot);
+                syncCoreTicking(corePresentation);
+              }
               if (continuation.kind === "DISCOVER") {
                 if (result.capture.gameSnapshot.phase === "FINAL") inspectedFinalGamePks.add(selectedGame.gamePk);
-                const replayStarted =
-                  corePresentation.celebration !== undefined ||
-                  coreSequenceNeedsTicking(corePresentation.decision?.sequenceState);
                 pendingDiscoveryDelayMs = inspectingCompletedGame && !replayStarted ? 0 : continuation.delayMs;
-                setStatus(result.capture.gameSnapshot.phase === "FINAL" ? "FINAL" : "POLLING");
+                if (!silentCompletedInspection) {
+                  setStatus(result.capture.gameSnapshot.phase === "FINAL" ? "FINAL" : "POLLING");
+                }
                 resumeTracking = undefined;
                 queuePendingDiscoveryIfSettled(corePresentation);
                 return;

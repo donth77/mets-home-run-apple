@@ -45,66 +45,8 @@
   grid-template-columns: repeat(4, minmax(0, 1fr));
   margin-bottom: 16px;
 }
-.test-control-panel,
 .service-log {
   padding: 18px;
-}
-.test-control-grid {
-  display: grid;
-  gap: 11px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  padding-top: 15px;
-}
-.test-control-card {
-  background: #0a1823;
-  border: 1px solid #223b4c;
-  border-radius: 9px;
-  display: grid;
-  gap: 7px;
-  min-width: 0;
-  padding: 13px;
-}
-.test-control-card__icon {
-  background: #173a55;
-  border: 1px solid #34709a;
-  border-radius: 5px;
-  height: 25px;
-  position: relative;
-  width: 25px;
-}
-.test-control-card__icon::after {
-  background: #f17b40;
-  content: "";
-  height: 7px;
-  inset: 8px;
-  position: absolute;
-  width: 7px;
-}
-.test-control-card h3 {
-  color: #dce7ef;
-  font-size: 0.75rem;
-  margin: 2px 0 0;
-}
-.test-control-card p {
-  color: #7f94a4;
-  font-size: 0.65rem;
-  line-height: 1.45;
-  margin: 0;
-  min-height: 38px;
-}
-.test-control-card button {
-  background: #1d5e8c;
-  border: 1px solid #367cae;
-  border-radius: 6px;
-  color: #fff;
-  font-size: 0.64rem;
-  min-height: 37px;
-}
-.test-control-card button:disabled {
-  background: #14222d;
-  border-color: #293d4b;
-  color: #617584;
-  cursor: not-allowed;
 }
 .service-log {
   margin-top: 16px;
@@ -356,4 +298,58 @@
   font-size: 0.62rem;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
+}
+
+.usb-bench-state--audio {
+  grid-template-columns: minmax(150px, auto) 76px 96px minmax(200px, 1fr);
+}
+
+.usb-bench-state--audio strong {
+  font-size: 0.86rem;
+  text-align: center;
+}
+
+.bench-audio-evidence {
+  background: #081620;
+  border: 1px solid #263e4f;
+  color: #b7cad7;
+  display: grid;
+  font-size: 0.68rem;
+  gap: 8px;
+  line-height: 1.5;
+  margin-top: 12px;
+  padding: 10px 12px;
+}
+
+.bench-audio-evidence span {
+  color: #f2f7fa;
+  font-weight: 700;
+}
+
+.bench-audio-evidence ul {
+  display: grid;
+  gap: 4px;
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+}
+
+.bench-audio-evidence li {
+  align-items: baseline;
+  display: flex;
+  gap: 10px;
+}
+
+.bench-audio-evidence code {
+  color: #f2f7fa;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.bench-audio-evidence small {
+  color: #849aa9;
+}
+
+.bench-audio-evidence p {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  margin: 0;
 }

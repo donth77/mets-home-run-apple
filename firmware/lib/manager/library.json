@@ -1,0 +1,11 @@
+{
+  "$schema": "https://raw.githubusercontent.com/platformio/platformio-core/develop/platformio/assets/schema/library.json",
+  "name": "apple-manager",
+  "version": "0.1.0",
+  "description": "Nano-hosted Apple Manager: first-boot Wi-Fi setup network, captive setup page, stored credentials, live status, owner settings, and the time zone table.",
+  "dependencies": [{ "name": "ArduinoJson" }],
+  "build": {
+    "includeDir": "include",
+    "srcDir": "src"
+  }
+}

@@ -1,8 +1,20 @@
 name: Public checks
 
+# Every push and pull request runs the checks. A push to main that touches the
+# Virtual Apple site also publishes it to Cloudflare Pages (the direct-upload
+# project behind metsapple.com), from the exact build the checks just passed.
+# The Pages Function that relays MLB traffic ships with it because wrangler
+# runs inside apps/virtual-apple, where the functions/ directory lives.
+
 on:
   push:
   pull_request:
+  workflow_dispatch:
+    inputs:
+      deploy_site:
+        description: "Publish Virtual Apple even if nothing under the site changed"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -10,12 +22,14 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-24.04
+    outputs:
+      site_changed: ${{ steps.site.outputs.changed }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
         with:
           version: 10.14.0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
@@ -32,3 +46,77 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
+      - name: Decide whether the site needs publishing
+        id: site
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+        env:
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+          FORCED: ${{ github.event_name == 'workflow_dispatch' && inputs.deploy_site }}
+        run: |
+          changed=true
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            changed="$FORCED"
+          elif [ -n "$BEFORE" ] && [ "$BEFORE" != "0000000000000000000000000000000000000000" ] \
+               && git fetch --quiet --depth=1 origin "$BEFORE" 2>/dev/null \
+               && git diff --quiet "$BEFORE" "$AFTER" -- apps/virtual-apple packages public package.json pnpm-lock.yaml pnpm-workspace.yaml .github/workflows/ci.yml; then
+            changed=false
+          fi
+          echo "changed=$changed" >> "$GITHUB_OUTPUT"
+          echo "site changed: $changed"
+      - name: Keep the built site for the deploy job
+        if: steps.site.outputs.changed == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: virtual-apple-site
+          path: apps/virtual-apple/dist
+          retention-days: 3
+          if-no-files-found: error
+
+  deploy-site:
+    name: Publish Virtual Apple
+    needs: validate
+    if: needs.validate.outputs.site_changed == 'true'
+    runs-on: ubuntu-24.04
+    concurrency:
+      group: publish-virtual-apple
+      cancel-in-progress: false
+    steps:
+      - name: Check the Cloudflare credentials
+        id: creds
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::warning::CLOUDFLARE_API_TOKEN (secret) or CLOUDFLARE_ACCOUNT_ID (variable) is missing; the site was not published. See apps/virtual-apple/README.md."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v7
+        if: steps.creds.outputs.ready == 'true'
+      - uses: actions/download-artifact@v8
+        if: steps.creds.outputs.ready == 'true'
+        with:
+          name: virtual-apple-site
+          path: apps/virtual-apple/dist
+      - name: Publish to Cloudflare Pages
+        if: steps.creds.outputs.ready == 'true'
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: apps/virtual-apple
+          command: pages deploy dist --project-name virtual-mets-apple --branch main --commit-hash ${{ github.sha }}
+      - name: Check the live site
+        if: steps.creds.outputs.ready == 'true'
+        run: |
+          sleep 15
+          for path in "/" "/setup/" "/api/mlb/api/v1/schedule?sportId=1&teamId=121&startDate=2026-09-03&endDate=2026-09-03"; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" -H "Cache-Control: no-cache" "https://metsapple.com$path")
+            echo "$code $path"
+            [ "$code" = "200" ] || exit 1
+          done
+          type=$(curl -s -o /dev/null -w "%{content_type}" -H "Cache-Control: no-cache" "https://metsapple.com/api/mlb/api/v1/schedule?sportId=1&teamId=121&startDate=2026-09-03&endDate=2026-09-03")
+          case "$type" in application/json*) ;; *) echo "the MLB relay answered $type, not JSON; the Pages Function did not ship" >&2; exit 1;; esac
