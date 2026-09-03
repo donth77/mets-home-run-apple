@@ -35,9 +35,17 @@ constexpr std::uint32_t kSerialWaitTimeoutMs = 3'000;
 constexpr char kFirmwareVersion[] = "0.1.0";
 constexpr char kProfileName[] = "audio_test";
 constexpr char kFixturePath[] = "/tone.wav";
+// The card holds the whole default celebration library, so the bench can step
+// through it rather than judging the hardware on one track.
+char current_path[64] = "/tone.wav";
 
-constexpr float kGainSteps[] = {0.10F, 0.20F, 0.35F};
-constexpr std::uint8_t kGainPercents[] = {10, 20, 35};
+// Unity is the only lossless setting. The library stores gain as a whole
+// number out of 64 and applies it with integer maths, so any value below 1.0
+// discards resolution: 0.10 becomes 6/64 and throws away about three bits,
+// which is inaudible on a test tone and clearly audible as grain on music.
+// Set playback level in the audio file and leave this at 1.0.
+constexpr float kGainSteps[] = {0.10F, 0.35F, 1.00F};
+constexpr std::uint8_t kGainPercents[] = {10, 35, 100};
 
 constexpr std::uint32_t kToneSampleRate = 22'050;
 constexpr std::uint32_t kToneSeconds = 1;
@@ -81,17 +89,26 @@ AudioFileSourceBuffer* buffered = nullptr;
 std::uint8_t* ram_clip = nullptr;
 std::uint32_t ram_clip_bytes = 0;
 bool play_from_ram = false;
+// Worst-case blocking measured during playback. The audio hardware plays from
+// a queue; if one call blocks longer than that queue holds, the queue empties
+// and the gap is heard. This measures the block directly, which the source
+// buffer's own underflow counter cannot see.
+std::uint32_t worst_loop_us = 0;
+std::uint32_t loops = 0;
+std::uint32_t blocks_over_5ms = 0;
 std::uint32_t underflows = 0;
 std::uint32_t refills = 0;
 void on_source_status(void*, int code, const char*) {
   if (code == AudioFileSourceBuffer::STATUS_UNDERFLOW) ++underflows;
   else if (code == AudioFileSourceBuffer::STATUS_FILLING) ++refills;
 }
-constexpr std::size_t kStreamBufferBytes = 8 * 1024;
+constexpr std::size_t kStreamBufferBytes = 4 * 1024;
 constexpr std::uint32_t kSdClockHz = 20'000'000;
-// Each DMA buffer is 128 frames; 16 of them queue about 93 ms at 22.05 kHz,
-// which has to exceed the time one buffer refill takes.
-constexpr int kI2sDmaBuffers = 16;
+// Each DMA buffer is 128 frames; 32 of them queue about 190 ms at 22.05 kHz.
+// This is the cushion that has to outlast one blocking refill, and it is the
+// thing that actually clicks when it runs dry. The source buffer's own
+// underflow counter does NOT detect that, which misled an earlier session.
+constexpr int kI2sDmaBuffers = 32;
 std::uint8_t tone_wav[kToneBytes];
 std::size_t gain_index = 0;
 bool sd_mounted = false;
@@ -159,8 +176,12 @@ void publish_state() {
 
 void publish_play(const char* status, const char* what) {
   if (std::strcmp(status, "FINISHED") == 0 || std::strcmp(status, "STOPPED") == 0) {
-    Serial.printf("APPLE_AUDIO:{\"type\":\"stream\",\"underflows\":%lu,\"refills\":%lu}\n",
-                  static_cast<unsigned long>(underflows), static_cast<unsigned long>(refills));
+    Serial.printf("APPLE_AUDIO:{\"type\":\"stream\",\"underflows\":%lu,\"refills\":%lu,"
+                  "\"loops\":%lu,\"worstBlockUs\":%lu,\"blocksOver5ms\":%lu,"
+                  "\"queueMs\":%d}\n",
+                  static_cast<unsigned long>(underflows), static_cast<unsigned long>(refills),
+                  static_cast<unsigned long>(loops), static_cast<unsigned long>(worst_loop_us),
+                  static_cast<unsigned long>(blocks_over_5ms), kI2sDmaBuffers * 128 * 1000 / 22050);
   }
   snprintf(last_status, sizeof(last_status), "%s", status);
   Serial.printf("APPLE_AUDIO:{\"type\":\"play\",\"status\":\"%s\",\"source\":\"%s\"}\n",
@@ -294,12 +315,15 @@ void start_playback(bool from_sd) {
       publish_play("FAILED", "SD not mounted");
       return;
     }
-    source = new AudioFileSourceSD(kFixturePath);
+    source = new AudioFileSourceSD(current_path);
     buffered = new AudioFileSourceBuffer(source, kStreamBufferBytes);
     underflows = 0;
     refills = 0;
+    worst_loop_us = 0;
+    loops = 0;
+    blocks_over_5ms = 0;
     buffered->RegisterStatusCB(on_source_status, nullptr);
-    snprintf(playing, sizeof(playing), "SD %s", kFixturePath);
+    snprintf(playing, sizeof(playing), "SD %.*s", static_cast<int>(sizeof(playing) - 4), current_path);
   } else {
     source = new AudioFileSourcePROGMEM(tone_wav, kToneBytes);
     snprintf(playing, sizeof(playing), "TONE 440 Hz");
@@ -348,6 +372,36 @@ void load_into_ram() {
                 "\"crc32\":\"%08lx\",\"psramFree\":%lu}\n",
                 static_cast<unsigned long>(got), static_cast<unsigned long>(crc),
                 static_cast<unsigned long>(ESP.getFreePsram()));
+}
+
+// Steps to the next .wav in the card's root, wrapping at the end.
+void next_track() {
+  if (!sd_mounted) {
+    Serial.println("APPLE_AUDIO:{\"type\":\"track\",\"status\":\"NO_CARD\"}");
+    return;
+  }
+  File dir = SD.open("/");
+  char first[64] = "";
+  char chosen[64] = "";
+  bool take_next = false;
+  for (File entry = dir.openNextFile(); entry; entry = dir.openNextFile()) {
+    const char* name = entry.name();
+    const std::size_t len = std::strlen(name);
+    const bool is_wav = len > 4 && strcasecmp(name + len - 4, ".wav") == 0;
+    const bool hidden = name[0] == '.' || (len > 2 && name[0] == '_');
+    if (is_wav && !hidden) {
+      char path[64];
+      std::snprintf(path, sizeof(path), "%s%s", name[0] == '/' ? "" : "/", name);
+      if (first[0] == '\0') std::snprintf(first, sizeof(first), "%s", path);
+      if (take_next && chosen[0] == '\0') std::snprintf(chosen, sizeof(chosen), "%s", path);
+      if (std::strcmp(path, current_path) == 0) take_next = true;
+    }
+    entry.close();
+  }
+  dir.close();
+  std::snprintf(current_path, sizeof(current_path), "%s", chosen[0] ? chosen : first);
+  Serial.printf("APPLE_AUDIO:{\"type\":\"track\",\"status\":\"SELECTED\",\"file\":\"%s\"}\n",
+                current_path);
 }
 
 void set_gain(std::size_t index) {
@@ -425,7 +479,13 @@ void setup() {
 
 void loop() {
   if (generator != nullptr && generator->isRunning()) {
-    if (!generator->loop()) {
+    const std::uint32_t started_us = micros();
+    const bool running = generator->loop();
+    const std::uint32_t took_us = micros() - started_us;
+    ++loops;
+    if (took_us > worst_loop_us) worst_loop_us = took_us;
+    if (took_us > 5000) ++blocks_over_5ms;
+    if (!running) {
       stop_playback("FINISHED");
     }
   }
@@ -443,6 +503,7 @@ void loop() {
       case '3': set_gain(2); break;
       case 'l': case 'L': load_into_ram(); break;
       case 'r': case 'R': play_from_ram = true; start_playback(false); play_from_ram = false; break;
+      case 'n': case 'N': next_track(); break;
       case 'a': case 'A': alternation_test(); break;
       case '?': publish_hello(); publish_state(); break;
       default: break;
