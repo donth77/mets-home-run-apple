@@ -24,6 +24,9 @@ user-assets/
 *.local.hpp
 *.local.html
 *.png
+# Images the builds need: the owner guide's screenshots and the Manager page logo.
+!public/setup/screen-*.png
+!firmware/lib/manager/page/logo.png
 
 # Generated from firmware/lib/manager/page by firmware/tools/embed_page.py
 firmware/lib/manager/include/apple/firmware/manager_page.hpp
