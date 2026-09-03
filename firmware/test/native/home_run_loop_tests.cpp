@@ -133,7 +133,8 @@ void test_name_normalization_and_fit() {
   // Headlines stay large and fully inside the margins with either the public
   // font or a local licensed font override. Exact advances differ by font.
   loop.begin(Headline::GrandSlam, "X", 1);
-  const TextFit grand_slam = HomeRunLoop::fit_words("GRAND", "SLAM");
+  expect_lines(loop.headline(), "GRAND", "SLAM!!", nullptr);
+  const TextFit &grand_slam = loop.headline();
   const TextFit home_run = HomeRunLoop::fit_words("HOME", "RUN");
   EXPECT_TRUE(grand_slam.scale_x >= 3);
   EXPECT_TRUE(home_run.scale_y >= 3);
@@ -194,7 +195,7 @@ void test_live_sequence_draws_words_and_wipes() {
   std::vector<std::uint16_t> fb(kPixels, 0);
   const std::uint32_t hold_start = loop.baked_ms() + loop.pop_ms() + 100;
   loop.render(hold_start, fb.data(), kTestColors);
-  EXPECT_TRUE(count_color(fb, kTestColors.white) > 1500);    // GRAND SLAM in white
+  EXPECT_TRUE(count_color(fb, kTestColors.white) > 1500);    // GRAND SLAM!! in white
   EXPECT_TRUE(count_color(fb, kTestColors.shadow) > 300);    // on its shadow
   EXPECT_TRUE(count_color(fb, kTestColors.field) > 40000);   // on the field
   const std::uint32_t name_hold = loop.baked_ms() + loop.sequence_ms() + loop.pop_ms() + 100;

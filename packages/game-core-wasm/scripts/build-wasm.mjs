@@ -6,7 +6,8 @@ import { spawnSync } from "node:child_process";
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const repositoryRoot = resolve(packageRoot, "../..");
 const outputDirectory = resolve(packageRoot, "src/generated");
-const outputFile = resolve(outputDirectory, "apple-core.mjs");
+const browserOutputFile = resolve(outputDirectory, "apple-core.mjs");
+const workerOutputFile = resolve(outputDirectory, "apple-core.worker.mjs");
 const cacheDirectory = resolve(repositoryRoot, ".cache/emscripten");
 
 await mkdir(outputDirectory, { recursive: true });
@@ -67,9 +68,7 @@ const exportedFunctions = [
 ];
 
 const compiler = process.env.EMXX ?? "em++";
-const result = spawnSync(
-  compiler,
-  [
+const commonArguments = [
     resolve(packageRoot, "src/c_api.cpp"),
     resolve(repositoryRoot, "firmware/lib/core/src/engine.cpp"),
     resolve(repositoryRoot, "firmware/lib/core/src/names.cpp"),
@@ -83,21 +82,27 @@ const result = spawnSync(
     "--no-entry",
     "-sMODULARIZE=1",
     "-sEXPORT_ES6=1",
-    "-sSINGLE_FILE=1",
     "-sALLOW_MEMORY_GROWTH=1",
     "-sENVIRONMENT=web,worker",
     "-sFILESYSTEM=0",
     `-sEXPORTED_FUNCTIONS=${JSON.stringify(exportedFunctions)}`,
     "-sEXPORTED_RUNTIME_METHODS=['UTF8ToString','stringToUTF8','lengthBytesUTF8']",
-    "-o",
-    outputFile,
-  ],
-  { cwd: repositoryRoot, encoding: "utf8", env: environment },
-);
+];
 
-if (result.stdout) process.stdout.write(result.stdout);
-if (result.stderr) process.stderr.write(result.stderr);
-if (result.error) throw result.error;
-if (result.status !== 0) process.exit(result.status ?? 1);
+for (const [outputFile, extraArguments] of [
+  [browserOutputFile, ["-sSINGLE_FILE=1"]],
+  [workerOutputFile, ["-sINCOMING_MODULE_JS_API=['instantiateWasm']"]],
+]) {
+  const result = spawnSync(compiler, [...commonArguments, ...extraArguments, "-o", outputFile], {
+    cwd: repositoryRoot,
+    encoding: "utf8",
+    env: environment,
+  });
 
-console.log(`Built ${outputFile.replace(`${repositoryRoot}/`, "")}`);
+  if (result.stdout) process.stdout.write(result.stdout);
+  if (result.stderr) process.stderr.write(result.stderr);
+  if (result.error) throw result.error;
+  if (result.status !== 0) process.exit(result.status ?? 1);
+
+  console.log(`Built ${outputFile.replace(`${repositoryRoot}/`, "")}`);
+}

@@ -51,7 +51,7 @@ HomeRunLoop::HomeRunLoop() { begin(Headline::HomeRun, "", 0); }
 void HomeRunLoop::begin(Headline headline, const char *batter_name, std::uint32_t seed) {
   headline_ = headline;
   seed_ = seed;
-  headline_fit_ = headline == Headline::GrandSlam ? text::fit_words("GRAND", "SLAM")
+  headline_fit_ = headline == Headline::GrandSlam ? text::fit_words("GRAND", "SLAM!!")
                                                   : text::fit_words("HOME", "RUN");
   name_ = text::fit_name(batter_name);
   diff_.invalidate();

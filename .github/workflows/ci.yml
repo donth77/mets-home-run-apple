@@ -59,7 +59,7 @@ jobs:
             changed="$FORCED"
           elif [ -n "$BEFORE" ] && [ "$BEFORE" != "0000000000000000000000000000000000000000" ] \
                && git fetch --quiet --depth=1 origin "$BEFORE" 2>/dev/null \
-               && git diff --quiet "$BEFORE" "$AFTER" -- apps/virtual-apple packages public package.json pnpm-lock.yaml pnpm-workspace.yaml .github/workflows/ci.yml; then
+               && git diff --quiet "$BEFORE" "$AFTER" -- apps/virtual-apple edge/notifications packages public package.json pnpm-lock.yaml pnpm-workspace.yaml .github/workflows/ci.yml; then
             changed=false
           fi
           echo "changed=$changed" >> "$GITHUB_OUTPUT"
@@ -101,6 +101,32 @@ jobs:
         with:
           name: virtual-apple-site
           path: apps/virtual-apple/dist
+      - uses: pnpm/action-setup@v6
+        if: steps.creds.outputs.ready == 'true'
+        with:
+          version: 10.14.0
+      - uses: actions/setup-node@v7
+        if: steps.creds.outputs.ready == 'true'
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install notification worker dependencies
+        if: steps.creds.outputs.ready == 'true'
+        run: pnpm install --frozen-lockfile
+      - name: Apply notification database migrations
+        if: steps.creds.outputs.ready == 'true'
+        working-directory: edge/notifications
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm exec wrangler d1 migrations apply virtual-mets-apple-notifications --remote --config wrangler.toml
+      - name: Publish notification watcher
+        if: steps.creds.outputs.ready == 'true'
+        working-directory: edge/notifications
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm run deploy
       # wrangler runs straight from npx: the Cloudflare action would try to
       # npm-install wrangler inside the app, where the pnpm workspace
       # dependencies stop npm cold. The working directory matters: wrangler
@@ -116,7 +142,7 @@ jobs:
         if: steps.creds.outputs.ready == 'true'
         run: |
           sleep 15
-          for path in "/" "/setup/" "/api/mlb/api/v1/schedule?sportId=1&teamId=121&startDate=2026-09-03&endDate=2026-09-03"; do
+          for path in "/" "/setup/" "/api/notifications/config" "/api/mlb/api/v1/schedule?sportId=1&teamId=121&startDate=2026-09-03&endDate=2026-09-03"; do
             code=$(curl -s -o /dev/null -w "%{http_code}" -H "Cache-Control: no-cache" "https://metsapple.com$path")
             echo "$code $path"
             [ "$code" = "200" ] || exit 1

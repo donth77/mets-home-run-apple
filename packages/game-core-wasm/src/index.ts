@@ -84,10 +84,11 @@ const sequenceStates: readonly CoreSequenceState[] = [
 ];
 
 type Module = Awaited<ReturnType<typeof createAppleCoreModule>>;
+export type GameCoreModuleFactory = () => Promise<Module>;
 
 export class GameCore {
-  static async create(): Promise<GameCore> {
-    const module = await createAppleCoreModule();
+  static async create(moduleFactory: GameCoreModuleFactory = createAppleCoreModule): Promise<GameCore> {
+    const module = await moduleFactory();
     return new GameCore(module);
   }
 

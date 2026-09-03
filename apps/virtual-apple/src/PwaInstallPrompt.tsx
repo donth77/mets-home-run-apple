@@ -76,8 +76,8 @@ export function PwaInstallPrompt() {
       <div className="pwa-install__identity">
         <img src="/favicon.png" alt="" width="40" height="40" />
         <div>
-          <strong id="pwa-install-title">Keep Virtual Apple handy</strong>
-          <span>Open it from your home screen.</span>
+          <strong id="pwa-install-title">Get Mets alerts</strong>
+          <span>Add Virtual Apple, then turn on home run and Mets win alerts.</span>
         </div>
       </div>
       <button type="button" onClick={() => void install()}>

@@ -12,7 +12,7 @@ event counts, draws the screen, and controls the lift.
 | Physical Apple | Nano ESP32 | Follow the game, run the display, and control the lift |
 | Apple Manager | Web page served by the Nano | Set up Wi-Fi, show device status, and change owner settings |
 | Apple Lab | Developer's computer | Simulate games, replay history, inspect feeds, and run guarded USB tests |
-| Virtual Apple | Public website | Show the game in a 3D Citi Field scene |
+| Virtual Apple | Public website and edge worker | Show the game in a 3D Citi Field scene and send optional alerts |
 | Shared game code | Nano, native tests, and browser WebAssembly | Build game state, approve celebrations, and render the physical display |
 
 ## Game flow
@@ -49,8 +49,10 @@ tests over USB. Those tests already receive live serial data.
 ### Virtual Apple
 
 Virtual Apple is the public gameday site. It uses the same game-state and
-decision code, but has its own 3D scene. Its small edge function relays MLB requests; it stores no game data
-and makes no game decisions. It cannot discover or control a physical Apple.
+decision code, but has its own 3D scene. One edge function relays MLB requests.
+A scheduled worker uses the shared decision core for opt-in push alerts and
+keeps anonymous subscriptions and its event ledger in D1. It cannot discover
+or control a physical Apple.
 
 ## Code map
 
@@ -65,5 +67,6 @@ and makes no game decisions. It cannot discover or control a physical Apple.
 | `firmware/lib/manager/` | Nano-hosted setup and settings page |
 | `apps/apple-lab/` | Local developer tools |
 | `apps/virtual-apple/` | Public browser experience |
+| `edge/notifications/` | Push subscriptions, game watcher, and delivery |
 | `packages/*-wasm/` | Browser wrappers around the shared C++ code |
 | `packages/mlb-live-feed/` | Browser schedule, live-feed, and replay adapter |

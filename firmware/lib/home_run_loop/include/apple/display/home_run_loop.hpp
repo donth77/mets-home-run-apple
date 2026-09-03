@@ -85,6 +85,7 @@ public:
 
   // The 160 x 120 role buffer behind the last render (tests, diagnostics).
   const std::uint8_t *logical() const { return logical_; }
+  const TextFit &headline() const { return headline_fit_; }
   const TextFit &name() const { return name_; }
 
   // Timeline, in milliseconds from the start of a loop.

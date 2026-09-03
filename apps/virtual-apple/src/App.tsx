@@ -10,6 +10,7 @@ import { gameDateParts, nextGameLabelParts, timeZoneAbbreviation } from "./gameD
 import { selectHomeRunPhrase } from "./homeRunPhrases";
 import { LiveGamedayWidget } from "./LiveGamedayWidget";
 import { MiniAppleView } from "./MiniAppleView";
+import { NotificationSettings } from "./NotificationSettings";
 import { PwaInstallPrompt } from "./PwaInstallPrompt";
 import {
   fanFacingMoment,
@@ -439,7 +440,12 @@ export function App() {
           </nav>
         )}
 
-        {!desktopViewModes && !miniAppleWindow.isOpen && <PwaInstallPrompt />}
+        {!miniAppleWindow.isOpen && (
+          <>
+            {!desktopViewModes && <PwaInstallPrompt />}
+            <NotificationSettings />
+          </>
+        )}
 
         {!miniAppleWindow.isOpen && (
           <VictoryConfetti active={winCelebration && appleFullyRaised} reducedMotion={reducedMotion} />

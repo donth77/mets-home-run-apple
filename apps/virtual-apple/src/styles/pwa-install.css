@@ -1,4 +1,5 @@
-.pwa-install {
+.pwa-install,
+.notification-settings {
   align-items: center;
   backdrop-filter: blur(15px);
   background: rgba(5, 16, 29, 0.94);
@@ -16,7 +17,8 @@
   z-index: 7;
 }
 
-.pwa-install__identity {
+.pwa-install__identity,
+.notification-settings__identity {
   align-items: center;
   display: flex;
   gap: 10px;
@@ -30,24 +32,28 @@
   width: 40px;
 }
 
-.pwa-install__identity div {
+.pwa-install__identity div,
+.notification-settings__identity div {
   display: grid;
   gap: 3px;
   min-width: 0;
 }
 
-.pwa-install__identity strong {
+.pwa-install__identity strong,
+.notification-settings__identity strong {
   color: #fff;
   font-size: 0.82rem;
 }
 
-.pwa-install__identity span {
+.pwa-install__identity span,
+.notification-settings__identity span {
   color: #9fb4c4;
   font-size: 0.68rem;
   line-height: 1.35;
 }
 
-.pwa-install button {
+.pwa-install button,
+.notification-settings > button:not(.notification-settings__test) {
   align-items: center;
   background: #f2672c;
   border: 1px solid #ff9a63;
@@ -64,16 +70,19 @@
   white-space: nowrap;
 }
 
-.pwa-install button:hover {
+.pwa-install button:hover,
+.notification-settings > button:not(.notification-settings__test):hover {
   background: #ff7540;
 }
 
-.pwa-install button svg {
+.pwa-install button svg,
+.notification-settings > button svg {
   height: 18px;
   width: 18px;
 }
 
-.pwa-install p {
+.pwa-install p,
+.notification-settings p {
   border-top: 1px solid rgba(255, 255, 255, 0.12);
   color: #c8d6e1;
   font-size: 0.72rem;
@@ -83,12 +92,75 @@
   padding: 10px 2px 1px;
 }
 
+.notification-settings__identity > svg {
+  color: #ff8a50;
+  flex: 0 0 auto;
+  height: 26px;
+  margin: 7px;
+  width: 26px;
+}
+
+.notification-settings__controls {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  grid-column: 1 / -1;
+}
+
+.notification-settings__controls label {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(188, 215, 237, 0.22);
+  border-radius: 999px;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 0.74rem;
+  font-weight: 780;
+  gap: 7px;
+  min-height: 40px;
+  padding: 7px 11px;
+}
+
+.notification-settings__controls input {
+  accent-color: #f2672c;
+  height: 17px;
+  margin: 0;
+  width: 17px;
+}
+
+.notification-settings__controls .notification-settings__off,
+.notification-settings .notification-settings__test {
+  background: transparent;
+  border: 0;
+  color: #b9cbd9;
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 780;
+  min-height: 40px;
+  padding: 7px 9px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.notification-settings .notification-settings__test {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+
+.notification-settings button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
 @media (max-width: 430px) {
-  .pwa-install {
+  .pwa-install,
+  .notification-settings {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .pwa-install button {
+  .pwa-install > button,
+  .notification-settings > button:not(.notification-settings__test) {
     width: 100%;
   }
 }

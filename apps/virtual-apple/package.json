@@ -14,6 +14,7 @@
     "@apple/game-core-wasm": "workspace:*",
     "@apple/game-state-wasm": "workspace:*",
     "@apple/mlb-live-feed": "workspace:*",
+    "@apple/notification-worker": "workspace:*",
     "@apple/protocol": "workspace:*",
     "@apple/scoreboard-ui": "workspace:*",
     "@apple/test-fixtures": "workspace:*",

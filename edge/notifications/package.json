@@ -1,0 +1,27 @@
+{
+  "name": "@apple/notification-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./api": "./src/api.ts"
+  },
+  "scripts": {
+    "build": "wrangler deploy --config wrangler.toml --dry-run --outdir dist",
+    "deploy": "wrangler deploy --config wrangler.toml",
+    "test": "vitest run --config ../../vitest.config.ts src",
+    "typecheck": "tsc --noEmit --project tsconfig.json"
+  },
+  "dependencies": {
+    "@apple/game-core-wasm": "workspace:*",
+    "@apple/game-state-wasm": "workspace:*",
+    "@apple/mlb-live-feed": "workspace:*",
+    "@apple/protocol": "workspace:*",
+    "@block65/webcrypto-web-push": "1.0.2"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260903.1",
+    "wrangler": "^4.128.0"
+  }
+}

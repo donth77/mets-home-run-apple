@@ -48,11 +48,12 @@ const playKinds: Record<NormalizedPlayKind, number> = {
 };
 
 type Module = Awaited<ReturnType<typeof createGameStateModule>>;
+export type GameStateModuleFactory = () => Promise<Module>;
 
 /** Browser boundary around the portable C++ game-state projector. */
 export class GameStateProjector {
-  static async create(): Promise<GameStateProjector> {
-    const module = await createGameStateModule();
+  static async create(moduleFactory: GameStateModuleFactory = createGameStateModule): Promise<GameStateProjector> {
+    const module = await moduleFactory();
     return new GameStateProjector(module);
   }
 

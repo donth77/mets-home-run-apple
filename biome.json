@@ -7,6 +7,7 @@
       "!**/.claude",
       "!**/.pio",
       "!**/.vite",
+      "!**/.wrangler",
       "!**/dist",
       "!**/node_modules",
       "!user-assets",

@@ -60,14 +60,14 @@ rebuild them for every change.
 | Path | Contents |
 | --- | --- |
 | `apps/` | Apple Lab and Virtual Apple |
+| `edge/` | Virtual Apple notification worker |
 | `firmware/` | Shared C++, Nano firmware, native tests, and Apple Manager |
 | `packages/` | Browser libraries, UI, 3D scene, protocol, and test fixtures |
 | `docs/ARCHITECTURE.md` | [System map and code boundaries](docs/ARCHITECTURE.md) |
 
 ## Inspiration
 
-A March 2025 exchange about a Wi-Fi-enabled Home Run Apple sparked online
-interest and helped inspire several fan builds. The image links to the
+In March 2025, a tweet about a Wi-Fi enabled Home Run Apple.
 [r/NewYorkMets discussion](https://www.reddit.com/r/NewYorkMets/comments/1jixetv/are_we_pro_or_anti_wifi_enabled_apple_for_2025/).
 
 <p align="center">
@@ -83,5 +83,5 @@ SHA-256: b71af4295a38ff9d7e303908b7c75f9569440067f431372f3c765227993a6f24
 -->
 
 Thanks to Reddit user
-[u/jboogie1844](https://www.reddit.com/user/jboogie1844/) for sharing another
+[u/jboogie1844](https://www.reddit.com/user/jboogie1844/) for sharing his updated
 [Wi-Fi Home Run Apple build](https://www.reddit.com/r/NewYorkMets/comments/1v96vfz/1_year_later_and_my_wifi_home_run_apple_has/).
