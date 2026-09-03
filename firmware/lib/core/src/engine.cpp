@@ -162,7 +162,7 @@ EngineOutput Engine::report_position(std::int32_t position_mm,
   if (sequence_state_ == SequenceState::Extending &&
       position_mm >= kMaxStrokeMm) {
     sequence_state_ = SequenceState::Raised;
-    raised_due_ms_ = now_ms + kRaisedDwellMs;
+    raised_due_ms_ = now_ms + raised_dwell_ms_;
     trace(output, "POSITION_RAISED", active_.event_key);
   } else if (sequence_state_ == SequenceState::Retracting && position_mm == 0) {
     trace(output, "POSITION_HOME", active_.event_key);

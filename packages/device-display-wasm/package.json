@@ -8,5 +8,8 @@
     "build": "node scripts/build-wasm.mjs",
     "test": "vitest run --config ../../vitest.config.ts src/index.test.ts",
     "typecheck": "tsc --noEmit --project tsconfig.json"
+  },
+  "dependencies": {
+    "@apple/protocol": "workspace:*"
   }
 }

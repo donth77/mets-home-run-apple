@@ -1,5 +1,4 @@
-.live-notice,
-.settings-notice {
+.live-notice {
   align-items: center;
   background: #102a40;
   border: 1px solid #2c5f83;
@@ -10,13 +9,11 @@
   padding: 11px 14px;
 }
 
-.live-notice strong,
-.settings-notice strong {
+.live-notice strong {
   color: #b9def5;
   font-size: 0.7rem;
 }
-.live-notice span,
-.settings-notice span {
+.live-notice span {
   color: #87a5ba;
   font-size: 0.68rem;
 }

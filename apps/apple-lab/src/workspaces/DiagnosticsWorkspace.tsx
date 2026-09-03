@@ -6,10 +6,10 @@ export function DiagnosticsWorkspace({ events }: { events: readonly DeviceTimeli
   return (
     <section className="workspace" aria-labelledby="diagnostics-title">
       <WorkspaceHeading
-        eyebrow="Device evidence"
+        eyebrow="Telemetry model"
         title="Diagnostics"
         titleId="diagnostics-title"
-        description="Inspect transport, feed, safety, and event-ledger state without changing physical behavior."
+        description="Preview the transport, feed, safety, and event-ledger data a future read-only autonomous-device connection could expose."
       />
       <div className="diagnostics-grid">
         <article className="manager-panel diagnostic-summary">
@@ -18,7 +18,7 @@ export function DiagnosticsWorkspace({ events }: { events: readonly DeviceTimeli
               <span>Connection summary</span>
               <h2>{device.name}</h2>
             </div>
-            <span className="state-badge state-badge--safe">Healthy</span>
+            <span className="state-badge state-badge--safe">Demo data</span>
           </header>
           <dl className="detail-list detail-list--wide">
             <div>
@@ -63,7 +63,7 @@ export function DiagnosticsWorkspace({ events }: { events: readonly DeviceTimeli
           <header className="panel-title">
             <div>
               <span>Safety invariants</span>
-              <h2>Current audit</h2>
+              <h2>Example audit</h2>
             </div>
           </header>
           <ul className="check-list">
@@ -93,7 +93,7 @@ export function DiagnosticsWorkspace({ events }: { events: readonly DeviceTimeli
           <header className="panel-title panel-title--timeline">
             <div>
               <span>Bounded history</span>
-              <h2>Device event ledger</h2>
+              <h2>Example event ledger</h2>
             </div>
             <small>Stable IDs prevent replay</small>
           </header>

@@ -4,8 +4,11 @@ dist/
 coverage/
 .pio/
 .cache/
+.claude/
+.playwright-mcp/
 .vite/
 .wrangler/
+firmware/build/
 __pycache__/
 *.py[cod]
 .env
@@ -20,3 +23,8 @@ user-assets/
 *.local.json
 *.local.hpp
 *.local.html
+*.png
+
+# Generated from firmware/lib/manager/page by firmware/tools/embed_page.py
+firmware/lib/manager/include/apple/firmware/manager_page.hpp
+firmware/lib/manager/include/apple/firmware/manager_logo.hpp

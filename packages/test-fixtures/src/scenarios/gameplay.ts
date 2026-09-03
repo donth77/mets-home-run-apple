@@ -86,14 +86,14 @@ export const gameplayScenarios: readonly FixtureScenario[] = [
           phase: "CELEBRATION",
           label: "JUAN SOTO · HOME RUN",
           home: { ...baseSnapshot.home, runs: 3 },
-          lastEvent: "Juan Soto HR · actuator extending at 15.24 mm/s",
+          lastEvent: "Juan Soto HR · actuator extending at 9.80 mm/s",
         },
         50,
         "Two-second display lead-in complete; extend command recorded.",
         [command("MOTION_EXTEND", "777686:play-47", 50)],
       ),
       frame(
-        6200,
+        8000,
         {
           phase: "CELEBRATION",
           label: "JUAN SOTO · HOME RUN",
@@ -101,13 +101,13 @@ export const gameplayScenarios: readonly FixtureScenario[] = [
           lastEvent: "Juan Soto HR · celebration dwell",
         },
         50,
-        "Extended limit reached after the rated 3.28-second stroke.",
+        "Extended limit reached after the measured 5.10-second stroke.",
       ),
       frame(
-        36200,
+        38000,
         {
-          phase: "CELEBRATION",
-          label: "JUAN SOTO · HOME RUN",
+          phase: "LIVE",
+          label: "LIVE",
           home: { ...baseSnapshot.home, runs: 3 },
           lastEvent: "Juan Soto HR · Apple returning home",
         },
@@ -116,7 +116,7 @@ export const gameplayScenarios: readonly FixtureScenario[] = [
         [command("MOTION_RETRACT", "777686:play-47", 0)],
       ),
       frame(
-        39500,
+        43100,
         { phase: "LIVE", label: "LIVE", home: { ...baseSnapshot.home, runs: 3 }, lastEvent: "Play resumed" },
         0,
         "Retracted limit reached; event remains deduplicated.",
@@ -171,14 +171,14 @@ export const gameplayScenarios: readonly FixtureScenario[] = [
           label: "GRAND SLAM!!",
           atBat: grandSlamAtBat,
           home: { ...baseSnapshot.home, runs: 6 },
-          lastEvent: "Francisco Lindor grand slam · actuator extending at 15.24 mm/s",
+          lastEvent: "Francisco Lindor grand slam · actuator extending at 9.80 mm/s",
         },
         50,
         "Two-second display lead-in complete; extend command recorded.",
         [command("MOTION_EXTEND", "777686:play-48", 50)],
       ),
       frame(
-        6200,
+        8000,
         {
           phase: "CELEBRATION",
           label: "GRAND SLAM!!",
@@ -187,13 +187,13 @@ export const gameplayScenarios: readonly FixtureScenario[] = [
           lastEvent: "Francisco Lindor grand slam · celebration dwell",
         },
         50,
-        "Extended limit reached after the rated 3.28-second stroke.",
+        "Extended limit reached after the measured 5.10-second stroke.",
       ),
       frame(
-        36200,
+        38000,
         {
-          phase: "CELEBRATION",
-          label: "GRAND SLAM!!",
+          phase: "LIVE",
+          label: "LIVE",
           atBat: grandSlamAtBat,
           home: { ...baseSnapshot.home, runs: 6 },
           lastEvent: "Francisco Lindor grand slam · Apple returning home",
@@ -203,7 +203,7 @@ export const gameplayScenarios: readonly FixtureScenario[] = [
         [command("MOTION_RETRACT", "777686:play-48", 0)],
       ),
       frame(
-        39500,
+        43100,
         { phase: "LIVE", label: "LIVE", home: { ...baseSnapshot.home, runs: 6 }, lastEvent: "Play resumed" },
         0,
         "Retracted limit reached; grand slam remains deduplicated.",
@@ -258,14 +258,14 @@ export const gameplayScenarios: readonly FixtureScenario[] = [
           label: "JUAN SOTO · HR CONFIRMED",
           review: "CONFIRMED",
           home: { ...baseSnapshot.home, runs: 3 },
-          lastEvent: "Juan Soto HR · actuator extending at 15.24 mm/s",
+          lastEvent: "Juan Soto HR · actuator extending at 9.80 mm/s",
         },
         50,
         "Display lead-in complete; extend recorded.",
         [command("MOTION_EXTEND", "777686:play-52", 50)],
       ),
       frame(
-        8500,
+        10300,
         {
           phase: "CELEBRATION",
           label: "JUAN SOTO · HR CONFIRMED",
@@ -277,10 +277,10 @@ export const gameplayScenarios: readonly FixtureScenario[] = [
         "Extended limit reached.",
       ),
       frame(
-        38500,
+        40300,
         {
-          phase: "CELEBRATION",
-          label: "JUAN SOTO · HR CONFIRMED",
+          phase: "LIVE",
+          label: "LIVE",
           review: "CONFIRMED",
           home: { ...baseSnapshot.home, runs: 3 },
           lastEvent: "Juan Soto HR · Apple returning home",
@@ -290,7 +290,7 @@ export const gameplayScenarios: readonly FixtureScenario[] = [
         [command("MOTION_RETRACT", "777686:play-52", 0)],
       ),
       frame(
-        41800,
+        45400,
         {
           phase: "LIVE",
           label: "LIVE",

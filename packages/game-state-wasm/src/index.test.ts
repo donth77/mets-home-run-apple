@@ -114,4 +114,28 @@ describe("canonical game-state WASM boundary", () => {
     expect(projection.gameSnapshot.linescore).toEqual({ innings: [] });
     expect(projection.coreInput.plays).toEqual([]);
   });
+  it("classifies MLB's game status with the shared C++", async () => {
+    const projector = await GameStateProjector.create();
+    activeProjectors.push(projector);
+    expect(
+      projector.classifyStatus({
+        abstractState: "Live",
+        detailedState: "Delayed",
+        statusCode: "IO",
+        reason: "",
+        latestAdvisory: "Status Change - Delayed: Rain",
+        reviewPending: false,
+      }),
+    ).toEqual({ phase: "DELAYED", label: "RAIN DELAY", weatherDelay: true });
+    expect(
+      projector.classifyStatus({
+        abstractState: "Final",
+        detailedState: "Postponed",
+        statusCode: "DR",
+        reason: "Rain",
+        latestAdvisory: "",
+        reviewPending: false,
+      }),
+    ).toEqual({ phase: "DELAYED", label: "Postponed", weatherDelay: false });
+  });
 });

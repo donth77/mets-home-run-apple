@@ -1,0 +1,12 @@
+{
+  "$schema": "https://raw.githubusercontent.com/platformio/platformio-core/develop/platformio/assets/schema/library.json",
+  "name": "ArduinoJson",
+  "version": "7.4.3",
+  "description": "Vendored single-header ArduinoJson 7.4.3 (MIT) so the native tests and the Nano parse MLB JSON with one pinned version.",
+  "license": "MIT",
+  "headers": "ArduinoJson.h",
+  "build": {
+    "srcDir": "src",
+    "includeDir": "src"
+  }
+}

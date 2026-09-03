@@ -36,6 +36,11 @@ class Engine {
   EngineOutput report_motion_fault(std::string_view reason,
                                    std::uint64_t now_ms);
 
+  // Owner-adjustable raised dwell; defaults to kRaisedDwellMs. Takes effect
+  // on the next raise.
+  void set_raised_dwell_ms(std::uint64_t dwell_ms) noexcept { raised_dwell_ms_ = dwell_ms; }
+  std::uint64_t raised_dwell_ms() const noexcept { return raised_dwell_ms_; }
+
   SequenceState sequence_state() const noexcept;
   bool fault_latched() const noexcept;
   std::size_t queued_sequence_count() const noexcept;
@@ -63,6 +68,7 @@ class Engine {
   std::uint64_t hold_remaining_ms_{0};
   std::uint64_t motion_deadline_ms_{0};
   std::uint64_t raised_due_ms_{0};
+  std::uint64_t raised_dwell_ms_{kRaisedDwellMs};
   std::uint64_t last_now_ms_{0};
   bool has_time_{false};
   bool fault_latched_{false};

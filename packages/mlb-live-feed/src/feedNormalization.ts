@@ -4,6 +4,9 @@ import type {
   GameHalf,
   GamePhase,
   GameSnapshot,
+  GameStatusClassification,
+  GameStatusClassifier,
+  GameStatusFacts,
   NormalizedPlayEvidence,
   ReviewState,
 } from "@apple/protocol";
@@ -55,11 +58,60 @@ function halfFromText(value: string): CoreHalf {
   return "TOP";
 }
 
-function phaseForFeed(feed: unknown, currentReview: ReviewState): GamePhase {
-  if (currentReview === "PENDING") return "REVIEW";
-  const status = objectAt(objectAt(feed, "gameData"), "status");
-  const abstractState = stringAt(status, "abstractGameState").toLowerCase();
-  const detailedState = stringAt(status, "detailedState").toLowerCase();
+// ---------------------------------------------------------------------------
+// Game status classification.
+//
+// This is the TypeScript mirror of firmware/lib/game_state/src/status.cpp.
+// Production apps hand the client the WebAssembly build of that C++ (see
+// GameStateProjector.classifyStatus); this copy is the default for tests and
+// the parity test in index.test.ts keeps the two identical.
+//
+// MLB reports a mid-game delay as detailedState "Delayed" with code IO, and
+// names the reason in a "Game Advisory" play event on the current play
+// ("Status Change - Delayed: Rain"). Before first pitch the status itself says
+// "Delayed Start: Rain" (PR). Rain, inclement weather, lightning, and wet
+// grounds all count as a rain delay; suspended, postponed, and cancelled games
+// keep MLB's label so the apples can show their own screens.
+// ---------------------------------------------------------------------------
+
+export const RAIN_DELAY_LABEL = "RAIN DELAY";
+
+/** Whole-word match with alphanumeric boundaries, matching the C++ helper. */
+function containsWord(text: string, word: string) {
+  const lowered = text.toLowerCase();
+  const needle = word.toLowerCase();
+  for (let at = lowered.indexOf(needle); at !== -1; at = lowered.indexOf(needle, at + 1)) {
+    const leftOk = at === 0 || !/[a-z0-9]/.test(lowered[at - 1] ?? "");
+    const after = at + needle.length;
+    const rightOk = after >= lowered.length || !/[a-z0-9]/.test(lowered[after] ?? "");
+    if (leftOk && rightOk) return true;
+  }
+  return false;
+}
+
+function mentionsWetWeather(lowered: string) {
+  return (
+    containsWord(lowered, "rain") ||
+    lowered.includes("inclement weather") ||
+    lowered.includes("lightning") ||
+    lowered.includes("wet grounds")
+  );
+}
+
+// MLB status codes: first letter I (in progress) or P (pre-game) for a delay,
+// second letter R rain, I inclement weather, L lightning, G wet grounds.
+function weatherDelayCode(code: string) {
+  return code.length === 2 && (code[0] === "I" || code[0] === "P") && ["R", "I", "L", "G"].includes(code[1] ?? "");
+}
+
+export function phaseForStatus(facts: GameStatusFacts): GamePhase {
+  if (facts.reviewPending) return "REVIEW";
+  const abstractState = facts.abstractState.trim().toLowerCase();
+  const detailedState = facts.detailedState.trim().toLowerCase();
+  // Postponed and cancelled games carry abstractGameState "Final" in MLB's
+  // table, so the interruption words come before the final test.
+  if (["delayed", "postponed", "suspended", "cancelled", "canceled"].some((word) => detailedState.includes(word)))
+    return "DELAYED";
   if (
     abstractState === "final" ||
     detailedState.includes("final") ||
@@ -67,8 +119,6 @@ function phaseForFeed(feed: unknown, currentReview: ReviewState): GamePhase {
     detailedState.includes("completed early")
   )
     return "FINAL";
-  if (["delayed", "postponed", "suspended", "cancelled", "canceled"].some((word) => detailedState.includes(word)))
-    return "DELAYED";
   if (detailedState.includes("challenge") || detailedState.includes("review")) return "REVIEW";
   if (abstractState === "live" || detailedState === "in progress" || detailedState === "manager challenge")
     return "LIVE";
@@ -77,22 +127,57 @@ function phaseForFeed(feed: unknown, currentReview: ReviewState): GamePhase {
   return "SLEEP";
 }
 
-const RAIN_DELAY_STATUS_CODES = new Set(["PR", "IR"]);
-
-function isRainDelay(status: JsonObject | undefined) {
-  const reason = stringAt(status, "reason").trim().toLowerCase();
-  const detailedState = stringAt(status, "detailedState").trim().toLowerCase();
-  const statusCode = stringAt(status, "statusCode").trim().toUpperCase();
-  const delayed = detailedState.includes("delayed") || RAIN_DELAY_STATUS_CODES.has(statusCode);
-  return delayed && (reason === "rain" || /\brain\b/.test(detailedState) || RAIN_DELAY_STATUS_CODES.has(statusCode));
+/** A delay (not a suspension or postponement) MLB attributes to wet weather. */
+export function weatherDelay(facts: GameStatusFacts): boolean {
+  const detailedState = facts.detailedState.trim().toLowerCase();
+  const code = facts.statusCode.trim().toUpperCase();
+  const delayed = detailedState.includes("delayed") || weatherDelayCode(code);
+  if (!delayed) return false;
+  if (weatherDelayCode(code)) return true;
+  if (mentionsWetWeather(facts.reason.trim().toLowerCase()) || mentionsWetWeather(detailedState)) return true;
+  const advisory = facts.latestAdvisory.trim().toLowerCase();
+  return advisory.includes("delay") && mentionsWetWeather(advisory);
 }
 
-function snapshotLabel(phase: GamePhase, status: JsonObject | undefined) {
-  if (phase === "FINAL") return "FINAL";
-  if (phase === "REVIEW") return "PLAY UNDER REVIEW";
-  if (phase === "LIVE") return "LIVE";
-  if (phase === "DELAYED" && isRainDelay(status)) return "RAIN DELAY";
-  return stringAt(status, "detailedState", phase);
+export function classifyGameStatus(facts: GameStatusFacts): GameStatusClassification {
+  const phase = phaseForStatus(facts);
+  if (phase === "FINAL") return { phase, label: "FINAL", weatherDelay: false };
+  if (phase === "REVIEW") return { phase, label: "PLAY UNDER REVIEW", weatherDelay: false };
+  if (phase === "LIVE") return { phase, label: "LIVE", weatherDelay: false };
+  const weather = phase === "DELAYED" && weatherDelay(facts);
+  if (weather) return { phase, label: RAIN_DELAY_LABEL, weatherDelay: true };
+  const detailed = facts.detailedState.trim();
+  if (detailed) return { phase, label: detailed, weatherDelay: false };
+  return {
+    phase,
+    label: phase === "PREGAME" ? "PREGAME" : phase === "DELAYED" ? "DELAYED" : "SLEEP",
+    weatherDelay: false,
+  };
+}
+
+/** The newest "Game Advisory" event on the current play, where MLB names a delay's reason. */
+function latestGameAdvisory(play: unknown): string {
+  let latest = "";
+  for (const event of arrayAt(play, "playEvents")) {
+    const details = objectAt(event, "details");
+    const description = stringAt(details, "description").trim();
+    if (!description) continue;
+    if (stringAt(details, "eventType") === "game_advisory" || description.startsWith("Status Change"))
+      latest = description;
+  }
+  return latest;
+}
+
+export function gameStatusFacts(feed: unknown, currentPlay: unknown, currentReview: ReviewState): GameStatusFacts {
+  const status = objectAt(objectAt(feed, "gameData"), "status");
+  return {
+    abstractState: stringAt(status, "abstractGameState"),
+    detailedState: stringAt(status, "detailedState"),
+    statusCode: stringAt(status, "statusCode"),
+    reason: stringAt(status, "reason"),
+    latestAdvisory: latestGameAdvisory(currentPlay),
+    reviewPending: currentReview === "PENDING",
+  };
 }
 
 export function playEventKey(play: unknown, gamePk: number): string {
@@ -242,6 +327,7 @@ export function normalizeFeed(
   receivedAt: string,
   deliveryCursor?: string,
   projectFrame: CanonicalGameProjector = projectCanonicalGameFrame,
+  classifyStatus: GameStatusClassifier = classifyGameStatus,
 ): { capture: NormalizedFeedCapture; fingerprints: Map<string, string> } {
   if (!isObject(feed)) throw new MlbFeedError("Live feed root was not an object.", "INVALID_FEED_SHAPE");
   const gamePk = numberAt(feed, "gamePk");
@@ -287,25 +373,33 @@ export function normalizeFeed(
     return changed;
   });
 
+  const currentAbout = objectAt(currentPlay, "about");
+  const inning = clampInteger(numberAt(linescore, "currentInning", numberAt(currentAbout, "inning", 0)), 0, 99);
+  const inningState = stringAt(linescore, "inningState").toLowerCase();
   const currentReview = reviewState(currentPlay);
-  const phase = phaseForFeed(feed, currentReview);
+  const classification = classifyStatus(gameStatusFacts(feed, currentPlay, currentReview));
+  const feedPhase = classification.phase;
+  // MLB can publish the completed half-inning before its separate game status
+  // changes to Final. A decisive ninth inning (or later) is nevertheless
+  // terminal, so do not expose a transient MID/END 9 frame to clients.
+  const phase =
+    feedPhase === "LIVE" &&
+    inning >= 9 &&
+    ((inningState === "middle" && home.runs > away.runs) || (inningState === "end" && home.runs !== away.runs))
+      ? "FINAL"
+      : feedPhase;
   if (updateMode === "BOOTSTRAP" && phase === "FINAL") {
     const occurredAt = [...allRawPlays].reverse().map(playCompletedAt).find(Boolean);
     if (occurredAt) replayCandidates.push({ eventKey: `${gamePk}:final`, kind: "FINAL", occurredAt });
   }
-  const currentAbout = objectAt(currentPlay, "about");
-  const inning = clampInteger(numberAt(linescore, "currentInning", numberAt(currentAbout, "inning", 0)), 0, 99);
-  const inningState = stringAt(linescore, "inningState").toLowerCase();
   const feedHalf = halfFromText(
     inningState === "middle" || inningState === "end"
       ? inningState
       : stringAt(linescore, "inningHalf", stringAt(currentAbout, "halfInning", "top")),
   );
-  // MLB uses `inningState: "End"` for the brief changeover after the bottom
-  // half. That means the inning ended, not the game. Reserve END for an
-  // actually final game so presentation clients cannot mistake a live
-  // pitching changeover for the final out.
-  const half = phase === "FINAL" ? "END" : feedHalf === "END" ? "MIDDLE" : feedHalf;
+  // Middle follows the top half; End follows the bottom half. Phase, rather
+  // than the half label, determines whether the game itself is final.
+  const half = phase === "FINAL" ? "END" : feedHalf;
   const feedOuts = clampInteger(numberAt(linescore, "outs"), 0, 3) as 0 | 1 | 2 | 3;
   const currentCount = objectAt(currentPlay, "count");
   const currentMatchup = objectAt(currentPlay, "matchup");
@@ -388,7 +482,9 @@ export function normalizeFeed(
     cursor,
     updateMode,
     phase,
-    label: snapshotLabel(phase, status),
+    // An inferred final (decisive ninth before MLB flips its status) keeps
+    // the final label; every other phase carries the shared classification.
+    label: phase === "FINAL" ? "FINAL" : classification.label,
     away,
     home,
     inning,

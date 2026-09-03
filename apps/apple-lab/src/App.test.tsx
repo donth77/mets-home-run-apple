@@ -12,12 +12,27 @@ afterEach(() => {
 });
 
 describe("Apple Lab manager", () => {
-  it("uses team nicknames in the compact engineering scoreboard", () => {
-    const { container } = render(<App />);
-    const teamNames = [...container.querySelectorAll(".apple-scoreboard__name")].map((node) => node.textContent);
+  it("keeps physical-device settings out of Apple Lab", () => {
+    render(<App />);
 
-    expect(teamNames).toContain("Braves");
-    expect(teamNames).not.toContain("Atlanta");
+    expect(screen.queryByRole("button", { name: /Settings/ })).toBeNull();
+  });
+
+  it("shows the device state in the same compact scorebug Virtual Apple and the Manager use", () => {
+    const { container } = render(<App />);
+    const teams = [...container.querySelectorAll(".apple-scorebug__team strong")].map((node) => node.textContent);
+
+    expect(teams).toContain("NYM");
+    expect(teams).toContain("ATL");
+    expect(container.querySelector(".apple-scoreboard__name")).toBeNull();
+  });
+
+  it("uses the shared compact scorebug in the Simulator", () => {
+    const { container } = render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: /Simulator/ }));
+
+    expect(container.querySelector(".stage-game-strip .apple-scorebug")).not.toBeNull();
+    expect(container.querySelector(".stage-game-strip .apple-scoreboard")).toBeNull();
   });
 
   it("opens the read-only live timeline with significant events", () => {
@@ -54,14 +69,15 @@ describe("Apple Lab manager", () => {
     expect(screen.getByText(/browser time$/)).toBeTruthy();
   });
 
-  it("keeps powered tests and the USB-only session unavailable without a Nano", () => {
+  it("keeps the USB-only session unavailable without a Nano", () => {
     render(<App />);
     fireEvent.click(screen.getByRole("button", { name: /Hardware tests/ }));
 
     expect(screen.getAllByText("Hardware disconnected").length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "Connect Nano" }).hasAttribute("disabled")).toBe(true);
     expect(screen.getByRole("button", { name: "Arm USB-only test" }).hasAttribute("disabled")).toBe(true);
-    expect(screen.getAllByRole("button", { name: "Unavailable" })).toHaveLength(4);
+    expect(screen.queryByText("Powered component tests")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Unavailable" })).toBeNull();
   });
 
   it("runs only the bounded logic self-test through an explicitly selected USB Nano", async () => {
@@ -233,13 +249,62 @@ describe("Apple Lab manager", () => {
     expect(commands).not.toContain("d");
   });
 
+  it("drives the card and amplifier checks through the audio test profile without touching motor keys", async () => {
+    const state = (mounted: boolean, status: string, playing = "") =>
+      `APPLE_AUDIO:{"type":"state","sdMounted":${mounted},"cardMb":${mounted ? 7580 : 0},"playing":"${playing}","status":"${status}","gainPercent":10}\n`;
+    const commands = mockSerialPort((command) => {
+      if (command === "?") {
+        return (
+          'APPLE_AUDIO:{"type":"hello","profile":"audio_test","firmwareVersion":"0.1.0","sdChipSelect":"A0","i2s":{"bclk":"A1","lrc":"A2","din":"A3"},"gainPercent":10,"gainCapPercent":35,"fixture":"/tone.wav"}\n' +
+          state(false, "IDLE")
+        );
+      }
+      if (command === "m") {
+        return (
+          'APPLE_AUDIO:{"type":"sd","status":"MOUNTED","cardMb":7580,"files":[{"name":"tone.wav","bytes":88244}]}\n' +
+          state(true, "IDLE")
+        );
+      }
+      if (command === "p") {
+        return (
+          'APPLE_AUDIO:{"type":"play","status":"STARTED","source":"SD /tone.wav"}\n' +
+          state(true, "STARTED", "SD /tone.wav")
+        );
+      }
+      return undefined;
+    });
+
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: /Hardware tests/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Connect Nano" }));
+    await waitFor(() => expect(screen.getByText("Nano recognized")).toBeTruthy());
+    expect(screen.getByText("audio_test")).toBeTruthy();
+    expect(screen.getByText("AUDIO_NO_MOTION")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Mount card" }).hasAttribute("disabled")).toBe(true);
+    expect(screen.queryByRole("button", { name: "Force outputs low" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "12 V supply unplugged" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Motor pins low on the Nano display" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Speaker wired across the amplifier output only" }));
+    fireEvent.click(screen.getByRole("button", { name: "Arm audio session" }));
+    fireEvent.click(screen.getByRole("button", { name: "Mount card" }));
+    await waitFor(() => expect(screen.getByText("tone.wav")).toBeTruthy());
+    expect(screen.getByText("MOUNTED 7580 MB")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Play card fixture" }));
+    await waitFor(() => expect(screen.getByText("Card fixture played through the amplifier")).toBeTruthy());
+    expect(commands).toEqual(["?", "m", "p"]);
+    expect(commands).not.toContain("a");
+    expect(commands).not.toContain("x");
+  });
+
   it("stages every Simulator scenario for a future guarded Nano run", () => {
     render(<App />);
     fireEvent.click(screen.getByRole("button", { name: /Simulator/ }));
     fireEvent.click(screen.getByRole("button", { name: /Home run/ }));
 
     expect(screen.getByText(/1 raise \/ lower sequence expected/)).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Run on device" }).hasAttribute("disabled")).toBe(true);
+    expect(screen.getByRole("button", { name: "Run fixture on device" }).hasAttribute("disabled")).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Physical cycle" }));
     expect(screen.getByRole("button", { name: "Physical cycle" }).getAttribute("aria-pressed")).toBe("true");
   });

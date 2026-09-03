@@ -2,8 +2,8 @@
 #include "apple/display/home_run_loop.hpp"
 #include "apple/display/mets_win_loop.hpp"
 #include "apple/firmware/board_pins.hpp"
+#include "apple/firmware/screens.hpp"
 #include "apple/firmware/scan_lock.hpp"
-#include "apple/firmware/team_colors.hpp"
 
 #include <Adafruit_GFX.h>
 #include <Adafruit_ST7789.h>
@@ -22,84 +22,28 @@ using apple::firmware::kDisplayBacklightPin;
 using apple::firmware::kDisplayChipSelectPin;
 using apple::firmware::kDisplayDataCommandPin;
 using apple::firmware::kDisplayResetPin;
-using apple::firmware::team_abbreviation_color;
 
-constexpr std::int16_t kDisplayWidth = 320;
-constexpr std::int16_t kDisplayHeight = 240;
-constexpr std::int16_t kLiveBasesCenterX = 95;
-constexpr std::int16_t kLiveCountCenterX = 225;
+using apple::firmware::FinalScreen;
+using apple::firmware::GameScreen;
+using apple::firmware::ScreenModel;
+using apple::firmware::ScreenPainter;
+using apple::firmware::ScreenState;
+using apple::firmware::UpcomingScreen;
+using apple::firmware::copy_text;
+using apple::firmware::kDarkBlue;
+using apple::firmware::kDisplayHeight;
+using apple::firmware::kDisplayWidth;
+
 constexpr std::size_t kSerialLineCapacity = 512;
 constexpr std::size_t kExpectedGameFieldCount = 18;
-constexpr std::size_t kEventCharactersPerLine = 51;
 constexpr std::uint32_t kSerialWaitTimeoutMs = 3'000;
 constexpr std::uint32_t kRainFrameDurationMs = 150;
 constexpr std::uint8_t kRainFrameCount = 6;
-constexpr std::uint8_t kRainOffsets[] = {0, 13, 5, 19, 9, 2, 16};
 // A celebration is shown for the core's lead-in plus the raised dwell, then the
 // scoreboard returns. Motion stays disarmed in this prototype target.
 constexpr std::uint32_t kCelebrationDisplayMs = static_cast<std::uint32_t>(
     apple::core::kCelebrationLeadInMs + apple::core::kRaisedDwellMs);
 
-constexpr std::uint16_t kMetsBlue = 0x016E;
-constexpr std::uint16_t kMetsOrange = 0xFAC2;
-constexpr std::uint16_t kDarkBlue = 0x0008;
-constexpr std::uint16_t kPanelBlue = 0x08D3;
-constexpr std::uint16_t kMutedBlue = 0x5B2E;
-constexpr std::uint16_t kGold = 0xFEA0;
-constexpr std::uint16_t kLiveGreen = 0x35E8;
-constexpr std::uint16_t kDelayYellow = 0xF628;
-constexpr std::uint16_t kRainBlue = 0x75DD;
-
-enum class ScreenState : std::uint8_t {
-  Waiting = 0,
-  Game,
-  Upcoming,
-  Offseason,
-  GenericDelay,
-  RainDelay,
-  Review,
-  Suspended,
-  Postponed,
-  Cancelled,
-  Final,
-};
-
-struct GameSnapshot {
-  char away[5] = "NYM";
-  char home[5] = "---";
-  std::uint16_t away_score = 0;
-  std::uint16_t home_score = 0;
-  char inning[10] = "";
-  std::uint8_t balls = 0;
-  std::uint8_t strikes = 0;
-  std::uint8_t outs = 0;
-  std::uint8_t occupied_bases = 0;
-  char batter[24] = "-";
-  char batter_line[12] = "-";
-  char pitcher[24] = "-";
-  std::uint16_t pitch_count = 0;
-  char venue[31] = "";
-  char event[104] = "WAITING FOR LIVE DATA";
-  bool valid = false;
-};
-
-struct UpcomingSnapshot {
-  char away[5] = "NYM";
-  char home[5] = "---";
-  char date[16] = "DATE TBD";
-  char time[13] = "TIME TBD";
-  char timezone[9] = "LOCAL";
-  char venue[31] = "";
-};
-
-struct FinalSnapshot {
-  char away[5] = "NYM";
-  char home[5] = "---";
-  std::uint16_t away_score = 0;
-  std::uint16_t home_score = 0;
-  char result[12] = "FINAL_SCORE";
-  char venue[31] = "";
-};
 
 Adafruit_ST7789 panel(kDisplayChipSelectPin, kDisplayDataCommandPin,
                       kDisplayResetPin);
@@ -107,13 +51,15 @@ GFXcanvas16 display(kDisplayWidth, kDisplayHeight);
 // Celebration frames go to the panel tear-free (see scan_lock.hpp); the
 // scoreboard keeps the ordinary full-canvas pushes.
 apple::firmware::ScanLockedPanel scan_lock(panel);
-GameSnapshot game;
-UpcomingSnapshot upcoming;
-FinalSnapshot final_game;
-ScreenState screen_state = ScreenState::Waiting;
-char offseason_season[12] = "NEXT SEASON";
-char delay_detail[40] = "WAITING FOR UPDATE";
-char state_detail[40] = "WAITING FOR UPDATE";
+ScreenModel model;
+ScreenPainter painter(display);
+GameScreen& game = model.game;
+UpcomingScreen& upcoming = model.upcoming;
+FinalScreen& final_game = model.final_game;
+ScreenState& screen_state = model.state;
+char (&offseason_season)[24] = model.offseason_season;
+char (&delay_detail)[40] = model.delay_detail;
+char (&state_detail)[40] = model.state_detail;
 
 apple::display::HomeRunLoop home_run_loop;
 apple::display::MetsWinLoop mets_win_loop;
@@ -126,69 +72,9 @@ char celebration_name[apple::display::HomeRunLoop::kMaxNameLength + 1] = "";
 
 char serial_line[kSerialLineCapacity] = {};
 std::size_t serial_line_length = 0;
-char status_message[80] = "CONNECTING TO USB LIVE BRIDGE";
+char (&status_message)[80] = model.status_message;
 bool needs_redraw = true;
 std::uint8_t last_rain_frame = 0xFF;
-
-void copy_text(char* destination, std::size_t capacity, const char* source) {
-  if (capacity == 0) {
-    return;
-  }
-  std::strncpy(destination, source, capacity - 1);
-  destination[capacity - 1] = '\0';
-}
-
-void copy_text_span(char* destination, std::size_t capacity,
-                    const char* source, std::size_t length) {
-  if (capacity == 0) {
-    return;
-  }
-  const std::size_t copied = std::min(length, capacity - 1);
-  std::memcpy(destination, source, copied);
-  destination[copied] = '\0';
-}
-
-bool wrap_event_text(const char* source,
-                     char (&first_line)[kEventCharactersPerLine + 1],
-                     char (&second_line)[kEventCharactersPerLine + 1]) {
-  first_line[0] = '\0';
-  second_line[0] = '\0';
-  const std::size_t length = std::strlen(source);
-  if (length <= kEventCharactersPerLine) {
-    copy_text(first_line, sizeof(first_line), source);
-    return false;
-  }
-
-  std::size_t split = kEventCharactersPerLine;
-  while (split > 0 && source[split] != ' ') {
-    --split;
-  }
-  if (split == 0) {
-    split = kEventCharactersPerLine;
-  }
-  copy_text_span(first_line, sizeof(first_line), source, split);
-
-  const char* remainder = source + split;
-  while (*remainder == ' ') {
-    ++remainder;
-  }
-  const std::size_t remainder_length = std::strlen(remainder);
-  if (remainder_length <= kEventCharactersPerLine) {
-    copy_text(second_line, sizeof(second_line), remainder);
-  } else {
-    constexpr std::size_t kTextBeforeEllipsis = kEventCharactersPerLine - 3;
-    std::size_t second_split = kTextBeforeEllipsis;
-    while (second_split > 0 && remainder[second_split] != ' ') {
-      --second_split;
-    }
-    if (second_split < kTextBeforeEllipsis / 2) {
-      second_split = kTextBeforeEllipsis;
-    }
-    copy_text_span(second_line, sizeof(second_line), remainder, second_split);
-    std::strcat(second_line, "...");
-  }
-  return true;
-}
 
 std::uint16_t parse_u16(const char* value) {
   return static_cast<std::uint16_t>(
@@ -198,350 +84,6 @@ std::uint16_t parse_u16(const char* value) {
 std::uint8_t parse_u8(const char* value, std::uint8_t maximum) {
   return static_cast<std::uint8_t>(
       std::min<unsigned long>(std::strtoul(value, nullptr, 10), maximum));
-}
-
-void set_text(std::uint16_t color, std::uint8_t size) {
-  display.setTextColor(color);
-  display.setTextSize(size);
-  display.setTextWrap(false);
-}
-
-void draw_centered(const char* text, std::int16_t center_x, std::int16_t y,
-                   std::uint8_t size, std::uint16_t color) {
-  std::int16_t bounds_x = 0;
-  std::int16_t bounds_y = 0;
-  std::uint16_t bounds_width = 0;
-  std::uint16_t bounds_height = 0;
-  set_text(color, size);
-  display.getTextBounds(text, 0, y, &bounds_x, &bounds_y, &bounds_width,
-                        &bounds_height);
-  display.setCursor(center_x - static_cast<std::int16_t>(bounds_width / 2), y);
-  display.print(text);
-}
-
-void draw_right_aligned(const char* text, std::int16_t right_x,
-                        std::int16_t y, std::uint8_t size,
-                        std::uint16_t color) {
-  std::int16_t bounds_x = 0;
-  std::int16_t bounds_y = 0;
-  std::uint16_t bounds_width = 0;
-  std::uint16_t bounds_height = 0;
-  set_text(color, size);
-  display.getTextBounds(text, 0, y, &bounds_x, &bounds_y, &bounds_width,
-                        &bounds_height);
-  display.setCursor(right_x - static_cast<std::int16_t>(bounds_width), y);
-  display.print(text);
-}
-
-void draw_fitted_player_name(const char* text, std::int16_t left_x,
-                             std::int16_t top_y, std::uint16_t max_width) {
-  std::uint8_t size = 2;
-  std::int16_t bounds_x = 0;
-  std::int16_t bounds_y = 0;
-  std::uint16_t bounds_width = 0;
-  std::uint16_t bounds_height = 0;
-  set_text(ST77XX_WHITE, size);
-  display.getTextBounds(text, 0, 0, &bounds_x, &bounds_y, &bounds_width,
-                        &bounds_height);
-  if (bounds_width > max_width) {
-    size = 1;
-  }
-  set_text(ST77XX_WHITE, size);
-  const std::int16_t centered_y =
-      top_y + static_cast<std::int16_t>((16 - size * 8) / 2);
-  display.setCursor(left_x, centered_y);
-  display.print(text);
-}
-
-void draw_base_diamond(std::int16_t center_x, std::int16_t center_y,
-                       std::int16_t radius, bool occupied) {
-  const std::uint16_t color = occupied ? kGold : ST77XX_WHITE;
-  const std::uint16_t fill = occupied ? color : kDarkBlue;
-  display.fillTriangle(center_x, center_y - radius, center_x + radius, center_y,
-                       center_x, center_y + radius, fill);
-  display.fillTriangle(center_x, center_y - radius, center_x - radius, center_y,
-                       center_x, center_y + radius, fill);
-  display.drawLine(center_x, center_y - radius, center_x + radius, center_y,
-                   color);
-  display.drawLine(center_x + radius, center_y, center_x, center_y + radius,
-                   color);
-  display.drawLine(center_x, center_y + radius, center_x - radius, center_y,
-                   color);
-  display.drawLine(center_x - radius, center_y, center_x, center_y - radius,
-                   color);
-}
-
-void draw_out_dots(std::uint8_t outs) {
-  for (std::uint8_t index = 0; index < 2; ++index) {
-    const std::int16_t x =
-        kLiveBasesCenterX - 10 + static_cast<std::int16_t>(index * 20);
-    if (index < outs) {
-      display.fillCircle(x, 126, 6, kMetsOrange);
-    } else {
-      display.drawCircle(x, 126, 6, kMutedBlue);
-    }
-  }
-}
-
-void draw_waiting_layout() {
-  display.fillScreen(kDarkBlue);
-  display.fillRect(0, 0, kDisplayWidth, 42, kMetsBlue);
-  display.fillRect(0, 38, kDisplayWidth, 4, kMetsOrange);
-  draw_centered("HOME RUN APPLE", 160, 10, 2, ST77XX_WHITE);
-
-  display.drawRoundRect(20, 63, 280, 116, 9, kMutedBlue);
-  draw_centered("USB LIVE DISPLAY", 160, 82, 2, kMetsOrange);
-  draw_centered(status_message, 160, 119, 1, ST77XX_WHITE);
-  draw_centered("MOTION OUTPUTS DISARMED", 160, 146, 1, kMutedBlue);
-  display.fillRect(0, 226, kDisplayWidth, 14, kPanelBlue);
-  draw_centered("Waiting for the host feed", 160, 229, 1, ST77XX_WHITE);
-}
-
-void draw_upcoming_layout() {
-  display.fillScreen(kDarkBlue);
-  display.fillRect(0, 0, kDisplayWidth, 42, kMetsBlue);
-  display.fillRect(0, 38, kDisplayWidth, 4, kMetsOrange);
-  draw_centered("NEXT METS GAME", 160, 10, 2, ST77XX_WHITE);
-
-  const std::uint16_t away_color =
-      std::strcmp(upcoming.away, "NYM") == 0 ? kMetsOrange : ST77XX_WHITE;
-  const std::uint16_t home_color =
-      std::strcmp(upcoming.home, "NYM") == 0 ? kMetsOrange : ST77XX_WHITE;
-  draw_centered(upcoming.away, 80, 77, 4, away_color);
-  draw_centered("AT", 160, 89, 2, kMutedBlue);
-  draw_centered(upcoming.home, 240, 77, 4, home_color);
-
-  display.drawRoundRect(26, 130, 268, 68, 8, kMutedBlue);
-  draw_centered(upcoming.date, 160, 143, 2, ST77XX_WHITE);
-  char local_time[24] = {};
-  std::snprintf(local_time, sizeof(local_time), "%s %s", upcoming.time,
-                upcoming.timezone);
-  draw_centered(local_time, 160, 169, 2, kGold);
-
-  display.fillRect(0, 232, kDisplayWidth, 8, kMetsOrange);
-}
-
-void draw_offseason_layout() {
-  display.fillScreen(kDarkBlue);
-  display.fillRect(0, 0, kDisplayWidth, 42, kMetsBlue);
-  display.fillRect(0, 38, kDisplayWidth, 4, kMetsOrange);
-  draw_centered("OFFSEASON", 160, 10, 2, ST77XX_WHITE);
-
-  // Sleeping Apple and pedestal, matching the manually maintained Aseprite.
-  display.fillCircle(145, 79, 21, ST77XX_RED);
-  display.fillCircle(174, 79, 21, ST77XX_RED);
-  display.fillTriangle(125, 80, 194, 80, 160, 110, ST77XX_RED);
-  display.fillRoundRect(160, 48, 4, 19, 2, kGold);
-  display.fillTriangle(159, 60, 140, 58, 150, 70, kLiveGreen);
-  display.fillCircle(175, 68, 5, 0xFDCF);
-  draw_centered("Z", 211, 62, 1, kMutedBlue);
-  draw_centered("Z", 228, 48, 2, kMutedBlue);
-
-  display.fillRect(120, 98, 78, 17, kPanelBlue);
-  display.fillRect(72, 115, 174, 14, 0x32C9);
-  display.fillRect(72, 129, 174, 4, kMetsOrange);
-  display.fillRect(72, 133, 174, 45, kMetsBlue);
-  for (std::int16_t x = 82; x < 246; x += 39) {
-    display.fillTriangle(x, 133, x + 28, 178, x, 178, kPanelBlue);
-  }
-
-  draw_centered("SEE YOU NEXT SEASON", 160, 195, 2, ST77XX_WHITE);
-  display.fillRect(0, 220, kDisplayWidth, 20, kPanelBlue);
-  draw_centered(offseason_season, 160, 227, 1, kMetsOrange);
-}
-
-void draw_delay_layout(bool rain, std::uint8_t rain_frame = 0) {
-  const std::uint16_t accent = rain ? kMutedBlue : kDelayYellow;
-  display.fillScreen(kDarkBlue);
-  display.fillRect(0, 0, kDisplayWidth, 42, kMetsBlue);
-  display.fillRect(0, 38, kDisplayWidth, 4, accent);
-  draw_centered(rain ? "RAIN DELAY" : "GAME DELAYED", 160, 10, 2,
-                ST77XX_WHITE);
-
-  display.fillRoundRect(22, 66, 276, 126, 9, kPanelBlue);
-  display.drawRoundRect(22, 66, 276, 126, 9, accent);
-  if (rain) {
-    display.fillCircle(143, 96, 10, kMutedBlue);
-    display.fillCircle(160, 90, 15, kMutedBlue);
-    display.fillCircle(179, 97, 11, kMutedBlue);
-    display.fillRect(143, 96, 37, 12, kMutedBlue);
-    for (std::uint8_t index = 0;
-         index < sizeof(kRainOffsets) / sizeof(kRainOffsets[0]); ++index) {
-      const std::int16_t x = 136 + static_cast<std::int16_t>(index * 8);
-      const std::int16_t y =
-          111 + static_cast<std::int16_t>(
-                    (kRainOffsets[index] + rain_frame * 4) % 24);
-      const std::int16_t length = index % 2 == 0 ? 9 : 7;
-      display.drawLine(x, y, x - 3, y + length - 1, kRainBlue);
-      display.drawLine(x + 1, y, x - 2, y + length - 1, kRainBlue);
-    }
-    draw_centered("WAITING FOR UPDATE", 160, 164, 1, ST77XX_WHITE);
-  } else {
-    display.fillCircle(160, 106, 22, kDelayYellow);
-    display.fillCircle(160, 106, 18, kPanelBlue);
-    display.fillRect(159, 93, 3, 14, kDelayYellow);
-    display.drawLine(160, 106, 172, 112, kDelayYellow);
-    display.drawLine(160, 107, 172, 113, kDelayYellow);
-    draw_centered("DELAY IN PROGRESS", 160, 134, 2, kDelayYellow);
-    draw_centered(delay_detail, 160, 164, 1, ST77XX_WHITE);
-  }
-  display.fillRect(0, 220, kDisplayWidth, 20, kPanelBlue);
-  draw_centered("WAITING FOR MLB UPDATE", 160, 227, 1, accent);
-}
-
-void draw_state_layout(ScreenState state) {
-  const bool is_review = state == ScreenState::Review;
-  const bool is_suspended = state == ScreenState::Suspended;
-  const bool is_postponed = state == ScreenState::Postponed;
-  const bool is_cancelled = state == ScreenState::Cancelled;
-  const std::uint16_t accent =
-      (is_postponed || is_cancelled) ? ST77XX_RED : kDelayYellow;
-  const char* title = is_review      ? "PLAY UNDER REVIEW"
-                      : is_suspended ? "GAME SUSPENDED"
-                      : is_postponed ? "GAME POSTPONED"
-                                     : "GAME CANCELLED";
-  const char* line_one = is_review      ? "CALL PENDING"
-                         : is_suspended ? "PLAY STOPPED"
-                         : is_postponed ? "POSTPONED"
-                                        : "NO GAME";
-  const char* line_two = is_review      ? "WAITING FOR REVIEW"
-                         : is_postponed ? "NEXT GAME TBD"
-                         : is_cancelled ? "SCHEDULE UPDATE PENDING"
-                                        : state_detail;
-
-  display.fillScreen(kDarkBlue);
-  display.fillRect(0, 0, kDisplayWidth, 42, kMetsBlue);
-  display.fillRect(0, 38, kDisplayWidth, 4, accent);
-  draw_centered(title, 160, 10, 2, ST77XX_WHITE);
-  display.fillRoundRect(22, 66, 276, 126, 9, kPanelBlue);
-  display.drawRoundRect(22, 66, 276, 126, 9, accent);
-
-  if (is_review) {
-    display.drawCircle(160, 104, 23, accent);
-    draw_centered("?", 160, 86, 4, accent);
-  } else if (is_suspended) {
-    display.drawCircle(160, 104, 22, accent);
-    display.fillRect(151, 91, 5, 27, accent);
-    display.fillRect(165, 91, 5, 27, accent);
-  } else {
-    display.drawRoundRect(139, 82, 42, 42, 5, accent);
-    display.drawLine(148, 91, 172, 115, accent);
-    display.drawLine(172, 91, 148, 115, accent);
-  }
-  draw_centered(line_one, 160, 134, 2, accent);
-  draw_centered(line_two, 160, 164, 1, ST77XX_WHITE);
-  display.fillRect(0, 220, kDisplayWidth, 20, kPanelBlue);
-  draw_centered(is_review ? "OFFICIAL REVIEW IN PROGRESS"
-                          : "WAITING FOR MLB UPDATE",
-                160, 227, 1, accent);
-}
-
-void draw_final_layout() {
-  display.fillScreen(kDarkBlue);
-  display.fillRect(0, 0, kDisplayWidth, 42, kMetsBlue);
-  display.fillRect(0, 38, kDisplayWidth, 4, kMetsOrange);
-  draw_centered("FINAL", 160, 9, 3, ST77XX_WHITE);
-
-  char away_line[14] = {};
-  char home_line[14] = {};
-  std::snprintf(away_line, sizeof(away_line), "%s %u", final_game.away,
-                final_game.away_score);
-  std::snprintf(home_line, sizeof(home_line), "%s %u", final_game.home,
-                final_game.home_score);
-  const std::uint16_t away_color =
-      std::strcmp(final_game.away, "NYM") == 0 ? kMetsOrange : ST77XX_WHITE;
-  const std::uint16_t home_color =
-      std::strcmp(final_game.home, "NYM") == 0 ? kMetsOrange : ST77XX_WHITE;
-  draw_centered(away_line, 160, 62, 4, away_color);
-  draw_centered(home_line, 160, 105, 4, home_color);
-  const bool mets_win = std::strcmp(final_game.result, "METS_WIN") == 0;
-  draw_centered(mets_win ? "METS WIN" : "FINAL SCORE", 160, 158, 2,
-                mets_win ? kMetsOrange : ST77XX_WHITE);
-  display.fillRect(0, 220, kDisplayWidth, 20, kPanelBlue);
-  draw_centered(final_game.venue, 160, 227, 1, kMutedBlue);
-}
-
-void draw_game_layout() {
-  display.fillScreen(kDarkBlue);
-  display.fillRect(0, 0, kDisplayWidth, 58, kMetsBlue);
-  display.fillRect(0, 54, kDisplayWidth, 4, kMetsOrange);
-
-  char score[8] = {};
-  set_text(team_abbreviation_color(game.away), 3);
-  display.setCursor(8, 14);
-  display.print(game.away);
-  set_text(ST77XX_WHITE, 3);
-  std::snprintf(score, sizeof(score), " %u", game.away_score);
-  display.print(score);
-
-  char home_score_block[13] = {};
-  std::snprintf(home_score_block, sizeof(home_score_block), "%s %u",
-                game.home, game.home_score);
-  std::int16_t bounds_x = 0;
-  std::int16_t bounds_y = 0;
-  std::uint16_t bounds_width = 0;
-  std::uint16_t bounds_height = 0;
-  set_text(ST77XX_WHITE, 3);
-  display.getTextBounds(home_score_block, 0, 14, &bounds_x, &bounds_y,
-                        &bounds_width, &bounds_height);
-  display.setCursor(312 - static_cast<std::int16_t>(bounds_width), 14);
-  set_text(team_abbreviation_color(game.home), 3);
-  display.print(game.home);
-  set_text(ST77XX_WHITE, 3);
-  std::snprintf(score, sizeof(score), " %u", game.home_score);
-  display.print(score);
-
-  draw_centered(game.inning, 160, 7, 2, ST77XX_WHITE);
-  draw_centered("LIVE", 160, 34, 1, kLiveGreen);
-
-  char count[8] = {};
-  std::snprintf(count, sizeof(count), "%u-%u", game.balls, game.strikes);
-  draw_centered("COUNT", kLiveCountCenterX, 72, 1, kMutedBlue);
-  draw_centered(count, kLiveCountCenterX, 88, 4, kGold);
-
-  draw_base_diamond(kLiveBasesCenterX, 75, 13,
-                    (game.occupied_bases & 0x02U) != 0);
-  draw_base_diamond(kLiveBasesCenterX + 21, 96, 13,
-                    (game.occupied_bases & 0x01U) != 0);
-  draw_base_diamond(kLiveBasesCenterX - 21, 96, 13,
-                    (game.occupied_bases & 0x04U) != 0);
-  draw_out_dots(game.outs);
-  draw_centered("OUTS", kLiveBasesCenterX, 139, 1, kMutedBlue);
-
-  display.drawFastHLine(0, 151, kDisplayWidth, kMutedBlue);
-  set_text(kMetsOrange, 1);
-  display.setCursor(12, 159);
-  display.print("BATTING");
-  if (std::strcmp(game.batter_line, "-") != 0) {
-    draw_right_aligned(game.batter_line, 148, 159, 1, kGold);
-  }
-  display.setCursor(172, 159);
-  display.print("PITCHING");
-  if (game.pitch_count > 0) {
-    char pitches[12] = {};
-    std::snprintf(pitches, sizeof(pitches), "P:%u", game.pitch_count);
-    draw_right_aligned(pitches, 313, 159, 1, kGold);
-  }
-
-  draw_fitted_player_name(game.batter, 12, 173, 144);
-  draw_fitted_player_name(game.pitcher, 172, 173, 140);
-
-  char first_event_line[kEventCharactersPerLine + 1] = {};
-  char second_event_line[kEventCharactersPerLine + 1] = {};
-  const bool event_wraps =
-      wrap_event_text(game.event, first_event_line, second_event_line);
-  display.fillRect(0, 199, kDisplayWidth, event_wraps ? 41 : 21, kPanelBlue);
-  set_text(ST77XX_WHITE, 1);
-  display.setCursor(7, event_wraps ? 203 : 206);
-  display.print(first_event_line);
-  if (event_wraps) {
-    display.setCursor(7, 224);
-    display.print(second_event_line);
-  } else {
-    display.fillRect(0, 220, kDisplayWidth, 20, kMetsBlue);
-    display.setCursor(7, 227);
-    display.print(game.venue);
-  }
 }
 
 std::size_t split_fields(char* line, char** fields, std::size_t capacity) {
@@ -861,36 +403,9 @@ void render_if_needed() {
   if (!needs_redraw && !rain_frame_changed) {
     return;
   }
-  switch (screen_state) {
-    case ScreenState::Game:
-      draw_game_layout();
-      break;
-    case ScreenState::Upcoming:
-      draw_upcoming_layout();
-      break;
-    case ScreenState::Offseason:
-      draw_offseason_layout();
-      break;
-    case ScreenState::GenericDelay:
-      draw_delay_layout(false);
-      break;
-    case ScreenState::RainDelay:
-      draw_delay_layout(true, rain_frame);
-      last_rain_frame = rain_frame;
-      break;
-    case ScreenState::Review:
-    case ScreenState::Suspended:
-    case ScreenState::Postponed:
-    case ScreenState::Cancelled:
-      draw_state_layout(screen_state);
-      break;
-    case ScreenState::Final:
-      draw_final_layout();
-      break;
-    case ScreenState::Waiting:
-    default:
-      draw_waiting_layout();
-      break;
+  painter.draw(model, rain_frame);
+  if (screen_state == ScreenState::RainDelay) {
+    last_rain_frame = rain_frame;
   }
   panel.drawRGBBitmap(0, 0, display.getBuffer(), kDisplayWidth,
                       kDisplayHeight);
@@ -907,6 +422,12 @@ void setup() {
   while (!Serial && millis() - serial_wait_started_ms < kSerialWaitTimeoutMs) {
     delay(10);
   }
+
+  copy_text(model.waiting_title, sizeof(model.waiting_title), "USB LIVE DISPLAY");
+  copy_text(model.status_message, sizeof(model.status_message),
+            "CONNECTING TO USB LIVE BRIDGE");
+  copy_text(model.waiting_footer, sizeof(model.waiting_footer),
+            "Waiting for the host feed");
 
   pinMode(kDisplayBacklightPin, OUTPUT);
   digitalWrite(kDisplayBacklightPin, LOW);

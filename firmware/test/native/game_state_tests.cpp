@@ -1,4 +1,5 @@
 #include "apple/game_state/projector.hpp"
+#include "apple/game_state/status.hpp"
 
 #include <cstdlib>
 #include <iostream>
@@ -174,7 +175,109 @@ void test_rejected_frame_preserves_last_good_projection() {
 
 } // namespace
 
+// Status cases come from MLB's /api/v1/gameStatus table and from the Mets'
+// two 2026 in-game delays (7/18 at PHI, 8/7 at PIT), where the status said
+// only "Delayed" (IO) and a Game Advisory carried "Delayed: Rain".
+void test_status_classification() {
+  using apple::game_state::classify_status;
+  using apple::game_state::StatusFacts;
+  struct Case {
+    const char *name;
+    StatusFacts facts;
+    Phase phase;
+    const char *label;
+    bool weather;
+  };
+  const Case cases[] = {
+      {"in progress", {"Live", "In Progress", "I", "", "", false}, Phase::Live, "LIVE", false},
+      {"warmup", {"Live", "Warmup", "PW", "", "", false}, Phase::Live, "LIVE", false},
+      {"pre-game", {"Preview", "Pre-Game", "P", "", "", false}, Phase::Pregame, "Pre-Game", false},
+      {"scheduled", {"Preview", "Scheduled", "S", "", "", false}, Phase::Pregame, "Scheduled", false},
+      {"real mid-game delay: advisory names rain",
+       {"Live", "Delayed", "IO", "", "Status Change - Delayed: Rain", false},
+       Phase::Delayed, "RAIN DELAY", true},
+      {"generic delay with no advisory",
+       {"Live", "Delayed", "IO", "", "", false}, Phase::Delayed, "Delayed", false},
+      {"resumed: latest advisory is the resume",
+       {"Live", "In Progress", "I", "", "Status Change - In Progress", false},
+       Phase::Live, "LIVE", false},
+      {"advisory: inclement weather",
+       {"Live", "Delayed", "IO", "", "Status Change - Delayed: Inclement Weather", false},
+       Phase::Delayed, "RAIN DELAY", true},
+      {"advisory: lightning",
+       {"Live", "Delayed", "IO", "", "Status Change - Delayed: Lightning", false},
+       Phase::Delayed, "RAIN DELAY", true},
+      {"advisory: wet grounds",
+       {"Live", "Delayed", "IO", "", "Status Change - Delayed: Wet Grounds", false},
+       Phase::Delayed, "RAIN DELAY", true},
+      {"advisory: power is not weather",
+       {"Live", "Delayed", "IO", "", "Status Change - Delayed: Power", false},
+       Phase::Delayed, "Delayed", false},
+      {"advisory: drainage is not rain",
+       {"Live", "Delayed", "IO", "", "Status Change - Delayed: Drainage", false},
+       Phase::Delayed, "Delayed", false},
+      {"advisory mentioning rain but not a delay",
+       {"Live", "Delayed", "IO", "", "Rain in the forecast", false},
+       Phase::Delayed, "Delayed", false},
+      {"IR delayed: rain", {"Live", "Delayed: Rain", "IR", "Rain", "", false},
+       Phase::Delayed, "RAIN DELAY", true},
+      {"II inclement weather", {"Live", "Delayed: Inclement Weather", "II", "Inclement Weather", "", false},
+       Phase::Delayed, "RAIN DELAY", true},
+      {"IL lightning", {"Live", "Delayed: Lightning", "IL", "Lightning", "", false},
+       Phase::Delayed, "RAIN DELAY", true},
+      {"IG wet grounds", {"Live", "Delayed: Wet Grounds", "IG", "Wet Grounds", "", false},
+       Phase::Delayed, "RAIN DELAY", true},
+      {"PR delayed start: rain", {"Preview", "Delayed Start: Rain", "PR", "Rain", "", false},
+       Phase::Delayed, "RAIN DELAY", true},
+      {"PG delayed start: wet grounds", {"Preview", "Delayed Start: Wet Grounds", "PG", "Wet Grounds", "", false},
+       Phase::Delayed, "RAIN DELAY", true},
+      {"code alone, untrimmed", {"Live", "Delayed", " ir ", "", "", false},
+       Phase::Delayed, "RAIN DELAY", true},
+      {"reason alone", {"Live", "Delayed", "", "rain", "", false},
+       Phase::Delayed, "RAIN DELAY", true},
+      {"IS snow", {"Live", "Delayed: Snow", "IS", "Snow", "", false},
+       Phase::Delayed, "Delayed: Snow", false},
+      {"IF fog", {"Live", "Delayed: Fog", "IF", "Fog", "", false},
+       Phase::Delayed, "Delayed: Fog", false},
+      {"IP power", {"Live", "Delayed: Power", "IP", "Power", "", false},
+       Phase::Delayed, "Delayed: Power", false},
+      {"IY ceremony", {"Live", "Delayed: Ceremony", "IY", "Ceremony", "", false},
+       Phase::Delayed, "Delayed: Ceremony", false},
+      {"TR suspended: rain keeps its label",
+       {"Live", "Suspended: Rain", "TR", "Rain", "", false}, Phase::Delayed, "Suspended: Rain", false},
+      {"UR suspended: rain", {"Live", "Suspended: Rain", "UR", "Rain", "Status Change - Suspended: Rain", false},
+       Phase::Delayed, "Suspended: Rain", false},
+      {"DR postponed: rain", {"Final", "Postponed", "DR", "Rain", "", false},
+       Phase::Delayed, "Postponed", false},
+      {"DI postponed: inclement weather", {"Final", "Postponed", "DI", "Inclement Weather", "", false},
+       Phase::Delayed, "Postponed", false},
+      {"CR cancelled: rain", {"Final", "Cancelled", "CR", "Rain", "", false},
+       Phase::Delayed, "Cancelled", false},
+      {"FR completed early: rain", {"Final", "Completed Early: Rain", "FR", "Rain", "", false},
+       Phase::Final, "FINAL", false},
+      {"final", {"Final", "Final", "F", "", "", false}, Phase::Final, "FINAL", false},
+      {"game over", {"Live", "Game Over", "O", "", "", false}, Phase::Final, "FINAL", false},
+      {"manager challenge", {"Live", "Manager Challenge", "I", "", "", false},
+       Phase::Review, "PLAY UNDER REVIEW", false},
+      {"review pending wins", {"Live", "Delayed", "IO", "", "Status Change - Delayed: Rain", true},
+       Phase::Review, "PLAY UNDER REVIEW", false},
+      {"empty status", {"", "", "", "", "", false}, Phase::Sleep, "SLEEP", false},
+  };
+  for (const Case &c : cases) {
+    const auto out = classify_status(c.facts);
+    if (out.phase != c.phase || out.label != c.label || out.weather_delay != c.weather) {
+      std::cerr << "status case '" << c.name << "': phase " << static_cast<int>(out.phase)
+                << " label '" << out.label << "' weather " << out.weather_delay << '\n';
+      fail(std::string("status classification: ") + c.name, __LINE__);
+    }
+  }
+  EXPECT_TRUE(apple::game_state::contains_word("Delayed: Rain", "rain"));
+  EXPECT_TRUE(!apple::game_state::contains_word("Delayed: Drainage", "rain"));
+  EXPECT_TRUE(!apple::game_state::contains_word("training", "rain"));
+}
+
 int main() {
+  test_status_classification();
   test_projects_complete_and_decision_views();
   test_replace_clears_stale_optional_state();
   test_rejected_frame_preserves_last_good_projection();

@@ -1,0 +1,11 @@
+{
+  "$schema": "https://raw.githubusercontent.com/platformio/platformio-core/develop/platformio/assets/schema/library.json",
+  "name": "apple-mlb-feed",
+  "version": "0.1.0",
+  "description": "Hardware-independent MLB live-feed and schedule adapter that produces canonical game frames.",
+  "dependencies": [{ "name": "apple-game-state" }, { "name": "ArduinoJson" }],
+  "build": {
+    "includeDir": "include",
+    "srcDir": "src"
+  }
+}

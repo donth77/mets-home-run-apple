@@ -35,7 +35,13 @@ export function stadiumHeaderText(data: StadiumHeaderData) {
   const isFinal = data.phase === "FINAL";
   const center = !isFinal && data.label.trim().toUpperCase() === "FINAL" ? (data.phase ?? "LIVE") : data.label;
   const inningLabel =
-    data.half === "TOP" ? `▲ ${data.inning}` : data.half === "BOTTOM" ? `▼ ${data.inning}` : `MID ${data.inning}`;
+    data.half === "TOP"
+      ? `▲ ${data.inning}`
+      : data.half === "BOTTOM"
+        ? `▼ ${data.inning}`
+        : data.half === "MIDDLE"
+          ? `MID ${data.inning}`
+          : `END ${data.inning}`;
   return {
     center: center.toUpperCase(),
     right: isFinal ? "" : `${inningLabel}  ·  ${Math.min(data.outs, 3)} OUT${data.outs === 1 ? "" : "S"}`,

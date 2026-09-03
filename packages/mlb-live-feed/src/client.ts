@@ -1,9 +1,16 @@
 import { MLB_STATS_API_ORIGIN } from "./constants";
 import { MlbFeedError } from "./errors";
 import { isFullFeed, patchOperationsFromPayload } from "./feedPayload";
-import { feedCursor, normalizeFeed, normalizedStateFingerprint, waitMilliseconds } from "./feedNormalization";
+import {
+  classifyGameStatus,
+  feedCursor,
+  normalizeFeed,
+  normalizedStateFingerprint,
+  waitMilliseconds,
+} from "./feedNormalization";
 import { type CanonicalGameProjector, projectCanonicalGameFrame } from "./feedProjections";
 import { applyJsonPatch } from "./jsonPatch";
+import type { GameStatusClassifier } from "@apple/protocol";
 import type { MlbScheduleGame } from "./schedule";
 import { assertMlbTimecode, formatMlbTimecode } from "./timecode";
 import { fetchJson } from "./transport";
@@ -13,6 +20,7 @@ export class MlbRecordingClient {
   readonly #fetcher: typeof fetch;
   readonly #now: () => Date;
   readonly #projectFrame: CanonicalGameProjector;
+  readonly #classifyStatus: GameStatusClassifier;
   #baseline: unknown;
   #upstreamCursor = "";
   #deliveryCursor = "";
@@ -24,10 +32,12 @@ export class MlbRecordingClient {
     fetcher: typeof fetch = fetch,
     now: () => Date = () => new Date(),
     projectFrame: CanonicalGameProjector = projectCanonicalGameFrame,
+    classifyStatus: GameStatusClassifier = classifyGameStatus,
   ) {
     this.#fetcher = fetcher;
     this.#now = now;
     this.#projectFrame = projectFrame;
+    this.#classifyStatus = classifyStatus;
   }
 
   reset() {
@@ -55,6 +65,7 @@ export class MlbRecordingClient {
       this.#now().toISOString(),
       upstreamCursor,
       this.#projectFrame,
+      this.#classifyStatus,
     );
     this.#baseline = full;
     this.#upstreamCursor = upstreamCursor;
@@ -125,6 +136,7 @@ export class MlbRecordingClient {
       this.#now().toISOString(),
       upstreamCursor,
       this.#projectFrame,
+      this.#classifyStatus,
     );
     const stateFingerprint = normalizedStateFingerprint(normalized.capture.gameSnapshot, normalized.fingerprints);
     if (upstreamCursor === this.#upstreamCursor && stateFingerprint === this.#stateFingerprint) {

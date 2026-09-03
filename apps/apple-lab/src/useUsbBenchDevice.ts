@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   parseUsbBenchLine,
+  type UsbAudioCardMessage,
+  type UsbAudioChecksumMessage,
+  type UsbAudioHelloMessage,
+  type UsbAudioPlayMessage,
+  type UsbAudioStateMessage,
+  type UsbAudioTestMessage,
   type UsbBenchHelloMessage,
   type UsbBenchStateMessage,
   type UsbBenchTestMessage,
@@ -31,8 +37,14 @@ type NavigatorWithSerial = Navigator & { serial?: SerialApiLike };
 
 export type UsbBenchConnectionState = "UNSUPPORTED" | "DISCONNECTED" | "CONNECTING" | "CONNECTED" | "ERROR";
 
-/** Single-character firmware commands. Every one is bounded by the firmware itself. */
-type UsbCommand = "?" | "t" | "x" | "a" | "u" | "d" | "h";
+/**
+ * Single-character firmware commands. Every one is bounded by the firmware
+ * itself. The audio build reuses `t` for its tone and `a` for the display/SD
+ * alternation test; the jog and motion builds read `a` as arm, so the panel
+ * only offers each key on the profile that defines it.
+ */
+type UsbCommand = "?" | "t" | "x" | "a" | "u" | "d" | "h" | "m" | "k" | "p" | "s" | "1" | "2" | "3";
+export type UsbAudioGainStep = 1 | 2 | 3;
 
 export interface UsbBenchLogLine {
   id: number;
@@ -62,6 +74,12 @@ export function useUsbBenchDevice() {
   const [motionHello, setMotionHello] = useState<UsbMotionHelloMessage>();
   const [motionState, setMotionState] = useState<UsbMotionStateMessage>();
   const [motionRun, setMotionRun] = useState<(UsbMotionRunMessage & { logId: number }) | undefined>();
+  const [audioHello, setAudioHello] = useState<UsbAudioHelloMessage>();
+  const [audioState, setAudioState] = useState<UsbAudioStateMessage>();
+  const [audioCard, setAudioCard] = useState<UsbAudioCardMessage>();
+  const [audioChecksum, setAudioChecksum] = useState<(UsbAudioChecksumMessage & { logId: number }) | undefined>();
+  const [audioPlay, setAudioPlay] = useState<(UsbAudioPlayMessage & { logId: number }) | undefined>();
+  const [audioTest, setAudioTest] = useState<(UsbAudioTestMessage & { logId: number }) | undefined>();
   const [log, setLog] = useState<UsbBenchLogLine[]>([]);
   const [error, setError] = useState<string>();
   const portRef = useRef<SerialPortLike | undefined>(undefined);
@@ -80,6 +98,12 @@ export function useUsbBenchDevice() {
     setMotionHello(undefined);
     setMotionState(undefined);
     setMotionRun(undefined);
+    setAudioHello(undefined);
+    setAudioState(undefined);
+    setAudioCard(undefined);
+    setAudioChecksum(undefined);
+    setAudioPlay(undefined);
+    setAudioTest(undefined);
   }, []);
 
   const acceptLine = useCallback((text: string) => {
@@ -123,6 +147,27 @@ export function useUsbBenchDevice() {
         setMotionRun({ ...message, logId: entry.id });
         break;
       case "motion-trace":
+        break;
+      case "audio-hello":
+        setAudioHello(message);
+        break;
+      case "audio-state":
+        setAudioState(message);
+        break;
+      case "audio-sd":
+        setAudioCard(message);
+        break;
+      case "audio-checksum":
+        setAudioChecksum({ ...message, logId: entry.id });
+        break;
+      case "audio-play":
+        setAudioPlay({ ...message, logId: entry.id });
+        break;
+      case "audio-gain":
+        setAudioState((current) => (current ? { ...current, gainPercent: message.percent } : current));
+        break;
+      case "audio-test":
+        setAudioTest({ ...message, logId: entry.id });
         break;
     }
   }, []);
@@ -241,7 +286,8 @@ export function useUsbBenchDevice() {
     };
   }, [disconnect]);
 
-  const profile: UsbFirmwareProfile | undefined = hello?.profile ?? jogHello?.profile ?? motionHello?.profile;
+  const profile: UsbFirmwareProfile | undefined =
+    hello?.profile ?? jogHello?.profile ?? motionHello?.profile ?? audioHello?.profile;
 
   const clearLog = useCallback(() => setLog([]), []);
   const queryStatus = useCallback(() => writeCommands(["?"]), [writeCommands]);
@@ -252,6 +298,18 @@ export function useUsbBenchDevice() {
   const jogExtend = useCallback(() => writeCommands(["a", "u"]), [writeCommands]);
   const jogRetract = useCallback(() => writeCommands(["a", "d"]), [writeCommands]);
   const startHomeRun = useCallback(() => writeCommands(["a", "h"]), [writeCommands]);
+  // Audio test build only. None of these keys can reach a motor pin: the
+  // audio firmware holds the bridge outputs low for its whole session.
+  const mountCard = useCallback(() => writeCommands(["m"]), [writeCommands]);
+  const checksumFixture = useCallback(() => writeCommands(["k"]), [writeCommands]);
+  const playTone = useCallback(() => writeCommands(["t"]), [writeCommands]);
+  const playFixture = useCallback(() => writeCommands(["p"]), [writeCommands]);
+  const stopPlayback = useCallback(() => writeCommands(["s"]), [writeCommands]);
+  const setGain = useCallback(
+    (step: UsbAudioGainStep) => writeCommands([step === 1 ? "1" : step === 2 ? "2" : "3"]),
+    [writeCommands],
+  );
+  const runAlternationTest = useCallback(() => writeCommands(["a"]), [writeCommands]);
 
   return useMemo(
     () => ({
@@ -267,6 +325,12 @@ export function useUsbBenchDevice() {
       motionHello,
       motionState,
       motionRun,
+      audioHello,
+      audioState,
+      audioCard,
+      audioChecksum,
+      audioPlay,
+      audioTest,
       log,
       error,
       connect,
@@ -277,9 +341,23 @@ export function useUsbBenchDevice() {
       jogExtend,
       jogRetract,
       startHomeRun,
+      mountCard,
+      checksumFixture,
+      playTone,
+      playFixture,
+      stopPlayback,
+      setGain,
+      runAlternationTest,
       clearLog,
     }),
     [
+      audioCard,
+      audioChecksum,
+      audioHello,
+      audioPlay,
+      audioState,
+      audioTest,
+      checksumFixture,
       clearLog,
       connect,
       connection,
@@ -297,10 +375,16 @@ export function useUsbBenchDevice() {
       motionHello,
       motionRun,
       motionState,
+      mountCard,
+      playFixture,
+      playTone,
       profile,
       queryStatus,
+      runAlternationTest,
       runLogicSelfTest,
+      setGain,
       startHomeRun,
+      stopPlayback,
       supported,
       testReceipt,
     ],

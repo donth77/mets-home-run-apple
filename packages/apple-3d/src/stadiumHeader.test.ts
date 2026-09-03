@@ -60,7 +60,7 @@ describe("stadium scoreboard header", () => {
     expect(JSON.stringify(header)).not.toContain("BETWEEN GAMES");
   });
 
-  it("does not turn MLB's live end-of-inning state into a final game", () => {
+  it("labels a live bottom-half changeover END rather than MID or FINAL", () => {
     const header = stadiumHeaderText({
       phase: "LIVE",
       label: "LIVE",
@@ -69,7 +69,7 @@ describe("stadium scoreboard header", () => {
       outs: 3,
     });
 
-    expect(header).toEqual({ center: "LIVE", right: "MID 2  ·  3 OUTS" });
+    expect(header).toEqual({ center: "LIVE", right: "END 2  ·  3 OUTS" });
     expect(JSON.stringify(header)).not.toContain("FINAL");
   });
 

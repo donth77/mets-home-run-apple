@@ -18,21 +18,33 @@ const checklistItems = [
 
 type ChecklistId = (typeof checklistItems)[number]["id"];
 type ChecklistState = Partial<Record<ChecklistId, boolean>>;
-type SessionKind = "logic" | "jog" | "motion";
+type SessionKind = "logic" | "jog" | "motion" | "audio";
 
 /** Physical conditions the operator attests to before a session can arm. */
-const confirmationLabels: Record<"logic" | "powered", { power: string; actuator: string; outputs: string }> = {
-  logic: {
-    power: "12 V disconnected",
-    actuator: "Actuator disconnected",
-    outputs: "OUT1 and OUT2 empty",
-  },
-  powered: {
-    power: "12 V supply fused and switched",
-    actuator: "Actuator unloaded, secured, and attended",
-    outputs: "Travel path clear of hands, wires, and tools",
-  },
-};
+const confirmationLabels: Record<"logic" | "powered" | "audio", { power: string; actuator: string; outputs: string }> =
+  {
+    logic: {
+      power: "12 V disconnected",
+      actuator: "Actuator disconnected",
+      outputs: "OUT1 and OUT2 empty",
+    },
+    powered: {
+      power: "12 V supply fused and switched",
+      actuator: "Actuator unloaded, secured, and attended",
+      outputs: "Travel path clear of hands, wires, and tools",
+    },
+    audio: {
+      power: "12 V supply unplugged",
+      actuator: "Motor pins low on the Nano display",
+      outputs: "Speaker wired across the amplifier output only",
+    },
+  };
+
+function formatBytes(bytes: number) {
+  if (bytes >= 1_048_576) return `${(bytes / 1_048_576).toFixed(1)} MB`;
+  if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${bytes} B`;
+}
 
 function loadChecklist(): ChecklistState {
   try {
@@ -57,6 +69,7 @@ function saveChecklist(value: ChecklistState) {
 }
 
 function sessionKindFor(profile: UsbBenchDevice["profile"]): SessionKind {
+  if (profile === "audio_test") return "audio";
   if (profile === "motion_commissioning") return "motion";
   if (profile === "actuator_jog_test" || profile === "l298n_output_meter_test") return "jog";
   return "logic";
@@ -88,8 +101,8 @@ export function UsbBenchPanel({
   const connected = bench.connection === "CONNECTED";
   const recognized = connected && bench.profile !== undefined;
   const kind = sessionKindFor(bench.profile);
-  const powered = kind !== "logic";
-  const labels = confirmationLabels[powered ? "powered" : "logic"];
+  const powered = kind === "jog" || kind === "motion";
+  const labels = confirmationLabels[kind === "audio" ? "audio" : powered ? "powered" : "logic"];
   const confirmed = confirmations.power && confirmations.actuator && confirmations.outputs;
   const testRunning = bench.testReceipt?.status === "STARTED";
   const jogMoving = bench.jogStatus !== undefined && bench.jogStatus.motion !== "STOP";
@@ -100,8 +113,11 @@ export function UsbBenchPanel({
       ? bench.driverState?.state === "STOP"
       : kind === "jog"
         ? bench.jogStatus?.motion === "STOP"
-        : bench.motionState?.sequence === "IDLE" && !bench.motionState.fault;
+        : kind === "audio"
+          ? bench.audioState !== undefined
+          : bench.motionState?.sequence === "IDLE" && !bench.motionState.fault;
   const canArm = recognized && confirmed && idle;
+  const audioReady = armed && recognized && kind === "audio";
 
   useEffect(() => {
     if (connected) return;
@@ -164,6 +180,41 @@ export function UsbBenchPanel({
     }
   }, [bench.motionRun, onTestRecorded, tick]);
 
+  useEffect(() => {
+    const play = bench.audioPlay;
+    if (!play) return;
+    const receiptKey = `audio-play:${play.logId}`;
+    if (recordedReceiptRef.current === receiptKey) return;
+    recordedReceiptRef.current = receiptKey;
+    if (play.status === "STARTED" && play.source.startsWith("SD")) {
+      tick("audio");
+      onTestRecorded("Card fixture played through the amplifier");
+    } else if (play.status === "FAILED") {
+      setActionError(`The Nano could not start playback: ${play.source}.`);
+    }
+  }, [bench.audioPlay, onTestRecorded, tick]);
+
+  useEffect(() => {
+    const test = bench.audioTest;
+    if (!test) return;
+    const receiptKey = `audio-test:${test.logId}`;
+    if (recordedReceiptRef.current === receiptKey) return;
+    recordedReceiptRef.current = receiptKey;
+    const passes = test.passes ?? 0;
+    const total = passes + (test.fails ?? 0);
+    if (test.status === "PASSED") {
+      onTestRecorded(`Display and SD bus alternation passed ${passes}/${total}`);
+    } else if (test.status === "FAILED") {
+      setActionError(`Display and SD bus alternation failed: ${test.fails ?? "?"} of ${total} reads differed.`);
+    } else {
+      setActionError(
+        test.status === "NO_CARD"
+          ? "The alternation test needs a mounted card. Mount the card first."
+          : "The alternation test needs the fixture on the card. Copy tone.wav to the card root.",
+      );
+    }
+  }, [bench.audioTest, onTestRecorded]);
+
   async function runAction(action: () => Promise<void>) {
     setActionError(undefined);
     try {
@@ -190,12 +241,21 @@ export function UsbBenchPanel({
   }, [bench.connection, recognized]);
 
   const firmwareVersion =
-    bench.hello?.firmwareVersion ?? bench.jogHello?.firmwareVersion ?? bench.motionHello?.firmwareVersion;
+    bench.hello?.firmwareVersion ??
+    bench.jogHello?.firmwareVersion ??
+    bench.motionHello?.firmwareVersion ??
+    bench.audioHello?.firmwareVersion;
   const jogWindowMs = bench.jogHello?.maxJogMs ?? bench.jogStatus?.maxJogMs;
 
   const safety = (() => {
     if (kind === "jog" && bench.jogHello) {
       return { value: "POWERED_JOG", detail: `${jogWindowMs} ms window, one jog per arm` };
+    }
+    if (kind === "audio" && bench.audioHello) {
+      return {
+        value: "AUDIO_NO_MOTION",
+        detail: `Gain cap ${bench.audioHello.gainCapPercent} %, 12 V unplugged`,
+      };
     }
     if (kind === "motion" && bench.motionHello) {
       return {
@@ -210,10 +270,24 @@ export function UsbBenchPanel({
   const intent = (() => {
     if (kind === "jog") return bench.jogStatus?.motion;
     if (kind === "motion" && bench.motionState) return `${bench.motionState.sequence} · ${bench.motionState.drive}`;
+    if (kind === "audio" && bench.audioState) {
+      return bench.audioState.playing
+        ? `${bench.audioState.status} · ${bench.audioState.playing}`
+        : bench.audioState.status;
+    }
     return bench.driverState?.state;
   })();
 
   const receipt = (() => {
+    if (kind === "audio") {
+      const value = bench.audioPlay;
+      return {
+        label: "Last playback",
+        value: value ? `${value.status} · ${value.source}` : "Not played",
+        detail: "Tone or card fixture through the I2S amplifier",
+        good: value?.status === "STARTED",
+      };
+    }
     if (kind === "jog") {
       const value = bench.jogReceipt;
       return {
@@ -240,9 +314,18 @@ export function UsbBenchPanel({
   })();
 
   const pins =
-    kind === "jog" ? jogPins(bench.jogStatus?.motion) : kind === "motion" ? bench.motionState : bench.driverState;
+    kind === "jog"
+      ? jogPins(bench.jogStatus?.motion)
+      : kind === "motion"
+        ? bench.motionState
+        : kind === "audio"
+          ? undefined
+          : bench.driverState;
 
   const description = (() => {
+    if (kind === "audio") {
+      return "This profile proves the microSD card on the shared SPI bus and the I2S amplifier. The firmware holds every motor pin low for the whole session; keep the 12 V supply unplugged.";
+    }
     if (kind === "jog") {
       return `This profile drives one bounded ${jogWindowMs ?? "?"} ms jog per arm and disarms itself afterward. It needs the fused 12 V supply and an unloaded, attended actuator.`;
     }
@@ -317,19 +400,47 @@ export function UsbBenchPanel({
           />
         </div>
 
-        <div className="usb-bench-state" aria-live="polite">
-          <div>
-            <span>ENA</span>
-            <strong>{pins?.ena ?? "—"}</strong>
-          </div>
-          <div>
-            <span>IN1</span>
-            <strong>{pins?.in1 ?? "—"}</strong>
-          </div>
-          <div>
-            <span>IN2</span>
-            <strong>{pins?.in2 ?? "—"}</strong>
-          </div>
+        <div
+          className={kind === "audio" ? "usb-bench-state usb-bench-state--audio" : "usb-bench-state"}
+          aria-live="polite"
+        >
+          {kind === "audio" ? (
+            <>
+              <div>
+                <span>CARD</span>
+                <strong>
+                  {bench.audioState
+                    ? bench.audioState.sdMounted
+                      ? `MOUNTED ${bench.audioState.cardMb} MB`
+                      : "NOT MOUNTED"
+                    : "—"}
+                </strong>
+              </div>
+              <div>
+                <span>GAIN</span>
+                <strong>{bench.audioState ? `${bench.audioState.gainPercent}%` : "—"}</strong>
+              </div>
+              <div>
+                <span>PLAYBACK</span>
+                <strong>{bench.audioState?.status ?? "—"}</strong>
+              </div>
+            </>
+          ) : (
+            <>
+              <div>
+                <span>ENA</span>
+                <strong>{pins?.ena ?? "—"}</strong>
+              </div>
+              <div>
+                <span>IN1</span>
+                <strong>{pins?.in1 ?? "—"}</strong>
+              </div>
+              <div>
+                <span>IN2</span>
+                <strong>{pins?.in2 ?? "—"}</strong>
+              </div>
+            </>
+          )}
           <p>
             {description}
             {kind === "motion" && bench.motionState
@@ -344,13 +455,21 @@ export function UsbBenchPanel({
         <div className={armed ? "service-safety is-armed" : "service-safety"}>
           <div>
             <span>
-              {armed ? (powered ? "Powered session armed" : "USB logic session armed") : "Physical disconnect check"}
+              {armed
+                ? powered
+                  ? "Powered session armed"
+                  : kind === "audio"
+                    ? "Audio session armed"
+                    : "USB logic session armed"
+                : "Physical disconnect check"}
             </span>
             <strong>
               {armed
                 ? powered
                   ? "One command per arm; the firmware disarms itself after each"
-                  : "The bounded self-test is available for 60 seconds"
+                  : kind === "audio"
+                    ? "Card, checksum, tone, fixture, gain, and bus checks are available"
+                    : "The bounded self-test is available for 60 seconds"
                 : "Confirm all three conditions each session"}
             </strong>
             <fieldset className="bench-confirmations" disabled={!recognized || armed}>
@@ -388,7 +507,7 @@ export function UsbBenchPanel({
               </button>
             ) : (
               <button type="button" className="arm-button" disabled={!canArm} onClick={onArm}>
-                {powered ? "Arm powered session" : "Arm USB-only test"}
+                {powered ? "Arm powered session" : kind === "audio" ? "Arm audio session" : "Arm USB-only test"}
               </button>
             )}
           </div>
@@ -435,18 +554,104 @@ export function UsbBenchPanel({
               {motionBusy ? "Sequence running…" : "Start one home run"}
             </button>
           )}
-          <button
-            type="button"
-            className="stop-button"
-            disabled={!connected}
-            onClick={() => void runAction(bench.forceStop)}
-          >
-            Force outputs low
-          </button>
+          {kind === "audio" && (
+            <>
+              <button
+                type="button"
+                className="primary-button"
+                disabled={!audioReady}
+                onClick={() => void runAction(bench.mountCard)}
+              >
+                Mount card
+              </button>
+              <button type="button" disabled={!audioReady} onClick={() => void runAction(bench.checksumFixture)}>
+                Verify fixture CRC
+              </button>
+              <button
+                type="button"
+                className="primary-button"
+                disabled={!audioReady}
+                onClick={() => void runAction(bench.playTone)}
+              >
+                Play 440 Hz tone
+              </button>
+              <button
+                type="button"
+                className="primary-button"
+                disabled={!audioReady}
+                onClick={() => void runAction(bench.playFixture)}
+              >
+                Play card fixture
+              </button>
+              <button
+                type="button"
+                className="stop-button"
+                disabled={!audioReady}
+                onClick={() => void runAction(bench.stopPlayback)}
+              >
+                Stop playback
+              </button>
+              <button type="button" disabled={!audioReady} onClick={() => void runAction(() => bench.setGain(1))}>
+                Gain 10 %
+              </button>
+              <button type="button" disabled={!audioReady} onClick={() => void runAction(() => bench.setGain(2))}>
+                Gain 20 %
+              </button>
+              <button type="button" disabled={!audioReady} onClick={() => void runAction(() => bench.setGain(3))}>
+                Gain 35 %
+              </button>
+              <button type="button" disabled={!audioReady} onClick={() => void runAction(bench.runAlternationTest)}>
+                Run display/SD alternation
+              </button>
+            </>
+          )}
+          {kind !== "audio" && (
+            <button
+              type="button"
+              className="stop-button"
+              disabled={!connected}
+              onClick={() => void runAction(bench.forceStop)}
+            >
+              Force outputs low
+            </button>
+          )}
           <button type="button" disabled={!connected} onClick={() => void runAction(bench.queryStatus)}>
             Refresh status
           </button>
         </div>
+
+        {kind === "audio" && (bench.audioCard || bench.audioChecksum) && (
+          <div className="bench-audio-evidence">
+            {bench.audioCard && (
+              <div>
+                <span>
+                  {bench.audioCard.status === "MOUNTED"
+                    ? `Card mounted · ${bench.audioCard.cardMb} MB · ${bench.audioCard.files.length} file${bench.audioCard.files.length === 1 ? "" : "s"}`
+                    : "Card missing · check the A0 chip select and the card seating"}
+                </span>
+                {bench.audioCard.files.length > 0 && (
+                  <ul aria-label="Card files">
+                    {bench.audioCard.files.map((file) => (
+                      <li key={file.name}>
+                        <code>{file.name}</code>
+                        <small>{formatBytes(file.bytes)}</small>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+            {bench.audioChecksum && (
+              <p>
+                {bench.audioChecksum.status === "OK"
+                  ? `Fixture ${bench.audioChecksum.file} · ${bench.audioChecksum.bytes} bytes · CRC-32 ${bench.audioChecksum.crc32}. Compare with the value printed by tools/make_tone_wav.py.`
+                  : bench.audioChecksum.status === "NO_CARD"
+                    ? "Checksum skipped: no card mounted."
+                    : `Checksum skipped: ${bench.audioChecksum.file ?? "the fixture"} is missing from the card.`}
+              </p>
+            )}
+          </div>
+        )}
       </section>
 
       <section className="manager-panel commissioning-panel" aria-labelledby="commissioning-title">

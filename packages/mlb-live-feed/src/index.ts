@@ -6,6 +6,7 @@ export {
   MLB_STATS_API_ORIGIN,
 } from "./constants";
 export { MlbFeedError } from "./errors";
+export { classifyGameStatus, gameStatusFacts, RAIN_DELAY_LABEL } from "./feedNormalization";
 export type { CanonicalGameProjection, CanonicalGameProjector } from "./feedProjections";
 export { fetchMlbHistoricalGameIndex } from "./historical";
 export { applyJsonPatch } from "./jsonPatch";

@@ -127,12 +127,12 @@
   border-bottom: 1px solid #203441;
   display: grid;
   gap: 12px;
-  grid-template-columns: minmax(280px, 350px) minmax(0, 1fr);
+  grid-template-columns: 260px minmax(0, 1fr);
   min-width: 0;
   padding: 8px 11px;
 }
-.stage-game-strip .apple-scoreboard {
-  max-width: 350px;
+.stage-game-strip .apple-scorebug {
+  max-width: 260px;
 }
 .game-context {
   display: grid;

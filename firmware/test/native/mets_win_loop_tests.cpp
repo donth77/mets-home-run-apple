@@ -125,6 +125,9 @@ void test_score_scale_and_card_layout() {
   EXPECT_TRUE(count_role(loop, 4) > 200);   // NYM 6 in orange
   EXPECT_TRUE(count_role(loop, 2) > 200);   // ATL 3 in white
   EXPECT_TRUE(count_role(loop, 6) > 60);    // the call
+  // Both the private Match 7 font and the wider public fallback paint the
+  // trailing exclamation point through this logical pixel.
+  EXPECT_EQ(static_cast<int>(loop.logical()[104 * apple::display::kLogicalWidth + 146]), 6);
   for (std::size_t y = 0; y < apple::display::kPanelHeight; ++y) {
     const std::uint16_t *row = fb.data() + y * apple::display::kPanelWidth;
     for (std::size_t x = 0; x < 4; ++x) {

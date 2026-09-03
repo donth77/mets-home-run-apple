@@ -15,10 +15,10 @@ export function LiveWorkspace({ events }: { events: readonly DeviceTimelineEvent
         eyebrow="Read-only game workspace"
         title="Live game"
         titleId="live-title"
-        description="Monitor the autonomous Apple or inspect a direct MLB feed through the compiled C++ game-state and decision layers. Neither source can reach physical outputs from this browser."
+        description="Inspect an example autonomous-device view or a direct MLB feed through the compiled C++ game-state and decision layers. Neither source can reach physical outputs from this browser."
       >
         <span className={source === "device" ? "mode-pill mode-pill--read" : "mode-pill mode-pill--safe"}>
-          <i /> {source === "device" ? "Monitoring only" : "Recording only"}
+          <i /> {source === "device" ? "Demo data" : "Recording only"}
         </span>
       </WorkspaceHeading>
       <fieldset className="live-source-switch">
@@ -32,8 +32,8 @@ export function LiveWorkspace({ events }: { events: readonly DeviceTimelineEvent
             setSource("device");
           }}
         >
-          <span>Autonomous Apple</span>
-          <small>Accepted state from the fake local device</small>
+          <span>Example autonomous Apple</span>
+          <small>Static demo data — not connected-device telemetry</small>
         </button>
         <button
           type="button"
@@ -49,8 +49,8 @@ export function LiveWorkspace({ events }: { events: readonly DeviceTimelineEvent
       {source === "device" ? (
         <>
           <div className="live-notice">
-            <strong>Read-only monitor</strong>
-            <span>Leaving this screen or closing Apple Lab has no effect on autonomous game tracking.</span>
+            <strong>Demo device view</strong>
+            <span>Reference data only. Live USB test telemetry remains available in Hardware Tests.</span>
           </div>
           <DeviceLiveView events={events} />
         </>

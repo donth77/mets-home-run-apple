@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="520" viewBox="0 0 1200 520" role="img" aria-labelledby="title description">
-  <title id="title">Target Mets Home Run Apple software architecture</title>
-  <desc id="description">The target architecture shares C++ game-state and decision libraries across Virtual Apple, Apple Lab, and the autonomous physical Apple. Both browser apps use the shared C++ state path, while physical-firmware integration remains in progress. Apple Manager is planned as a local website served by the physical Apple, and Apple Lab includes a narrow USB-only commissioning connection before future local telemetry and guarded tests.</desc>
+  <title id="title">Mets Home Run Apple software architecture</title>
+  <desc id="description">The finished system shares C++ game-state and decision code across the autonomous physical Apple, Apple Lab, and Virtual Apple. Apple Manager is served by the Nano, and Apple Lab can receive local device telemetry.</desc>
 
   <defs>
     <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
@@ -46,7 +46,7 @@
     <rect x="300" y="34" width="600" height="154" rx="22" fill="url(#coreFill)" stroke="#ff6b22" stroke-width="2.5" />
     <text x="330" y="70" class="card-title" style="font-size: 25px">Shared C++ libraries</text>
     <rect x="330" y="88" width="255" height="76" rx="12" fill="#0b203d" stroke="#345c87" />
-    <text x="348" y="112" class="eyebrow blue">GAME STATE · FOUNDATION</text>
+    <text x="348" y="112" class="eyebrow blue">GAME STATE</text>
     <text x="348" y="137" class="body">Score · inning · situation</text>
     <text x="348" y="157" class="small">PLAYERS · LINE SCORE · STATUS</text>
     <rect x="597" y="88" width="273" height="76" rx="12" fill="#0b203d" stroke="#345c87" />
@@ -82,7 +82,7 @@
     <text x="624" y="311" class="card-title">Physical Apple</text>
     <text x="624" y="340" class="eyebrow mint">AUTONOMOUS NANO ESP32</text>
     <text x="624" y="374" class="body">MLB feed · display · audio</text>
-    <text x="624" y="397" class="body">lights · storage · lift</text>
+    <text x="624" y="397" class="body">lights · storage · safe lift</text>
   </g>
 
   <g filter="url(#shadow)">

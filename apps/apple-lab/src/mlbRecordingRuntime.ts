@@ -22,7 +22,12 @@ export async function createAppleLabMlbRuntime(
     throw reason;
   }
 
-  const client = new MlbRecordingClient(fetcher, now, (frame) => gameState.project(frame));
+  const client = new MlbRecordingClient(
+    fetcher,
+    now,
+    (frame) => gameState.project(frame),
+    (facts) => gameState.classifyStatus(facts),
+  );
   let disposed = false;
   return {
     client,

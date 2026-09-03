@@ -1,0 +1,105 @@
+:root {
+  --lab-font-caption: 0.75rem;
+  --lab-font-small: 0.8rem;
+  --lab-font-body: 0.875rem;
+  --lab-font-heading: 1rem;
+}
+
+/*
+ * Apple Lab used to compress supporting text as low as 8–11px. Keep the
+ * physical display, scoreboards, and 3D package typography untouched while
+ * establishing readable floors for the engineering interface around them.
+ */
+.manager-shell
+:is(p, small, code, time, dt, dd, button, input, select, output, label):not(
+  :where(.apple-scoreboard *, .apple-scorebug *, .apple-stage *)
+) {
+  font-size: var(--lab-font-small);
+}
+
+.manager-shell p:not(:where(.apple-scoreboard *, .apple-scorebug *, .apple-stage *)) {
+  font-size: var(--lab-font-body);
+}
+
+.eyebrow,
+.panel-title span,
+.current-play > span,
+.compact-facts dt,
+.health-item > span,
+.live-game-detail span,
+.context-callout > span,
+.selected-fixture > span,
+.stage-toolbar span,
+.game-context span,
+.command-stack > span,
+.position-card > span,
+.service-safety span,
+.manager-topbar > div:first-child span,
+.sidebar-device > span,
+.workspace-nav button > span,
+.core-receipt > div > span,
+.replay-transport__status > span,
+.bookmark-list li > div:first-child > span,
+.device-fixture-card > div:first-child span,
+.physical-output-heading span,
+.physical-output-signals dt,
+.physical-screen-shell > span,
+.stage-badges span,
+.motion-readout > span,
+.position-card > strong small,
+.usb-bench-state span,
+.timeline-data-actions > span,
+.timeline-event time span,
+.transport-pill,
+.read-only-badge,
+.state-badge,
+.mode-pill,
+.health-score,
+.event-result {
+  font-size: var(--lab-font-caption);
+}
+
+.sidebar-device strong,
+.workspace-nav button strong,
+.manager-topbar > div:first-child strong,
+.health-item strong,
+.live-notice strong,
+.live-source-switch span,
+.core-receipt__summary strong,
+.live-game-detail strong,
+.bookmark-list strong,
+.replay-receipts li > strong,
+.scenario-button strong,
+.selected-fixture strong,
+.device-fixture-card > div:first-child strong,
+.physical-output-heading strong,
+.stage-toolbar strong,
+.game-context strong,
+.trace-data-toolbar > div > span,
+.timeline-event time strong,
+.timeline-event__content > div > strong,
+.service-safety strong,
+.commissioning-item strong {
+  font-size: var(--lab-font-body);
+}
+
+.panel-title h2 {
+  font-size: var(--lab-font-heading);
+}
+
+.overview-game footer,
+.sidebar-footer span,
+.topbar-status > span,
+.live-notice span,
+.autonomy-route span,
+.recording-error,
+.replay-transport__status strong,
+.replay-receipts li > span,
+.bench-notice,
+.bench-audio-evidence,
+.empty-state,
+.trace-row,
+.timeline-pagination,
+.check-list li {
+  font-size: var(--lab-font-small);
+}

@@ -3,6 +3,8 @@ import type {
   GameHalf,
   GamePhase,
   GameSnapshot,
+  GameStatusClassification,
+  GameStatusFacts,
   NormalizedGameInput,
   NormalizedPlayKind,
   NormalizedUpdateMode,
@@ -210,6 +212,25 @@ export class GameStateProjector {
       gameSnapshot,
       coreInput: this.#readJson<NormalizedGameInput>(this.#module._apple_game_state_decision_json(this.#handle)),
     };
+  }
+
+  /** Phase and label for MLB's status fields, classified by the shared C++. */
+  classifyStatus(facts: GameStatusFacts): GameStatusClassification {
+    this.#assertAlive();
+    return this.#withStrings(
+      [facts.abstractState, facts.detailedState, facts.statusCode, facts.reason, facts.latestAdvisory],
+      ([abstractState, detailedState, statusCode, reason, latestAdvisory]) =>
+        this.#readJson<GameStatusClassification>(
+          this.#module._apple_game_status_classify(
+            abstractState,
+            detailedState,
+            statusCode,
+            reason,
+            latestAdvisory,
+            facts.reviewPending ? 1 : 0,
+          ),
+        ),
+    );
   }
 
   #assertAlive(): void {

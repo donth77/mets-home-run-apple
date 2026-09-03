@@ -1,15 +1,14 @@
-import { useState } from "react";
 import {
   ACTUATOR_FULL_STROKE_SECONDS,
   ACTUATOR_SPEED_MM_PER_SECOND,
   AppleStage,
-  HOME_RUN_DISPLAY_LEAD_IN_MS,
   HOME_RUN_RAISED_DWELL_MS,
   useActuatorSimulation,
 } from "@apple/apple-3d";
 import { MAX_STROKE_MM } from "@apple/protocol";
 import { Scoreboard } from "@apple/scoreboard-ui";
 import { fixtureScenarios } from "@apple/test-fixtures";
+import { useState } from "react";
 import { CsvExportButton, useReducedMotion, WorkspaceHeading } from "../managerComponents";
 import { PhysicalOutputPreview } from "../PhysicalOutputPreview";
 import { useFixturePlayback } from "../useFixturePlayback";
@@ -32,9 +31,7 @@ export function SimulatorWorkspace() {
     .find((frame) => frame.events.some((event) => event.type === "CELEBRATION_STARTED"));
   const celebrationElapsedMs = celebrationFrame ? playback.elapsedMs - celebrationFrame.atMs : 0;
   const celebration =
-    celebrationFrame &&
-    playback.activeFrame.snapshot.phase === "CELEBRATION" &&
-    celebrationElapsedMs < HOME_RUN_DISPLAY_LEAD_IN_MS + HOME_RUN_RAISED_DWELL_MS
+    celebrationFrame && playback.activeFrame.snapshot.phase === "CELEBRATION"
       ? celebrationFrame.events.find((event) => event.type === "CELEBRATION_STARTED")
       : undefined;
   const frameIndex = Math.max(0, playback.scenario.frames.indexOf(playback.activeFrame));
@@ -89,8 +86,8 @@ export function SimulatorWorkspace() {
           </div>
           <div className="device-fixture-card">
             <div>
-              <span>On-device fixture</span>
-              <strong>Nano not connected</strong>
+              <span>Future fixture runner</span>
+              <strong>Not connected</strong>
             </div>
             <p>
               {playback.scenario.deviceFixture.frames.length} normalized input
@@ -119,11 +116,11 @@ export function SimulatorWorkspace() {
               </button>
             </fieldset>
             <button type="button" className="device-run-button" disabled aria-describedby="device-run-unavailable">
-              Run on device
+              Run fixture on device
             </button>
             <small id="device-run-unavailable">
-              Available after an authenticated Nano fixture transport is connected. Physical mode will additionally
-              require home position, suspended live automation, and an expiring maintenance lease.
+              Separate from the working USB Hardware Tests. A future authenticated fixture transport would also
+              require home position, suspended live automation, and an expiring maintenance lease for physical mode.
             </small>
           </div>
         </aside>
@@ -145,7 +142,7 @@ export function SimulatorWorkspace() {
             </div>
           </div>
           <div className="stage-game-strip">
-            <Scoreboard snapshot={playback.activeFrame.snapshot} variant="lab" />
+            <Scoreboard snapshot={playback.activeFrame.snapshot} />
             <div className="game-context">
               <span>Current display event</span>
               <strong>{playback.activeFrame.snapshot.lastEvent}</strong>
