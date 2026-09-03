@@ -107,7 +107,7 @@ constexpr char kProfileName[] = "apple_live";
 #ifdef APPLE_UPDATE_CRASH_TEST
 constexpr char kFirmwareVersion[] = "0.2.2-crashtest";
 #else
-constexpr char kFirmwareVersion[] = "0.3.0-rc.3";
+constexpr char kFirmwareVersion[] = "0.3.0-rc.4";
 #endif
 constexpr char kHostname[] = "home-run-apple";
 constexpr char kEasternTz[] = "EST5EDT,M3.2.0,M11.1.0";
@@ -1234,7 +1234,12 @@ void service_wifi() {
   const bool connected = WiFi.status() == WL_CONNECTED;
   if (connected && net_state != NetState::Connected) {
     net_state = NetState::Connected;
-    configTzTime(settings.posix_tz, "pool.ntp.org", "time.nist.gov", "time.google.com");
+    // Anycast services first: they answer from a nearby machine in
+    // milliseconds. pool.ntp.org is the fallback because its name resolves to
+    // a random volunteer server that may be slow or silent, and the client
+    // waits out a retry before moving on. The Apple has no battery-backed
+    // clock, so this wait is the whole of the SYNCING CLOCK screen.
+    configTzTime(settings.posix_tz, "time.google.com", "time.cloudflare.com", "pool.ntp.org");
     secure_client.setCACert(apple::firmware::kMlbRootCaPem);
     secure_client.setHandshakeTimeout(kHttpTimeoutMs / 1000);
     secure_client.setTimeout(kHttpTimeoutMs / 1000);
