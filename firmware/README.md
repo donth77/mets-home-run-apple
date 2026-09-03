@@ -150,13 +150,8 @@ GitHub is reached over TLS pinned to the roots in
 `include/apple/firmware/update_roots.hpp`; the weekly contract check watches
 those chains.
 
-While the repository is private, only an Apple holding a read-only GitHub token
-can see the releases. Send it once from the home Wi-Fi; it is kept in flash and
-never shown by the page. `beta=on` also accepts pre-releases:
-
-```sh
-curl -X POST -d 'token=github_pat_...&beta=on' http://home-run-apple.local/api/settings
-```
+An Apple takes pre-releases only when a maintainer opts it in with `beta=on`
+through the settings API.
 
 ## Code map
 
