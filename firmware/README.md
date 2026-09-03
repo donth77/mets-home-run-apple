@@ -122,9 +122,41 @@ Useful serial keys:
 | `r` | Replay the built-in recorded game |
 | `w` | Forget Wi-Fi and reopen setup |
 | `i` | Show the local address and setup code |
+| `u` | Check GitHub for a firmware release now |
 
 `APPLE_LIVE:` JSON lines carry status, game frames, sequence changes, and
 celebration receipts.
+
+## Firmware updates
+
+Releases live on GitHub. Tag a commit `firmware-vX.Y.Z` that matches
+`kFirmwareVersion` in `src/apple_live.cpp`; the release workflow builds, signs
+with the `FIRMWARE_SIGNING_KEY` secret, checks the signature, and publishes
+`home-run-apple-X.Y.Z.bin` with its checksum as "Home Run Apple firmware
+X.Y.Z". A version with a suffix such as `0.3.0-rc.1` becomes a pre-release.
+
+The Apple checks GitHub for itself: about ninety seconds after joining Wi-Fi,
+then once a day. With **Update automatically** on (the default) a newer release
+installs between games in the early morning, 3:00 to 5:59 in the owner's time
+zone, never while a game is in progress or the Apple is celebrating. Apple
+Manager shows the result under Update and offers **Install now**; picking a
+downloaded file there still works. Either way the Apple restarts and is back in
+about a minute.
+
+Every image must carry the project's signature, which the Apple checks before
+committing it to the spare slot. A new image that crashes twice before it proves
+itself (a successful schedule fetch, or five minutes) rolls back on its own.
+GitHub is reached over TLS pinned to the roots in
+`include/apple/firmware/update_roots.hpp`; the weekly contract check watches
+those chains.
+
+While the repository is private, only an Apple holding a read-only GitHub token
+can see the releases. Send it once from the home Wi-Fi; it is kept in flash and
+never shown by the page. `beta=on` also accepts pre-releases:
+
+```sh
+curl -X POST -d 'token=github_pat_...&beta=on' http://home-run-apple.local/api/settings
+```
 
 ## Code map
 

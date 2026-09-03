@@ -131,6 +131,7 @@ a.btn{display:inline-block;font-size:15px;font-weight:600;padding:11px 16px;bord
 <div class="switch"><div><b>Motor</b><small>Off keeps the Apple still; celebrations still show on the screen</small></div><label class="toggle"><input id="motor" type="checkbox" aria-label="Motor"><i></i></label></div>
 <div class="switch"><div><b>Pause the Apple</b><small>Stops following games and celebrating until you turn it off</small></div><label class="toggle"><input id="pause" type="checkbox" aria-label="Pause the Apple"><i></i></label></div>
 <div class="switch"><div><b>Sleep screen between games</b><small>Screen off until the next game starts</small></div><label class="toggle"><input id="sleep" type="checkbox" aria-label="Sleep screen between games"><i></i></label></div>
+<div class="switch"><div><b>Update automatically</b><small>Installs new firmware between games, early in the morning. The Apple restarts and is back in a minute</small></div><label class="toggle"><input id="autoupd" type="checkbox" aria-label="Update automatically"><i></i></label></div>
 <div class="switch"><div><b>Screen brightness</b><small>Dims the display without turning it off</small><div class="range"><input id="bright" type="range" min="10" max="100" step="10" value="100" aria-label="Screen brightness in percent"><output id="bright-out">100%</output></div></div></div>
 <div class="switch"><div style="flex:1"><b>Time zone</b><small>Game times on the Apple's screen and on this page</small><div class="combo"><input id="tz" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="City, zone, or abbreviation" aria-label="Time zone" aria-autocomplete="list"><div id="tz-list" class="combo-list" hidden></div></div><small id="tz-hint"></small></div></div>
 <div class="switch"><div><b>Password lock</b><small>Off: anyone on your Wi-Fi can change settings. On: changes need the Apple's eight-digit password</small></div><label class="toggle"><input id="lock" type="checkbox" aria-label="Password lock"><i></i></label></div>
@@ -138,9 +139,9 @@ a.btn{display:inline-block;font-size:15px;font-weight:600;padding:11px 16px;bord
 </section>
 <section id="update" hidden>
 <h2>Update</h2>
-<p class="note">Installed <strong id="fw-installed">…</strong>. Pick a firmware file from the project's releases page and install it. The Apple restarts and is back in about a minute. If the new firmware fails to start, the Apple goes back to this version on its own.</p>
-<div class="row"><button id="check-updates" type="button" class="quiet">Check for updates</button><span id="check-note" class="note"></span></div>
-<div id="latest" class="note" hidden></div>
+<p class="note" id="update-status">Installed <strong id="fw-installed">…</strong>.</p>
+<div class="row"><button id="check-updates" type="button" class="quiet">Check for updates</button><button id="install-latest" type="button" hidden>Install now</button><span id="check-note" class="note"></span></div>
+<p class="note">Or pick a firmware file from the project's releases page. The Apple restarts and is back in about a minute. If the new firmware fails to start, the Apple goes back to this version on its own.</p>
 <input id="fw-file" type="file" accept=".bin" aria-label="Firmware file">
 <div class="progress" id="fw-bar" hidden><i id="fw-bar-fill"></i></div>
 <div class="row"><button id="install" type="button" disabled>Install</button><span id="fw-note" class="note"></span></div>
@@ -194,7 +195,7 @@ function render(s){
   text("lift",s.fault?"Stopped: fault":liftWord,s.fault?"bad":"");
   text("lift-2",(s.motion==="L298N"?"Motor on":"Motor off")+(s.positionMm?", "+s.positionMm+" mm up":""));
   var lc=s.lastCelebration;if(lc&&lc.at){text("last",(lc.kind==="WIN"?"Mets win":"Home run")+(lc.subject?", "+lc.subject:""));text("last-2",when(new Date(lc.at*1000).toISOString())+(lc.moved?" · the Apple rose":" · screen only"))}else{text("last","None yet");text("last-2","")}
-  text("fw",s.firmwareVersion||"");if(s.firmwareVersion)installedVersion=s.firmwareVersion;text("fw-installed",s.firmwareVersion||"");text("fw-2",(s.hostname||"home-run-apple")+".local");
+  text("fw",s.firmwareVersion||"");if(s.firmwareVersion)installedVersion=s.firmwareVersion;text("fw-installed",s.firmwareVersion||"");renderUpdate(s);text("fw-2",(s.hostname||"home-run-apple")+".local");
   var st=s.settings;
   if(st){lastSettings=st;if(!settingsDirty)fillSettings(st)}
   var connected=w.state==="CONNECTED";
@@ -246,9 +247,9 @@ $("join").addEventListener("click",function(){
   authFetch("/api/wifi",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:"ssid="+encodeURIComponent(ssid)+"&password="+encodeURIComponent(pw)+(browserZone?"&tz="+encodeURIComponent(browserZone):"")})
     .then(function(r){if(!r.ok)throw new Error();}).catch(function(){joining=false;b.disabled=false;b.textContent="Join";notice("Failed to start joining. Try again.","bad")});
 });
-function fillSettings(st){var z=null;$("raised").value=st.raisedSeconds;$("raised-out").value=st.raisedSeconds+" s";if(st.brightness){$("bright").value=st.brightness;$("bright-out").value=st.brightness+"%"}$("motor").checked=!!st.motor;$("pause").checked=!st.follow;$("sleep").checked=!!st.sleepDisplay;$("lock").checked=!!st.requireCode;if(zones.length){z=zoneFor(st.timeZone||"");tzSelected=z?z.id:"";$("tz").value=z?z.label:"";zoneHint()}}
+function fillSettings(st){var z=null;$("raised").value=st.raisedSeconds;$("raised-out").value=st.raisedSeconds+" s";if(st.brightness){$("bright").value=st.brightness;$("bright-out").value=st.brightness+"%"}$("motor").checked=!!st.motor;$("pause").checked=!st.follow;$("sleep").checked=!!st.sleepDisplay;$("lock").checked=!!st.requireCode;$("autoupd").checked=st.autoUpdate!==false;if(zones.length){z=zoneFor(st.timeZone||"");tzSelected=z?z.id:"";$("tz").value=z?z.label:"";zoneHint()}}
 function markDirty(){settingsDirty=true;$("save").disabled=false;$("revert").hidden=false;}
-["motor","pause","sleep","lock"].forEach(function(id){$(id).addEventListener("change",markDirty)});
+["motor","pause","sleep","lock","autoupd"].forEach(function(id){$(id).addEventListener("change",markDirty)});
 $("tz").addEventListener("input",function(){var z=resolveText(this.value);tzSelected=z&&(z.label.toLowerCase()===this.value.trim().toLowerCase()||zoneFor(this.value.trim()))?z.id:"";showZoneList();markDirty();zoneHint(true)});
 $("tz").addEventListener("focus",showZoneList);
 $("tz").addEventListener("blur",function(){var self=this;setTimeout(function(){var z,cur;$("tz-list").hidden=true;z=resolveText(self.value);if(z){tzSelected=z.id;self.value=z.label}else if(!self.value.trim()&&lastSettings){cur=zoneFor(lastSettings.timeZone||"");tzSelected=cur?cur.id:"";self.value=cur?cur.label:""}zoneHint()},150)});
@@ -265,7 +266,7 @@ $("save").addEventListener("click",function(){
 });
 function saveSettings(){
   var b=$("save");b.disabled=true;b.innerHTML="";var sp=document.createElement("span");sp.className="spin";b.appendChild(sp);b.appendChild(document.createTextNode("Saving"));
-  var body="raised="+$("raised").value+"&motor="+($("motor").checked?"on":"off")+"&follow="+($("pause").checked?"paused":"auto")+"&sleep="+($("sleep").checked?"on":"off")+"&lock="+($("lock").checked?"on":"off")+"&bright="+$("bright").value+(tzSelected?"&tz="+encodeURIComponent(tzSelected):"");
+  var body="raised="+$("raised").value+"&motor="+($("motor").checked?"on":"off")+"&follow="+($("pause").checked?"paused":"auto")+"&sleep="+($("sleep").checked?"on":"off")+"&lock="+($("lock").checked?"on":"off")+"&auto="+($("autoupd").checked?"on":"off")+"&bright="+$("bright").value+(tzSelected?"&tz="+encodeURIComponent(tzSelected):"");
   authFetch("/api/settings",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:body})
     .then(function(r){b.textContent="Save";if(!r.ok){b.disabled=false;toast(r.status===401?"Not saved: the password is needed.":"Failed to save.","bad",{id:"settings"});return}settingsDirty=false;$("revert").hidden=true;toast("Saved.","ok",{id:"settings"});status()})
     .catch(function(){b.textContent="Save";b.disabled=false;toast("Failed to save.","bad",{id:"settings"})});
@@ -286,26 +287,32 @@ $("forget").addEventListener("click",function(){
   }).catch(function(){clearTimeout(timer);b.disabled=false;notice("No answer from the Apple. If its screen shows WI-FI SETUP, it worked: join the setup network from your phone or computer. Otherwise check that you're on the same Wi-Fi and try again.","warn")});
 })});
 var installedVersion="";
-function updateMessage(err){return {GAME_IN_PROGRESS:"A game is in progress. Install it after the game.",CELEBRATING:"The Apple is celebrating. Try again in a minute.",BUSY:"The Apple just started. Try again in a minute.",BAD_SIGNATURE:"That file is not signed by the project. Download it again from the releases page.",NOT_SIGNED:"That file is not a signed Apple firmware file.",TOO_SMALL:"That file is not a firmware file.",NO_SPACE:"No room for the update.",CODE:"Not installed: the password is needed."}[err]||("Install failed"+(err?" ("+err+")":"")+".")}
-function waitForRestart(before){var started=Date.now();(function poll(){fetch("/api/status",{cache:"no-store"}).then(function(r){return r.json()}).then(function(s){if(s.firmwareVersion&&s.firmwareVersion!==before){toast("Updated to "+s.firmwareVersion+".","ok",{id:"update"});$("fw-bar").hidden=true;$("fw-file").value="";$("install").disabled=true;text("fw-note","");return}throw 0}).catch(function(){if(Date.now()-started<120000)setTimeout(poll,3000);else toast("The Apple has not come back yet. Give it a minute, then reload this page.","warn",{id:"update",sticky:true})})})()}
+function updateMessage(err){return {GAME_IN_PROGRESS:"A game is in progress. Install it after the game.",CELEBRATING:"The Apple is celebrating. Try again in a minute.",BUSY:"The Apple just started. Try again in a minute.",BAD_SIGNATURE:"That file is not signed by the project. Download it again from the releases page.",NOT_SIGNED:"That file is not a signed Home Run Apple firmware file.",TOO_SMALL:"That file is not a firmware file.",NO_SPACE:"No room for the update.",NO_UPDATE:"There is nothing to install.",OFFLINE:"The Apple is not on Wi-Fi.",CODE:"Not installed: the password is needed."}[err]||("Install failed"+(err?" ("+err+")":"")+".")}
+function waitForRestart(before,limit){var started=Date.now();limit=limit||120000;(function poll(){fetch("/api/status",{cache:"no-store"}).then(function(r){return r.json()}).then(function(s){if(s.firmwareVersion&&s.firmwareVersion!==before){toast("Updated to "+s.firmwareVersion+".","ok",{id:"update"});$("fw-bar").hidden=true;$("fw-file").value="";$("install").disabled=true;text("fw-note","");return}throw 0}).catch(function(){if(Date.now()-started<limit)setTimeout(poll,3000);else toast("The Apple has not come back yet. Give it a minute, then reload this page.","warn",{id:"update",sticky:true})})})()}
 function sendFirmware(f,retry){var b=$("install"),bar=$("fw-bar"),fill=$("fw-bar-fill"),before=installedVersion;b.disabled=true;bar.hidden=false;fill.style.width="0%";text("fw-note","Sending\u2026");var fd=new FormData();fd.append("firmware",f,f.name);var x=new XMLHttpRequest();x.open("POST","/api/update");x.setRequestHeader("X-Apple-Code",code());x.upload.onprogress=function(e){if(e.lengthComputable)fill.style.width=Math.round(100*e.loaded/e.total)+"%"};x.onload=function(){if(x.status===200){fill.style.width="100%";text("fw-note","Installed");toast("Installed. The Apple is restarting\u2026","ok",{id:"update",sticky:true});waitForRestart(before);return}b.disabled=false;bar.hidden=true;text("fw-note","");if(x.status===401&&retry!==false){askCode().then(function(v){if(v!==null)sendFirmware(f,false)});return}var err="";try{err=JSON.parse(x.responseText).error}catch(e){}toast(updateMessage(err),"bad",{id:"update",sticky:true})};x.onerror=function(){b.disabled=false;bar.hidden=true;text("fw-note","");toast("The upload did not go through. Check that you're on the same Wi-Fi and try again.","bad",{id:"update",sticky:true})};x.send(fd)}
-var REPO="donth77/mets-home-run-apple",latestAsset=null;
-function versionParts(v){return String(v||"").replace(/^firmware-v/,"").split(".").map(function(n){return parseInt(n,10)||0})}
-function newer(a,b){var x=versionParts(a),y=versionParts(b),i;for(i=0;i<3;i++){if((x[i]||0)>(y[i]||0))return true;if((x[i]||0)<(y[i]||0))return false}return false}
-$("check-updates").addEventListener("click",function(){var b=this;b.disabled=true;text("check-note","Checking\u2026");$("latest").hidden=true;latestAsset=null;
-  fetch("https://api.github.com/repos/"+REPO+"/releases?per_page=15",{headers:{Accept:"application/vnd.github+json"}}).then(function(r){if(r.status===404)return [];if(!r.ok)throw new Error("github "+r.status);return r.json()}).then(function(list){
-    var rel=(list||[]).filter(function(r){return !r.draft&&!r.prerelease&&/^firmware-v\d/.test(r.tag_name)}).sort(function(p,q){return newer(p.tag_name,q.tag_name)?-1:1})[0];
-    b.disabled=false;
-    if(!rel){text("check-note","No public firmware releases yet.");return}
-    var v=rel.tag_name.replace(/^firmware-v/,""),asset=(rel.assets||[]).filter(function(a){return /\.bin$/.test(a.name)})[0];
-    if(!newer(v,installedVersion)){text("check-note","Up to date ("+installedVersion+").");return}
-    if(!asset){text("check-note","Version "+v+" has no firmware file.");return}
-    latestAsset={version:v,url:asset.url,name:asset.name,page:rel.html_url};text("check-note","");
-    var box=$("latest");box.innerHTML="";box.appendChild(document.createTextNode("Version "+v+" is available. "));var a=document.createElement("a");a.href="#";a.textContent="Install "+v;a.addEventListener("click",function(ev){ev.preventDefault();installLatest()});box.appendChild(a);box.hidden=false;
-  }).catch(function(){b.disabled=false;text("check-note","Could not reach GitHub. Check that this device has internet.")});
+var lastStatus=null,downloadWatch=false;
+function updateError(e){return {PRIVATE_REPOSITORY:"The project's releases are private; this Apple needs a developer token.",TLS_HANDSHAKE:"Could not verify GitHub's certificate. Install by file instead.",OFFLINE:"The Apple is not on Wi-Fi.",BUSY:"The Apple is busy. Try again in a minute.",JSON:"GitHub's answer could not be read.",SHORT_DOWNLOAD:"The download stopped early. The Apple tries again later.",BAD_SIGNATURE:"The downloaded file is not signed by the project.",NOT_SIGNED:"The downloaded file is not a signed Home Run Apple firmware file.",NO_SPACE:"No room for the update.",HTTP_403:"GitHub refused the request. The developer token may have expired.",HTTP_404:"The project's releases could not be found."}[e]||("Could not check for updates"+(e?" ("+e+")":"")+".")}
+function renderUpdate(s){lastStatus=s;var u=s.update||{},st=u.state||"IDLE",box=$("update-status"),v=s.firmwareVersion||"",msg;
+  if(st==="CHECKING")msg="Checking…";
+  else if(st==="DOWNLOADING")msg="Downloading "+(u.version||"the update")+"… The Apple restarts when it is done.";
+  else if(st==="AVAILABLE")msg=(u.version||"A new version")+(u.prerelease?" (pre-release)":"")+" is ready. "+(s.settings&&s.settings.autoUpdate===false?"Automatic updates are off.":"It installs between games, early in the morning.");
+  else if(st==="UP_TO_DATE")msg="Up to date"+(u.checkedAt?", checked "+when(u.checkedAt):"")+".";
+  else if(st==="FAILED")msg=updateError(u.error)+(u.checkedAt?" Last good check "+when(u.checkedAt)+".":"");
+  else msg="Not checked yet.";
+  box.innerHTML="";box.appendChild(document.createTextNode("Installed "));var b=document.createElement("strong");b.id="fw-installed";b.textContent=v;box.appendChild(b);box.appendChild(document.createTextNode(". "+msg));
+  $("install-latest").hidden=st!=="AVAILABLE";
+  $("check-updates").disabled=st==="CHECKING"||st==="DOWNLOADING";
+  if(st==="DOWNLOADING"&&!downloadWatch){downloadWatch=true;waitForRestart(v,300000)}
+}
+function pollRelease(n){status();if(n>0)setTimeout(function(){pollRelease(n-1)},1500)}
+$("check-updates").addEventListener("click",function(){var b=this;b.disabled=true;text("check-note","");
+  authFetch("/api/update/check",{method:"POST"}).then(function(r){if(r.ok){pollRelease(12);return}return r.json().then(function(j){toast(updateError(j&&j.error),"bad",{id:"update"})}).catch(function(){toast("Could not ask the Apple to check.","bad",{id:"update"})})}).catch(function(){toast("No answer from the Apple.","bad",{id:"update"})}).then(function(){b.disabled=false});
 });
-function installLatest(){var l=latestAsset;if(!l)return;dialog({title:"Install "+l.version+"?",text:"The file downloads from GitHub through this device, then the Apple restarts and is back in about a minute.",ok:"Install"}).then(function(ok){if(!ok)return;text("check-note","Downloading "+l.name+"\u2026");
-  fetch(l.url,{headers:{Accept:"application/octet-stream"}}).then(function(r){if(!r.ok)throw new Error("download "+r.status);return r.blob()}).then(function(blob){text("check-note","");sendFirmware(new File([blob],l.name,{type:"application/octet-stream"}))}).catch(function(){text("check-note","");var box=$("latest");box.innerHTML="";box.appendChild(document.createTextNode("The download did not go through. "));var a=document.createElement("a");a.href=l.page;a.target="_blank";a.rel="noopener";a.textContent="Get the file from GitHub";box.appendChild(a);box.appendChild(document.createTextNode(" and pick it below."));box.hidden=false})})}
+$("install-latest").addEventListener("click",function(){var v=(lastStatus&&lastStatus.update&&lastStatus.update.version)||"the update";
+  dialog({title:"Install "+v+"?",text:"The Apple downloads it from GitHub, restarts, and is back in about a minute.",ok:"Install"}).then(function(ok){if(!ok)return;
+    authFetch("/api/update/install",{method:"POST"}).then(function(r){if(r.ok){toast("Installing "+v+". The Apple restarts when the download is done.","ok",{id:"update",sticky:true});downloadWatch=true;waitForRestart(installedVersion,300000);pollRelease(4);return}return r.json().then(function(j){toast(updateMessage(j&&j.error),"bad",{id:"update",sticky:true})}).catch(function(){toast("Could not start the install.","bad",{id:"update",sticky:true})})}).catch(function(){toast("No answer from the Apple.","bad",{id:"update",sticky:true})});
+  });
+});
 $("restart").addEventListener("click",function(){dialog({title:"Restart the Apple?",text:"It is back in about 30 seconds. Settings and Wi-Fi are kept.",ok:"Restart"}).then(function(ok){if(!ok)return;authFetch("/api/restart",{method:"POST"}).then(function(r){if(r.ok){toast("Restarting. This page reconnects on its own.","ok",{id:"update",sticky:true});return}var err="";try{}catch(e){}r.json().then(function(j){toast(j&&j.error==="CELEBRATING"?"The Apple is celebrating. Try again in a minute.":"Could not restart.","bad",{id:"update",sticky:true})}).catch(function(){toast("Could not restart.","bad",{id:"update",sticky:true})})}).catch(function(){toast("No answer from the Apple.","bad",{id:"update",sticky:true})})})});
 $("fw-file").addEventListener("change",function(){var f=this.files[0];$("install").disabled=!f;text("fw-note",f?Math.round(f.size/1024)+" KB":"")});
 $("install").addEventListener("click",function(){var f=$("fw-file").files[0];if(!f)return;dialog({title:"Install this firmware?",text:f.name+". The Apple restarts and is back in about a minute.",ok:"Install"}).then(function(ok){if(ok)sendFirmware(f)})});

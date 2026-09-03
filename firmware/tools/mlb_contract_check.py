@@ -4,8 +4,9 @@
 The API is unofficial and changes without notice. This script fetches the
 current Mets schedule and the most recent completed Mets game, then:
 
-1. verifies the TLS chain still ends at the root certificate the firmware
-   pins (DigiCert Global Root G2);
+1. verifies the TLS chains still end at the roots the firmware pins: DigiCert
+   Global Root G2 for MLB, and the GitHub roots in update_roots.hpp that the
+   Apple's own firmware-release checks depend on;
 2. verifies MLB's game-status table still carries the delay, suspended,
    postponed, and cancelled codes the shared classifier keys on;
 3. verifies the `fields=` query still trims the live feed;
@@ -82,6 +83,32 @@ def check_certificate_chain() -> None:
     if PINNED_ROOT_NAME not in issuer_text:
         raise ContractFailure(f"certificate chain no longer ends at {PINNED_ROOT_NAME}: {issuer_text}")
     print(f"certificate chain: {len(blocks)} certificates served, issued under {PINNED_ROOT_NAME}")
+
+
+UPDATE_ROOTS_HEADER = pathlib.Path(__file__).resolve().parents[1] / "include" / "apple" / "firmware" / "update_roots.hpp"
+GITHUB_HOSTS = ("api.github.com", "release-assets.githubusercontent.com")
+
+
+def check_github_roots() -> None:
+    """The Apple fetches its own firmware releases over TLS pinned to the roots in
+    update_roots.hpp. Each host's served chain must still lead to one of them."""
+    names = re.findall(r"^\s*// ([^:\n]+): ", UPDATE_ROOTS_HEADER.read_text(), re.M)
+    names = [n for n in names if "Root" in n or "Authority" in n]
+    if not names:
+        raise ContractFailure(f"no root names found in {UPDATE_ROOTS_HEADER.name}")
+    for host in GITHUB_HOSTS:
+        result = subprocess.run(
+            ["openssl", "s_client", "-connect", f"{host}:443", "-servername", host, "-showcerts"],
+            input=b"", capture_output=True, timeout=TIMEOUT,
+        )
+        blocks = re.findall(rb"-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----", result.stdout, re.S)
+        if not blocks:
+            raise ContractFailure(f"openssl returned no certificates for {host}")
+        issuer = subprocess.run(["openssl", "x509", "-noout", "-issuer"], input=blocks[-1], capture_output=True, timeout=TIMEOUT)
+        issuer_text = issuer.stdout.decode("utf-8", "replace").strip()
+        if not any(name in issuer_text for name in names):
+            raise ContractFailure(f"{host} chain no longer ends at a pinned root ({', '.join(names)}): {issuer_text}")
+    print(f"github roots: {', '.join(GITHUB_HOSTS)} still chain to the pinned roots")
 
 
 def recent_final_game() -> dict:
@@ -245,6 +272,7 @@ def main() -> int:
     root = pathlib.Path(__file__).resolve().parents[2]
     try:
         check_certificate_chain()
+        check_github_roots()
         check_game_statuses()
         game = recent_final_game()
         with tempfile.TemporaryDirectory() as tmp:

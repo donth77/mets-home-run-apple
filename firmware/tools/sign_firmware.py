@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Sign Apple firmware for wireless installs, and make the keys.
+"""Sign Home Run Apple firmware for wireless installs, and make the keys.
 
 The Apple only installs a firmware file that carries a valid signature from
 the project's signing key, so a corrupt download or a stranger's file never

@@ -56,6 +56,10 @@ struct SettingsUpdate {
   int lock{-1};    ///< -1 unchanged, 0 no password for changes, 1 ask for the password
   String time_zone;  ///< IANA id from the Manager's table, empty when unchanged
   int brightness{-1};  ///< -1 unchanged, else 10..100 percent
+  int auto_update{-1};  ///< -1 unchanged, 0 only check, 1 install new firmware on its own
+  int beta{-1};         ///< -1 unchanged, 1 also take pre-releases (developer setting)
+  bool token_given{false};  ///< `github_token` was sent (empty clears it)
+  String github_token;      ///< read-only token for a private repository (developer setting)
 };
 
 class ManagerServer {
@@ -85,6 +89,14 @@ class ManagerServer {
   /// Restart from the page: returns an empty string when scheduled, else a reason.
   using RestartFn = std::function<String()>;
   void set_restart_hook(RestartFn restart) { restart_ = std::move(restart); }
+  /// Release checks the Apple runs itself: `check` asks for a check now and
+  /// `install` asks to fetch and install the release it found. Each returns
+  /// an empty string when accepted, else a short reason.
+  using ActionFn = std::function<String()>;
+  void set_release_hooks(ActionFn check, ActionFn install) {
+    release_check_ = std::move(check);
+    release_install_ = std::move(install);
+  }
   void loop();
 
   /// Opens the WPA2 setup network with a captive DNS so phones show the page
@@ -129,7 +141,10 @@ class ManagerServer {
   UpdateGateFn update_gate_;
   UpdateDoneFn update_done_;
   RestartFn restart_;
+  ActionFn release_check_;
+  ActionFn release_install_;
   void handle_restart();
+  void handle_release_action(const ActionFn& action);
   void handle_not_found();
   bool redirect_to_portal();
   bool authorized();

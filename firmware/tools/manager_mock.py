@@ -8,7 +8,8 @@ without a board.
 
 Then open http://127.0.0.1:8765/. The mock answers the same routes as the
 firmware (/api/status, /api/networks, /api/timezones, POST /api/wifi,
-/api/wifi/forget, /api/settings, /api/update, /api/restart) and reads the time zone table straight from
+/api/wifi/forget, /api/settings, /api/update, /api/update/check,
+/api/update/install, /api/restart) and reads the time zone table straight from
 lib/manager/src/time_zones.cpp so the page sees the real list. A join succeeds
 after a few status polls; settings are kept in memory.
 """
@@ -51,6 +52,22 @@ def zone_id(name):
 
 
 def make_handler(state):
+    def release_status():
+        rel = state["release"]
+        # A check answers on the next poll; a download restarts after three.
+        if rel["state"] == "CHECKING":
+            rel["state"] = "AVAILABLE" if rel["found"] else "UP_TO_DATE"
+            rel["checkedAt"] = 1788392040
+        elif rel["state"] == "DOWNLOADING":
+            rel["ticks"] += 1
+            if rel["ticks"] >= 3:
+                state["version"] = rel["version"]
+                rel.update(state="IDLE", version="", found=False, ticks=0)
+                state["polls"] = -3
+        return {"state": rel["state"], "version": rel["version"] if rel["state"] in ("AVAILABLE", "DOWNLOADING") else "",
+                "prerelease": rel["prerelease"], "size": 1515957 if rel["state"] == "AVAILABLE" else 0,
+                "checkedAt": rel["checkedAt"], "nextCheckIn": 86000, "error": rel["error"], "windowOpen": False}
+
     def status():
         state["polls"] += 1
         connected = state["joined"] and state["polls"] > 2
@@ -81,6 +98,7 @@ def make_handler(state):
                      "nextInMs": 42000, "lastError": ""},
             "settings": dict(settings, timeZoneLabel=zone_label(settings["timeZone"]),
                              setupKey="" if settings["requireCode"] else "00000000"),
+            "update": release_status(),
             "lastCelebration": {"kind": "HR", "subject": "Juan Soto", "at": 1788392040, "moved": True},
             "sequence": "IDLE", "fault": False, "positionMm": 0,
         }
@@ -146,6 +164,16 @@ def make_handler(state):
             if self.path == "/api/restart":
                 state["polls"] = -6
                 return self.send_json({"ok": True})
+            if self.path == "/api/update/check":
+                rel = state["release"]
+                rel.update(state="CHECKING", error="", found=True, version="0.3.0-mock", prerelease=settings["beta"])
+                return self.send_json({"ok": True})
+            if self.path == "/api/update/install":
+                rel = state["release"]
+                if rel["state"] != "AVAILABLE":
+                    return self.send_json({"ok": False, "error": "NO_UPDATE"}, 409)
+                rel.update(state="DOWNLOADING", ticks=0)
+                return self.send_json({"ok": True})
             if self.path == "/api/wifi/forget":
                 state["joined"] = False
                 return self.send_json({"ok": True})
@@ -160,7 +188,10 @@ def make_handler(state):
                     settings["raisedSeconds"] = int(args["raised"][0])
                 if "bright" in args:
                     settings["brightness"] = int(args["bright"][0])
-                for key, name in (("motor", "motor"), ("follow", "follow"), ("sleep", "sleepDisplay"), ("lock", "requireCode")):
+                if "token" in args:
+                    settings["tokenSet"] = bool(args["token"][0])
+                for key, name in (("motor", "motor"), ("follow", "follow"), ("sleep", "sleepDisplay"), ("lock", "requireCode"),
+                                  ("auto", "autoUpdate"), ("beta", "beta")):
                     if key in args:
                         settings[name] = args[key][0] in ("on", "auto", "1", "true")
                 return self.send_json({"ok": True})
@@ -181,7 +212,8 @@ def main():
         "setup_network": args.setup,
         "settings": {"raisedSeconds": 30, "motor": True, "follow": True, "sleepDisplay": False,
                      "requireCode": False, "timeZone": "America/New_York", "timeZoneChosen": False,
-                     "brightness": 100},
+                     "brightness": 100, "autoUpdate": True, "beta": False, "tokenSet": False},
+        "release": {"state": "IDLE", "version": "", "prerelease": False, "checkedAt": 0, "error": "", "found": False, "ticks": 0},
     }
     print(f"Apple Manager mock on http://127.0.0.1:{args.port}/  ({len(ZONES)} time zones, "
           f"{'setup' if args.setup else 'connected'} state, password 00000000 when the lock is on)")

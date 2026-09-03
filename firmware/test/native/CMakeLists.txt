@@ -97,3 +97,15 @@ elseif(MSVC)
 endif()
 
 add_test(NAME apple_time_zone_tests COMMAND apple_time_zone_tests)
+
+add_executable(apple_release_pick_tests release_pick_tests.cpp)
+target_link_libraries(apple_release_pick_tests PRIVATE apple_release_pick)
+target_compile_features(apple_release_pick_tests PRIVATE cxx_std_17)
+
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+  target_compile_options(apple_release_pick_tests PRIVATE -Wall -Wextra -Wpedantic -Werror)
+elseif(MSVC)
+  target_compile_options(apple_release_pick_tests PRIVATE /W4 /WX)
+endif()
+
+add_test(NAME apple_release_pick_tests COMMAND apple_release_pick_tests)
