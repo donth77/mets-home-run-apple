@@ -20,6 +20,8 @@
 #include "apple/display/mets_win_loop.hpp"
 #include "apple/firmware/board_pins.hpp"
 #include "apple/firmware/manager.hpp"
+#include "apple/firmware/release_pick.hpp"
+#include "apple/firmware/update_roots.hpp"
 #include "apple/firmware/time_zones.hpp"
 #include "apple/firmware/firmware_update.hpp"
 #include "apple/firmware/mlb_root_ca.hpp"
@@ -105,7 +107,7 @@ constexpr char kProfileName[] = "apple_live";
 #ifdef APPLE_UPDATE_CRASH_TEST
 constexpr char kFirmwareVersion[] = "0.2.2-crashtest";
 #else
-constexpr char kFirmwareVersion[] = "0.2.10-rc.1";
+constexpr char kFirmwareVersion[] = "0.3.0-rc.2";
 #endif
 constexpr char kHostname[] = "home-run-apple";
 constexpr char kEasternTz[] = "EST5EDT,M3.2.0,M11.1.0";
@@ -152,6 +154,17 @@ constexpr std::uint16_t kRaisedSecondsMax = 120;
 // network or Manager startup is crashing; the next boot skips them so the
 // USB flasher (which runs inside this app) stays reachable.
 constexpr std::uint32_t kBootSettleMs = 30'000;
+// A freshly installed firmware counts as proven once it has fetched the
+// schedule, or after this long without one (no Wi-Fi is not its fault).
+constexpr std::uint32_t kBootConfirmMaxMs = 5 * 60 * 1000;
+// Release checks against GitHub: shortly after joining Wi-Fi, then daily;
+// sooner after a failure. Installs wait for the quiet window between games.
+constexpr std::uint32_t kReleaseFirstCheckMs = 90 * 1000;
+constexpr std::uint32_t kReleaseCheckPeriodMs = 24UL * 60 * 60 * 1000;
+constexpr std::uint32_t kReleaseRetryMs = 60UL * 60 * 1000;
+constexpr int kInstallWindowStartHour = 3;  // local time, inclusive
+constexpr int kInstallWindowEndHour = 6;    // exclusive
+constexpr char kReleasesUrl[] = "https://api.github.com/repos/donth77/mets-home-run-apple/releases?per_page=10";
 constexpr std::uint8_t kBacklightChannel = 4;  // LEDC channel for dimming the display
 constexpr std::uint8_t kBrightnessMin = 10;   // percent
 constexpr std::uint32_t kEarlyCrashLimit = 3;
@@ -287,6 +300,9 @@ struct Settings {
   const char* posix_tz{kEasternTz};        // rule handed to the clock library
   bool tz_chosen{false};  // set once an owner or their setup device picked a zone
   std::uint8_t brightness{100};  // display backlight, percent
+  bool auto_update{true};   // install a new release on its own, between games
+  bool beta{false};         // developer: also take pre-releases
+  char github_token[128]{""};  // developer: read-only token while the repository is private
 };
 
 // The most recent real celebration, kept in flash for the Manager's status.
@@ -314,6 +330,7 @@ Preferences boot_guard;
 bool safe_mode = false;
 bool boot_settled = false;
 bool update_pending_boot = false;  // a wireless update has not proven itself yet
+bool schedule_ok_since_boot = false;  // the network path works on this firmware
 std::uint32_t restart_at_ms = 0;   // set after an update is written
 NetState net_state = NetState::NoCredentials;
 std::uint32_t next_wifi_attempt_ms = 0;
@@ -378,6 +395,21 @@ void apply_time_zone();
 String update_gate();
 void on_update_done();
 String on_restart_request();
+String on_check_request();
+String on_install_request();
+bool install_window_open();
+enum class ReleaseState : std::uint8_t { Idle, Checking, UpToDate, Available, Downloading, Failed };
+const char* release_state_name(ReleaseState state);
+struct ReleaseStatus {
+  ReleaseState state{ReleaseState::Idle};
+  apple::firmware::ReleasePick pick;
+  std::int64_t checked_at{0};      // epoch seconds of the last completed check
+  std::uint32_t next_check_ms{0};  // 0 until Wi-Fi is up
+  bool check_requested{false};
+  bool install_requested{false};
+  char error[40] = "";
+};
+ReleaseStatus release;
 
 // A celebration on screen can never outlive the engine's own bounds.
 std::uint32_t celebration_display_max_ms() {
@@ -505,6 +537,18 @@ void fill_status(JsonDocument& doc) {
   owner["timeZoneLabel"] = zone ? zone->label : "";
   owner["timeZoneChosen"] = settings.tz_chosen;
   owner["brightness"] = settings.brightness;
+  owner["autoUpdate"] = settings.auto_update;
+  owner["beta"] = settings.beta;
+  owner["tokenSet"] = settings.github_token[0] != '\0';
+  JsonObject rel = doc["update"].to<JsonObject>();
+  rel["state"] = release_state_name(release.state);
+  rel["version"] = release.pick.found ? release.pick.version.c_str() : "";
+  rel["prerelease"] = release.pick.found && release.pick.prerelease;
+  rel["size"] = release.pick.found ? release.pick.asset_size : 0;
+  rel["checkedAt"] = release.checked_at;
+  rel["nextCheckIn"] = release.next_check_ms == 0 ? -1 : std::max<std::int32_t>(0, static_cast<std::int32_t>(release.next_check_ms - now32())) / 1000;
+  rel["error"] = release.error;
+  rel["windowOpen"] = install_window_open();
   if (last_celebration.at != 0) {
     JsonObject last = doc["lastCelebration"].to<JsonObject>();
     last["kind"] = last_celebration.kind;
@@ -1164,6 +1208,7 @@ void start_wifi() {
   manager.begin(fill_status, on_join_request, on_forget_request, on_settings);
   manager.set_update_hooks(update_gate, on_update_done);
   manager.set_restart_hook(on_restart_request);
+  manager.set_release_hooks(on_check_request, on_install_request);
   if (credentials.configured()) {
     begin_station();
     show_joining_screen();
@@ -1195,6 +1240,7 @@ void service_wifi() {
     secure_client.setTimeout(kHttpTimeoutMs / 1000);
     manager.start_mdns(kHostname);
     next_schedule_ms = now32();
+    release.next_check_ms = now32() + kReleaseFirstCheckMs;
     char detail[48];
     std::snprintf(detail, sizeof(detail), "connected rssi=%d ip=%s", WiFi.RSSI(), WiFi.localIP().toString().c_str());
     publish_trace("WIFI", detail);
@@ -1414,6 +1460,7 @@ void refresh_schedule() {
                 static_cast<unsigned long>(stats.elapsed_ms));
   publish_trace("SCHEDULE", detail);
   next_schedule_ms = now32() + kScheduleRefreshMs;
+  schedule_ok_since_boot = true;
 
   const std::optional<ScheduleGame> game_two = doubleheader_game_two();
   if (final_seen) final_has_game_two = game_two.has_value();
@@ -1481,6 +1528,9 @@ void load_settings() {
   if (!set_time_zone(zone.c_str())) set_time_zone(apple::firmware::kDefaultTimeZoneId);
   settings.tz_chosen = settings_store.getBool("tzset", false);
   const std::uint8_t bright = settings_store.getUChar("bright", settings.brightness);
+  settings.auto_update = settings_store.getBool("autoupd", settings.auto_update);
+  settings.beta = settings_store.getBool("beta", settings.beta);
+  settings_store.getString("ghtok", settings.github_token, sizeof(settings.github_token));
   settings.brightness = bright < kBrightnessMin ? kBrightnessMin : bright > 100 ? 100 : bright;
   apply_time_zone();
   history_store.begin("history", false);
@@ -1499,6 +1549,9 @@ void save_settings() {
   settings_store.putString("tz", settings.time_zone);
   settings_store.putBool("tzset", settings.tz_chosen);
   settings_store.putUChar("bright", settings.brightness);
+  settings_store.putBool("autoupd", settings.auto_update);
+  settings_store.putBool("beta", settings.beta);
+  settings_store.putString("ghtok", settings.github_token);
 }
 
 // Brightness is a percent; the low end stays visible in a dark room.
@@ -1595,13 +1648,25 @@ String on_settings(const apple::firmware::SettingsUpdate& update) {
     settings.tz_chosen = true;
     apply_time_zone();
   }
+  if (update.auto_update >= 0) settings.auto_update = update.auto_update == 1;
+  if (update.beta >= 0) {
+    settings.beta = update.beta == 1;
+    release.check_requested = true;  // the answer may change
+  }
+  if (update.token_given) {
+    if (update.github_token.length() >= sizeof(settings.github_token)) return "TOKEN_LENGTH";
+    copy_text(settings.github_token, sizeof(settings.github_token), update.github_token.c_str());
+    release.check_requested = true;
+  }
   save_settings();
-  char detail[128];
-  std::snprintf(detail, sizeof(detail), "raised=%us motor=%s follow=%s sleep=%s lock=%s tz=%s bright=%u",
+  char detail[160];
+  std::snprintf(detail, sizeof(detail),
+                "raised=%us motor=%s follow=%s sleep=%s lock=%s tz=%s bright=%u auto=%s beta=%s token=%s",
                 static_cast<unsigned>(settings.raised_seconds), settings.motor ? "on" : "off",
                 settings.follow ? "auto" : "paused", settings.sleep_display ? "on" : "off",
                 settings.require_code ? "on" : "off", settings.time_zone,
-                static_cast<unsigned>(settings.brightness));
+                static_cast<unsigned>(settings.brightness), settings.auto_update ? "on" : "off",
+                settings.beta ? "on" : "off", settings.github_token[0] ? "set" : "none");
   publish_trace("SETTINGS", detail);
   request_redraw();
   return String();
@@ -1638,6 +1703,251 @@ String on_restart_request() {
   if (celebration_active || !motion_idle()) return "CELEBRATING";
   publish_trace("RESET", "restart requested from the manager page");
   restart_at_ms = now32() + 1000;
+  return String();
+}
+
+// ---------------------------------------------------------------------------
+// Releases on GitHub: the Apple checks for itself and installs between games.
+//
+// The releases list and the signed .bin come from GitHub over TLS pinned to
+// the roots in update_roots.hpp. Asset downloads answer with a redirect to a
+// separate host, followed by hand so the token never leaves api.github.com.
+// A private repository needs the developer token; a public one needs none.
+
+const char* release_state_name(ReleaseState state) {
+  switch (state) {
+    case ReleaseState::Checking: return "CHECKING";
+    case ReleaseState::UpToDate: return "UP_TO_DATE";
+    case ReleaseState::Available: return "AVAILABLE";
+    case ReleaseState::Downloading: return "DOWNLOADING";
+    case ReleaseState::Failed: return "FAILED";
+    case ReleaseState::Idle:
+    default: return "IDLE";
+  }
+}
+
+void release_failed(const char* code) {
+  copy_text(release.error, sizeof(release.error), code);
+  release.state = ReleaseState::Failed;
+  release.next_check_ms = now32() + kReleaseRetryMs;
+  char detail[64];
+  std::snprintf(detail, sizeof(detail), "failed: %s", code);
+  publish_trace("RELEASE", detail);
+}
+
+void prepare_github_client(WiFiClientSecure& client) {
+  client.setCACert(apple::firmware::kUpdateRootsPem);
+  client.setHandshakeTimeout(kHttpTimeoutMs / 1000);
+  client.setTimeout(kHttpTimeoutMs / 1000);
+}
+
+// A GET against GitHub; the token goes only to api.github.com.
+int github_get(HTTPClient& http, WiFiClientSecure& client, const char* url, const char* accept, bool with_token) {
+  http.setReuse(false);
+  http.setTimeout(kHttpTimeoutMs);
+  http.setConnectTimeout(kHttpTimeoutMs);
+  http.setFollowRedirects(HTTPC_DISABLE_FOLLOW_REDIRECTS);
+  http.setUserAgent((String("HomeRunApple/") + kFirmwareVersion + " (Arduino Nano ESP32)").c_str());
+  if (!http.begin(client, url)) return -1000;
+  http.addHeader("Accept", accept);
+  http.addHeader("X-GitHub-Api-Version", "2022-11-28");
+  if (with_token && settings.github_token[0] != '\0') {
+    http.addHeader("Authorization", String("Bearer ") + settings.github_token);
+  }
+  esp_task_wdt_reset();
+  return http.GET();
+}
+
+void describe_http_failure(int code, WiFiClientSecure& client, HTTPClient& http, char* out, std::size_t capacity) {
+  if (code == -1000) {
+    std::snprintf(out, capacity, "HTTP_BEGIN");
+  } else if (code < 0) {
+    char tls[40] = "";
+    client.lastError(tls, sizeof(tls));
+    std::snprintf(out, capacity, "%s", tls[0] ? "TLS_HANDSHAKE" : http.errorToString(code).c_str());
+  } else {
+    std::snprintf(out, capacity, "HTTP_%d", code);
+  }
+}
+
+void check_for_release() {
+  release.state = ReleaseState::Checking;
+  release.error[0] = '\0';
+  publish_trace("RELEASE", settings.beta ? "checking GitHub (pre-releases included)" : "checking GitHub");
+  WiFiClientSecure client;
+  prepare_github_client(client);
+  HTTPClient http;
+  const int code = github_get(http, client, kReleasesUrl, "application/vnd.github+json", true);
+  if (code != HTTP_CODE_OK) {
+    char why[40];
+    describe_http_failure(code, client, http, why, sizeof(why));
+    http.end();
+    release_failed(code == HTTP_CODE_NOT_FOUND && settings.github_token[0] == '\0' ? "PRIVATE_REPOSITORY" : why);
+    return;
+  }
+  JsonDocument filter;
+  deserializeJson(filter, apple::firmware::releases_filter_json());
+  JsonDocument doc(&json_allocator);
+  const ArduinoJson::DeserializationError error =
+      deserializeJson(doc, http.getStream(), ArduinoJson::DeserializationOption::Filter(filter),
+                      ArduinoJson::DeserializationOption::NestingLimit(8));
+  http.end();
+  if (error != ArduinoJson::DeserializationError::Ok) {
+    release_failed("JSON");
+    return;
+  }
+  release.pick = apple::firmware::pick_release(doc.as<JsonArrayConst>(), kFirmwareVersion, settings.beta);
+  release.checked_at = wall_epoch();
+  release.next_check_ms = now32() + kReleaseCheckPeriodMs;
+  if (!release.pick.found) {
+    release.state = ReleaseState::UpToDate;
+    publish_trace("RELEASE", "up to date");
+    return;
+  }
+  release.state = ReleaseState::Available;
+  char detail[96];
+  std::snprintf(detail, sizeof(detail), "%s available (%ld bytes)%s", release.pick.version.c_str(),
+                release.pick.asset_size, release.pick.prerelease ? " pre-release" : "");
+  publish_trace("RELEASE", detail);
+}
+
+// Streams one HTTP body into the spare slot; true once it is verified.
+bool stream_release_image(HTTPClient& http) {
+  apple::firmware::FirmwareUpdater updater;
+  if (!updater.begin()) {
+    release_failed(updater.error());
+    return false;
+  }
+  WiFiClient* stream = http.getStreamPtr();
+  int remaining = http.getSize();
+  std::uint32_t last_data_ms = now32();
+  std::uint32_t total = 0;
+  static std::uint8_t buffer[2048];
+  while (http.connected() && (remaining > 0 || remaining == -1)) {
+    const std::size_t available = stream->available();
+    if (available > 0) {
+      const int n = stream->readBytes(buffer, std::min(available, sizeof(buffer)));
+      if (n <= 0) break;
+      updater.write(buffer, static_cast<std::size_t>(n));
+      total += static_cast<std::uint32_t>(n);
+      if (remaining > 0) remaining -= n;
+      last_data_ms = now32();
+    } else {
+      if (static_cast<std::int32_t>(now32() - last_data_ms) > static_cast<std::int32_t>(kHttpTimeoutMs)) break;
+      delay(1);
+    }
+    esp_task_wdt_reset();
+  }
+  if (remaining > 0 || (release.pick.asset_size > 0 && total != static_cast<std::uint32_t>(release.pick.asset_size))) {
+    updater.abort();
+    release_failed("SHORT_DOWNLOAD");
+    return false;
+  }
+  if (!updater.end()) {
+    release_failed(updater.error());
+    return false;
+  }
+  return true;
+}
+
+void download_release() {
+  release.state = ReleaseState::Downloading;
+  release.error[0] = '\0';
+  char detail[96];
+  std::snprintf(detail, sizeof(detail), "downloading %s", release.pick.asset_name.c_str());
+  publish_trace("RELEASE", detail);
+  copy_text(model.waiting_title, sizeof(model.waiting_title), "HOME RUN APPLE");
+  copy_text(model.waiting_note, sizeof(model.waiting_note), release.pick.version.c_str());
+  show_waiting("DOWNLOADING UPDATE", apple::firmware::kMetsOrange, apple::firmware::WaitingIcon::Update);
+  render_if_needed();
+
+  WiFiClientSecure client;
+  prepare_github_client(client);
+  bool installed = false;
+  String location;
+  {
+    HTTPClient http;
+    const int code = github_get(http, client, release.pick.asset_url.c_str(), "application/octet-stream", true);
+    if (code == HTTP_CODE_OK) {
+      installed = stream_release_image(http);
+    } else if (code == HTTP_CODE_FOUND || code == HTTP_CODE_MOVED_PERMANENTLY ||
+               code == HTTP_CODE_TEMPORARY_REDIRECT || code == HTTP_CODE_SEE_OTHER || code == 308) {
+      location = http.getLocation();
+    } else {
+      char why[40];
+      describe_http_failure(code, client, http, why, sizeof(why));
+      release_failed(why);
+    }
+    http.end();
+  }
+  if (!installed && location.length() > 0) {
+    // The download host takes no token; the URL itself carries a short-lived signature.
+    HTTPClient http;
+    const int code = github_get(http, client, location.c_str(), "application/octet-stream", false);
+    if (code == HTTP_CODE_OK) {
+      installed = stream_release_image(http);
+    } else {
+      char why[40];
+      describe_http_failure(code, client, http, why, sizeof(why));
+      release_failed(why);
+    }
+    http.end();
+  }
+  if (!installed) {
+    if (release.state != ReleaseState::Failed) release_failed("NO_LOCATION");
+    request_redraw();
+    return;
+  }
+  publish_trace("RELEASE", "installed; restarting");
+  on_update_done();
+}
+
+// Installs happen in the early morning between games, never mid-game.
+bool install_window_open() {
+  if (!clock_valid()) return false;
+  const time_t at = static_cast<time_t>(wall_epoch());
+  struct tm local;
+  localtime_r(&at, &local);
+  if (local.tm_hour < kInstallWindowStartHour || local.tm_hour >= kInstallWindowEndHour) return false;
+  if (game && apple::mlb_feed::should_poll(*game, wall_epoch(), kPregameLeadSeconds)) return false;
+  return update_gate().length() == 0;
+}
+
+void service_release() {
+  if (safe_mode || !boot_settled || net_state != NetState::Connected || !clock_valid()) return;
+  if (manager.update_in_progress() || replay_active) return;
+  if (release.install_requested) {
+    release.install_requested = false;
+    if (release.state == ReleaseState::Available && update_gate().length() == 0) download_release();
+    return;
+  }
+  if (release.state == ReleaseState::Available && settings.auto_update && install_window_open()) {
+    download_release();
+    return;
+  }
+  const bool check_due = release.next_check_ms != 0 && due(release.next_check_ms);
+  if (release.check_requested || check_due) {
+    release.check_requested = false;
+    if (celebration_active || !motion_idle()) {
+      release.next_check_ms = now32() + 60 * 1000;
+      return;
+    }
+    check_for_release();
+  }
+}
+
+String on_check_request() {
+  if (net_state != NetState::Connected) return "OFFLINE";
+  if (release.state == ReleaseState::Downloading || release.state == ReleaseState::Checking) return "BUSY";
+  release.check_requested = true;
+  return String();
+}
+
+String on_install_request() {
+  if (release.state != ReleaseState::Available) return "NO_UPDATE";
+  const String why = update_gate();
+  if (why.length() > 0) return why;
+  release.install_requested = true;
   return String();
 }
 
@@ -1829,6 +2139,10 @@ void handle_serial() {
       case 'P':
         next_poll_ms = now32();
         break;
+      case 'u':
+      case 'U':
+        release.check_requested = true;
+        break;
       case 'w':
       case 'W':
         on_forget_request();
@@ -1925,12 +2239,14 @@ void loop() {
   const std::uint64_t now = now_ms();
   if (!boot_settled && now >= kBootSettleMs) {
     boot_settled = true;
+    // With an unproven firmware, crashes keep counting until it is confirmed.
+    if (!update_pending_boot) boot_guard.putUInt("early", 0);
+  }
+  if (update_pending_boot && boot_settled && (schedule_ok_since_boot || now >= kBootConfirmMaxMs)) {
+    update_pending_boot = false;
+    boot_guard.putBool("pending", false);
     boot_guard.putUInt("early", 0);
-    if (update_pending_boot) {
-      update_pending_boot = false;
-      boot_guard.putBool("pending", false);
-      publish_trace("UPDATE", "new firmware confirmed");
-    }
+    publish_trace("UPDATE", schedule_ok_since_boot ? "new firmware confirmed: schedule fetched" : "new firmware confirmed");
   }
   if (restart_at_ms != 0 && due(restart_at_ms)) {
     Serial.flush();
@@ -1941,6 +2257,7 @@ void loop() {
   service_motion(now);
   service_replay();
   service_network();
+  service_release();
   if (celebration_active) {
     service_celebration();
   } else {

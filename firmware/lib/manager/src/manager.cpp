@@ -81,6 +81,8 @@ void ManagerServer::begin(StatusFn status, JoinFn join, ForgetFn forget, Setting
   server_.on("/api/timezones", HTTP_GET, [this] { handle_time_zones(); });
   server_.on("/api/update", HTTP_POST, [this] { handle_update_done(); }, [this] { handle_update_upload(); });
   server_.on("/api/restart", HTTP_POST, [this] { handle_restart(); });
+  server_.on("/api/update/check", HTTP_POST, [this] { handle_release_action(release_check_); });
+  server_.on("/api/update/install", HTTP_POST, [this] { handle_release_action(release_install_); });
   // Captive-portal probes from phones and laptops.
   for (const char* probe : {"/generate_204", "/gen_204", "/hotspot-detect.html", "/library/test/success.html",
                             "/connecttest.txt", "/ncsi.txt", "/fwlink", "/success.txt", "/canonical.html"}) {
@@ -338,6 +340,12 @@ void ManagerServer::handle_settings() {
   if (server_.hasArg("lock")) update.lock = on_off(server_.arg("lock"));
   if (server_.hasArg("tz")) update.time_zone = server_.arg("tz");
   if (server_.hasArg("bright")) update.brightness = server_.arg("bright").toInt();
+  if (server_.hasArg("auto")) update.auto_update = on_off(server_.arg("auto"));
+  if (server_.hasArg("beta")) update.beta = on_off(server_.arg("beta"));
+  if (server_.hasArg("token")) {
+    update.token_given = true;
+    update.github_token = server_.arg("token");
+  }
   const String error = settings_(update);
   if (error.length() > 0) {
     server_.send(400, "application/json", String("{\"ok\":false,\"error\":\"") + error + "\"}");
@@ -370,6 +378,16 @@ void ManagerServer::handle_restart() {
   String why = restart_ ? restart_() : String("NO_RESTART");
   if (why.length() > 0) {
     server_.send(why == "NO_RESTART" ? 404 : 409, "application/json", String("{\"ok\":false,\"error\":\"") + why + "\"}");
+    return;
+  }
+  server_.send(200, "application/json", "{\"ok\":true}");
+}
+
+void ManagerServer::handle_release_action(const ActionFn& action) {
+  if (!authorized()) return;
+  const String why = action ? action() : String("NO_RELEASES");
+  if (why.length() > 0) {
+    server_.send(why == "NO_RELEASES" ? 404 : 409, "application/json", String("{\"ok\":false,\"error\":\"") + why + "\"}");
     return;
   }
   server_.send(200, "application/json", "{\"ok\":true}");

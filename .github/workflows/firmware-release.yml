@@ -1,7 +1,7 @@
 name: Firmware release
 
 # Tag a commit `firmware-vX.Y.Z` (matching kFirmwareVersion in
-# firmware/src/apple_live.cpp) to build, sign, and publish the Apple firmware
+# firmware/src/apple_live.cpp) to build, sign, and publish the Home Run Apple firmware
 # as a GitHub release. Owners install the .bin from the Manager's Update
 # section. A version with a suffix, such as `0.3.0-rc.1`, becomes a
 # pre-release: the Manager's Check for updates skips it, so only an Apple
@@ -63,7 +63,7 @@ jobs:
       - name: Publish the release
         uses: softprops/action-gh-release@v2
         with:
-          name: Apple firmware ${{ steps.version.outputs.version }}
+          name: Home Run Apple firmware ${{ steps.version.outputs.version }}
           prerelease: ${{ contains(steps.version.outputs.version, '-') }}
           body: |
             Signed firmware for the physical Home Run Apple (Arduino Nano ESP32).

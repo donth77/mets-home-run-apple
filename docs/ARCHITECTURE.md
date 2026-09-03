@@ -36,8 +36,9 @@ electrical outputs.
 ### Apple Manager
 
 Apple Manager lives on the Nano. It handles first-time Wi-Fi setup, current
-status, owner settings, restarts, and signed firmware updates. It works on the
-local network and does not run the game loop.
+status, owner settings, restarts, and signed firmware updates, which the Apple
+fetches from the project's GitHub releases on its own and installs between
+games. It works on the local network and does not run the game loop.
 
 ### Apple Lab
 

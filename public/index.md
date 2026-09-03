@@ -32,7 +32,7 @@ need the official game state.
 
 Virtual Mets Apple is part of the open-source
 [Mets Home Run Apple](https://github.com/donth77/mets-home-run-apple) project.
-The same repository contains the physical Apple firmware and the Apple Lab
+The same repository contains the Home Run Apple firmware and the Apple Lab
 builder tool. The public site cannot find or control physical hardware.
 
 This project is not affiliated with, endorsed by, or sponsored by the New York
