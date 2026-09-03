@@ -9,6 +9,7 @@
 #include <Adafruit_ST7789.h>
 #include <Arduino.h>
 #include <AudioFileSourcePROGMEM.h>
+#include <AudioFileSourceBuffer.h>
 #include <AudioFileSourceSD.h>
 #include <AudioGeneratorWAV.h>
 #include <AudioOutputI2S.h>
@@ -63,6 +64,34 @@ Adafruit_ST7789 panel(kDisplayChipSelectPin, kDisplayDataCommandPin,
 AudioOutputI2S* output = nullptr;
 AudioGeneratorWAV* generator = nullptr;
 AudioFileSource* source = nullptr;
+// A buffer between the card and the generator, because a bare SD read is too
+// slow and irregular to feed I2S directly. Keep it SMALL. The library tops the
+// buffer up with readNonBlock, which AudioFileSourceSD never implements, so the
+// base class turns it into an ordinary blocking read: buffer size therefore
+// sets the worst-case stall, and a large buffer stutters worse than a small
+// one. 8 KB is about 185 ms of audio refilled in roughly 8 ms chunks, well
+// inside the I2S queue below. Playback from flash needs none of this.
+AudioFileSourceBuffer* buffered = nullptr;
+// The buffered source announces every underflow through this callback, so a
+// run can say whether crackling came from the audio queue running dry or from
+// something outside the data path, such as the supply rail sagging.
+// Diagnostic: the whole track loaded into PSRAM so it can be played with the
+// card completely idle. If memory playback is clean and card playback is not,
+// the fault is the card's electrical activity rather than the data path.
+std::uint8_t* ram_clip = nullptr;
+std::uint32_t ram_clip_bytes = 0;
+bool play_from_ram = false;
+std::uint32_t underflows = 0;
+std::uint32_t refills = 0;
+void on_source_status(void*, int code, const char*) {
+  if (code == AudioFileSourceBuffer::STATUS_UNDERFLOW) ++underflows;
+  else if (code == AudioFileSourceBuffer::STATUS_FILLING) ++refills;
+}
+constexpr std::size_t kStreamBufferBytes = 8 * 1024;
+constexpr std::uint32_t kSdClockHz = 20'000'000;
+// Each DMA buffer is 128 frames; 16 of them queue about 93 ms at 22.05 kHz,
+// which has to exceed the time one buffer refill takes.
+constexpr int kI2sDmaBuffers = 16;
 std::uint8_t tone_wav[kToneBytes];
 std::size_t gain_index = 0;
 bool sd_mounted = false;
@@ -129,6 +158,10 @@ void publish_state() {
 }
 
 void publish_play(const char* status, const char* what) {
+  if (std::strcmp(status, "FINISHED") == 0 || std::strcmp(status, "STOPPED") == 0) {
+    Serial.printf("APPLE_AUDIO:{\"type\":\"stream\",\"underflows\":%lu,\"refills\":%lu}\n",
+                  static_cast<unsigned long>(underflows), static_cast<unsigned long>(refills));
+  }
   snprintf(last_status, sizeof(last_status), "%s", status);
   Serial.printf("APPLE_AUDIO:{\"type\":\"play\",\"status\":\"%s\",\"source\":\"%s\"}\n",
                 status, what);
@@ -179,6 +212,8 @@ void stop_playback(const char* status) {
     delete generator;
     generator = nullptr;
   }
+  delete buffered;  // owns nothing; the wrapped source is freed below
+  buffered = nullptr;
   delete source;
   source = nullptr;
   if (status != nullptr) publish_play(status, playing);
@@ -192,7 +227,10 @@ void mount_sd() {
     SD.end();
     sd_mounted = false;
   }
-  sd_mounted = SD.begin(kSdChipSelectPin, SPI);
+  // 4 MHz is the library default and too slow here: refilling the stream
+  // buffer takes longer than the I2S queue holds, and the gap is audible.
+  // The checksum command verifies that this speed is still error-free.
+  sd_mounted = SD.begin(kSdChipSelectPin, SPI, kSdClockHz);
   sd_card_bytes = sd_mounted ? SD.cardSize() : 0;
   Serial.printf("APPLE_AUDIO:{\"type\":\"sd\",\"status\":\"%s\",\"cardMb\":%lu,\"files\":[",
                 sd_mounted ? "MOUNTED" : "MISSING",
@@ -244,12 +282,23 @@ void checksum_fixture() {
 
 void start_playback(bool from_sd) {
   stop_playback(nullptr);
-  if (from_sd) {
+  if (play_from_ram) {
+    if (ram_clip == nullptr) {
+      publish_play("FAILED", "nothing loaded into memory");
+      return;
+    }
+    source = new AudioFileSourcePROGMEM(ram_clip, ram_clip_bytes);
+    snprintf(playing, sizeof(playing), "RAM %s", kFixturePath);
+  } else if (from_sd) {
     if (!sd_mounted) {
       publish_play("FAILED", "SD not mounted");
       return;
     }
     source = new AudioFileSourceSD(kFixturePath);
+    buffered = new AudioFileSourceBuffer(source, kStreamBufferBytes);
+    underflows = 0;
+    refills = 0;
+    buffered->RegisterStatusCB(on_source_status, nullptr);
     snprintf(playing, sizeof(playing), "SD %s", kFixturePath);
   } else {
     source = new AudioFileSourcePROGMEM(tone_wav, kToneBytes);
@@ -257,7 +306,7 @@ void start_playback(bool from_sd) {
   }
   generator = new AudioGeneratorWAV();
   output->SetGain(kGainSteps[gain_index]);
-  if (!generator->begin(source, output)) {
+  if (!generator->begin(buffered != nullptr ? static_cast<AudioFileSource*>(buffered) : source, output)) {
     publish_play("FAILED", playing);
     stop_playback(nullptr);
     return;
@@ -265,6 +314,40 @@ void start_playback(bool from_sd) {
   publish_play("STARTED", playing);
   draw_state();
   publish_state();
+}
+
+// Reads the fixture into PSRAM once, so playback can run with no card access.
+void load_into_ram() {
+  if (!sd_mounted) {
+    Serial.println("APPLE_AUDIO:{\"type\":\"ram\",\"status\":\"NO_CARD\"}");
+    return;
+  }
+  if (ram_clip != nullptr) {
+    free(ram_clip);
+    ram_clip = nullptr;
+    ram_clip_bytes = 0;
+  }
+  File file = SD.open(kFixturePath, FILE_READ);
+  if (!file) {
+    Serial.println("APPLE_AUDIO:{\"type\":\"ram\",\"status\":\"MISSING\"}");
+    return;
+  }
+  const std::uint32_t size = file.size();
+  ram_clip = static_cast<std::uint8_t*>(ps_malloc(size));
+  if (ram_clip == nullptr) {
+    file.close();
+    Serial.println("APPLE_AUDIO:{\"type\":\"ram\",\"status\":\"NO_MEMORY\"}");
+    return;
+  }
+  const std::uint32_t got = file.read(ram_clip, size);
+  file.close();
+  ram_clip_bytes = got;
+  std::uint32_t crc = 0;
+  crc = crc32_update(crc, ram_clip, got);
+  Serial.printf("APPLE_AUDIO:{\"type\":\"ram\",\"status\":\"LOADED\",\"bytes\":%lu,"
+                "\"crc32\":\"%08lx\",\"psramFree\":%lu}\n",
+                static_cast<unsigned long>(got), static_cast<unsigned long>(crc),
+                static_cast<unsigned long>(ESP.getFreePsram()));
 }
 
 void set_gain(std::size_t index) {
@@ -326,7 +409,7 @@ void setup() {
   panel.invertDisplay(true);
 
   build_tone();
-  output = new AudioOutputI2S();
+  output = new AudioOutputI2S(0, AudioOutputI2S::EXTERNAL_I2S, kI2sDmaBuffers);
   output->SetPinout(gpio_of(kI2sBitClockPin), gpio_of(kI2sWordSelectPin),
                     gpio_of(kI2sDataPin));
   output->SetOutputModeMono(true);
@@ -352,12 +435,14 @@ void loop() {
     switch (command) {
       case 'm': case 'M': mount_sd(); break;
       case 'k': case 'K': checksum_fixture(); break;
-      case 't': case 'T': start_playback(false); break;
+      case 't': case 'T': play_from_ram = false; start_playback(false); break;
       case 'p': case 'P': start_playback(true); break;
       case 's': case 'S': stop_playback("STOPPED"); break;
       case '1': set_gain(0); break;
       case '2': set_gain(1); break;
       case '3': set_gain(2); break;
+      case 'l': case 'L': load_into_ram(); break;
+      case 'r': case 'R': play_from_ram = true; start_playback(false); play_from_ram = false; break;
       case 'a': case 'A': alternation_test(); break;
       case '?': publish_hello(); publish_state(); break;
       default: break;
