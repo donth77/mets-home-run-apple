@@ -479,7 +479,7 @@ describe("Virtual Apple accessibility", () => {
     liveTestState.celebration = {
       eventKey: "777686:play-48",
       kind: "GRAND_SLAM",
-      subject: "Pete Alonso",
+      subject: "Bo Bichette",
     };
     liveTestState.status = "POLLING";
     const { container, getByRole } = render(<App />);
@@ -488,7 +488,7 @@ describe("Virtual Apple accessibility", () => {
     expect(stage.getAttribute("data-scoreboard-label")).toBe("GRAND SLAM!!");
     expect(container.querySelector(".apple-scorebug__event strong")?.textContent).toBe("GRAND SLAM!!");
     expect(container.querySelector(".moment-card h2")?.textContent).toBe("GRAND SLAM!!");
-    expect(container.querySelector(".moment-card p")?.textContent).toContain("Pete Alonso clears the bases");
+    expect(container.querySelector(".moment-card p")?.textContent).toContain("Bo Bichette clears the bases");
     expect(soundTestState.cue).toEqual({ id: "777686:play-48", kind: "HOME_RUN" });
   });
 

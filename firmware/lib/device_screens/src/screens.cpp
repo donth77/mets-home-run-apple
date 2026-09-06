@@ -1,3 +1,4 @@
+#include <Fonts/FreeSansBold12pt7b.h>
 #include "apple/firmware/offseason_art.hpp"
 #include "apple/firmware/player_names.hpp"
 #include "apple/firmware/screens.hpp"
@@ -314,7 +315,7 @@ void ScreenPainter::draw_waiting_layout(const ScreenModel& model) {
     status_y = has_note ? 116 : 130;
     note_y = 156;
   }
-  draw_centered(model.status_message, 160, status_y, status_size, ST77XX_WHITE);
+  draw_centered(model.status_message, 160, status_y, status_size, model.status_color);
   if (has_note) {
     char first[sizeof(model.waiting_note)];
     copy_text(first, sizeof(first), model.waiting_note);
@@ -660,6 +661,45 @@ void ScreenPainter::draw_game_layout(const ScreenModel& model) {
 
 // First-boot Wi-Fi setup: the network name, its key, and the page address in
 // type large enough to read from across a room.
+// The owner button's short press. No panel, so the address gets the whole
+// height: the name to type in orange, the numeric fallback under it, and the
+// password the Manager asks for in gray at the bottom. The name is as large
+// as 20 characters can be on this panel with this font.
+void ScreenPainter::draw_info_layout(const ScreenModel& model) {
+  canvas_.fillScreen(kDarkBlue);
+  canvas_.fillRect(0, 0, kDisplayWidth, 42, kMetsBlue);
+  canvas_.fillRect(0, 38, kDisplayWidth, 4, kMetsOrange);
+  draw_centered(model.waiting_title, 160, 9, 3, ST77XX_WHITE);
+  // The address in a proportional 12 pt bold, the largest that keeps twenty
+  // characters inside the panel. Custom fonts position by baseline, so the y
+  // here is where the letters sit, not their top. If a longer name ever
+  // arrives, fall back to the built-in font rather than clip it.
+  {
+    std::int16_t bx = 0, by = 0;
+    std::uint16_t bw = 0, bh = 0;
+    canvas_.setFont(&FreeSansBold12pt7b);
+    set_text(kMetsOrange, 1);
+    canvas_.getTextBounds(model.status_message, 0, 0, &bx, &by, &bw, &bh);
+    if (bw <= 310) {
+      canvas_.setCursor(160 - static_cast<std::int16_t>(bw / 2) - bx, 112);
+      canvas_.print(model.status_message);
+      canvas_.setFont(nullptr);
+    } else {
+      canvas_.setFont(nullptr);
+      draw_centered(model.status_message, 160, 96, 2, kMetsOrange);
+    }
+  }
+  char first[sizeof(model.waiting_note)];
+  copy_text(first, sizeof(first), model.waiting_note);
+  char* second = std::strchr(first, '|');
+  if (second != nullptr) {
+    *second = '\0';
+    ++second;
+  }
+  draw_centered(first, 160, 146, 2, ST77XX_WHITE);
+  if (second != nullptr) draw_centered(second, 160, 196, 2, kNeutralGray);
+}
+
 void ScreenPainter::draw_setup_layout(const ScreenModel& model) {
   // Large type only, centered under the header; labels in a quiet gray so
   // the values carry the screen. An error band, when set, stacks on top and
@@ -715,6 +755,9 @@ void ScreenPainter::draw_setup_qr_layout(const ScreenModel& model) {
 
 void ScreenPainter::draw(const ScreenModel& model, std::uint8_t rain_frame) {
   switch (model.state) {
+    case ScreenState::Info:
+      draw_info_layout(model);
+      break;
     case ScreenState::Setup:
       draw_setup_layout(model);
       break;

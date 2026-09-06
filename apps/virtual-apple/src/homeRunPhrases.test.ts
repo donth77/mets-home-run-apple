@@ -12,8 +12,8 @@ describe("home-run phrases", () => {
     expect(selectHomeRunPhrase("Juan Soto", 0)).toBe(
       "Juan Soto sends one out, and the Home Run Apple is rising in center field!",
     );
-    expect(selectHomeRunPhrase("Pete Alonso", 0.999999)).toBe(
-      "Pete Alonso sends it over the fence, and up comes the Home Run Apple!",
+    expect(selectHomeRunPhrase("Bo Bichette", 0.999999)).toBe(
+      "Bo Bichette sends it over the fence, and up comes the Home Run Apple!",
     );
   });
 

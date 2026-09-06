@@ -21,6 +21,12 @@
 #include "apple/firmware/board_pins.hpp"
 #include "apple/firmware/manager.hpp"
 #include "apple/firmware/release_pick.hpp"
+#include <AudioFileSourceBuffer.h>
+#include <AudioFileSourceSD.h>
+#include <AudioGeneratorWAV.h>
+#include <AudioOutputI2S.h>
+#include <SD.h>
+#include <AudioFileSourcePROGMEM.h>
 #include "apple/firmware/update_roots.hpp"
 #include "apple/firmware/time_zones.hpp"
 #include "apple/firmware/firmware_update.hpp"
@@ -107,7 +113,7 @@ constexpr char kProfileName[] = "apple_live";
 #ifdef APPLE_UPDATE_CRASH_TEST
 constexpr char kFirmwareVersion[] = "0.2.2-crashtest";
 #else
-constexpr char kFirmwareVersion[] = "0.3.0-rc.4";
+constexpr char kFirmwareVersion[] = "0.3.0-rc.8";
 #endif
 constexpr char kHostname[] = "home-run-apple";
 constexpr char kEasternTz[] = "EST5EDT,M3.2.0,M11.1.0";
@@ -118,9 +124,40 @@ constexpr std::uint8_t kMotorEnablePin = D6;
 // Owner reset button to ground (internal pull-up). Hold clears Wi-Fi and
 // settings; a short press shows the address and the code.
 constexpr std::uint8_t kResetButtonPin = D3;
+
+// Celebration audio. The card has its own SPI bus on the second host, not
+// the display's. Sharing the display's clock line put a second load and a
+// splice stub on it, and that line is what interferes with the amplifier;
+// with the card taken off it, a 100 ohm series resistor at the Nano end of
+// D13 is enough for clean audio at the display's full 32 MHz. Measured on the
+// bench 2026-09-04. See public/AUDIO_PLAN.md.
+constexpr std::uint8_t kSdChipSelectPin = A0;
+constexpr std::uint8_t kSdClockPin = A5;
+constexpr std::uint8_t kSdMisoPin = A6;   // the card's DO
+constexpr std::uint8_t kSdMosiPin = A7;   // the card's DI
+constexpr std::uint8_t kI2sBitClockPin = A1;
+constexpr std::uint8_t kI2sWordSelectPin = A2;
+constexpr std::uint8_t kI2sDataPin = A3;
+constexpr std::uint32_t kSdClockHz = 20'000'000;
+// AudioFileSourceBuffer refills through a blocking read, so buffer size sets
+// the worst-case stall. Small on purpose.
+constexpr std::size_t kAudioBufferBytes = 8 * 1024;
+// About 190 ms of queued audio, at 16 KB of DMA memory. Playback has a core to
+// itself, so the queue only has to absorb Wi-Fi bursts rather than the
+// celebration display, which occupies its own core for ~24 ms a frame. A
+// 740 ms queue was tried while playback still shared that core and did not
+// help, because the generator cannot refill it in the gaps between frames.
+constexpr int kI2sDmaBuffers = 32;
+constexpr std::uint8_t kMaxTracks = 50;        // about 80 bytes each; the page paginates
+constexpr std::uint8_t kMaxPlayerTracks = 32;
+constexpr std::uint32_t kMaxTrackBytes = 4UL * 1024 * 1024;  // 90 s at 22,050 Hz mono is 3.97 MB
+constexpr char kAudioManifestPath[] = "/audio.json";
+// A celebration runs about 46 s, so there is no point holding more of a track
+// than that. Two of these live in PSRAM at once, one per list.
+constexpr std::uint32_t kResidentTrackBytes = 50UL * 22050 * 2 + 64;
 constexpr std::uint32_t kResetHoldMs = 10'000;
 constexpr std::uint32_t kResetShortPressMaxMs = 1'000;
-constexpr std::uint32_t kInfoScreenMs = 60'000;
+constexpr std::uint32_t kInfoScreenMs = 20'000;  // one short press shows the address and code
 constexpr std::uint32_t kSerialWaitTimeoutMs = 3'000;
 constexpr std::uint32_t kLoopPeriodMs = 10;
 constexpr std::uint32_t kWatchdogSeconds = 90;
@@ -300,6 +337,13 @@ struct Settings {
   const char* posix_tz{kEasternTz};        // rule handed to the clock library
   bool tz_chosen{false};  // set once an owner or their setup device picked a zone
   std::uint8_t brightness{100};  // display backlight, percent
+  // Applied to the stored copy of each track rather than at the output stage,
+  // whose own gain control is lossy. See public/AUDIO_PLAN.md.
+  std::uint8_t volume{80};       // celebration audio, percent
+  // A win is the end of the game, so nothing follows that the Apple has to
+  // react to: it can stay up and play the whole track. Off, a win behaves
+  // like a home run and uses the raised time.
+  bool win_full_track{true};
   bool auto_update{true};   // install a new release on its own, between games
   bool beta{false};         // developer: also take pre-releases
   char github_token[128]{""};  // developer: read-only token while the repository is private
@@ -364,6 +408,169 @@ char last_error[64] = "";
 std::uint32_t next_status_ms = 0;
 
 bool celebration_active = false;
+
+// ---------------------------------------------------------------------------
+// Celebration audio state. A missing or unreadable card means the Apple
+// celebrates silently; it is never a fault and never delays the lift.
+// The card's own bus. The display keeps the default one.
+SPIClass sd_spi(HSPI);
+// The card library is not safe for two cores at once, and the audio task
+// streams a win track from the card while the main loop may be refreshing
+// its stored copies. Every use of the card takes this lock.
+SemaphoreHandle_t sd_lock = nullptr;
+struct CardLock {
+  CardLock() { if (sd_lock) xSemaphoreTakeRecursive(sd_lock, portMAX_DELAY); }
+  ~CardLock() { if (sd_lock) xSemaphoreGiveRecursive(sd_lock); }
+};
+AudioOutputI2S* audio_out = nullptr;
+AudioGeneratorWAV* audio_gen = nullptr;
+AudioFileSource* audio_file = nullptr;
+AudioFileSourceBuffer* audio_buffered = nullptr;
+// The same rounded fixed-point scaling as apply_volume, on a run of samples.
+void scale_samples(std::int16_t* samples, std::uint32_t count, std::int32_t scale) {
+  for (std::uint32_t i = 0; i < count; ++i) {
+    samples[i] = static_cast<std::int16_t>((static_cast<std::int32_t>(samples[i]) * scale + 2048) >> 12);
+  }
+}
+
+// Wraps a streamed WAV and applies the volume as bytes pass through, so a
+// track played straight off the card is scaled the same way as one held in
+// memory. Only bytes from the data chunk onward are touched; a read that ends
+// halfway through a sample carries the odd byte to the next call.
+class AudioFileSourceScaled : public AudioFileSource {
+ public:
+  AudioFileSourceScaled(AudioFileSource* inner, std::uint32_t data_at, std::uint8_t percent)
+      : inner_(inner), data_at_(data_at), scale_((static_cast<std::int32_t>(percent) * 4096) / 100),
+        bypass_(percent >= 100) {}
+  bool open(const char*) override { return true; }
+  bool isOpen() override { return inner_ != nullptr && inner_->isOpen(); }
+  bool close() override { return inner_ != nullptr && inner_->close(); }
+  bool seek(int32_t pos, int dir) override {
+    uint32_t target = 0;
+    if (dir == SEEK_SET) target = static_cast<uint32_t>(pos);
+    else if (dir == SEEK_CUR) target = static_cast<uint32_t>(static_cast<int32_t>(pos_) + pos);
+    else target = inner_->getSize() + pos;
+    CardLock lock;
+    if (!inner_->seek(static_cast<int32_t>(target), SEEK_SET)) return false;
+    pos_ = target;
+    have_carry_ = false;
+    return true;
+  }
+  uint32_t getSize() override { return inner_->getSize(); }
+  uint32_t getPos() override { return pos_; }
+  bool loop() override { return inner_->loop(); }
+  uint32_t read(void* data, uint32_t len) override {
+    uint32_t got = 0;
+    {
+      CardLock lock;  // the buffered source may refill from the card here
+      got = inner_->read(data, len);
+    }
+    const uint32_t start = pos_;  // where these bytes sit in the file, by our own count
+    pos_ += got;
+    if (bypass_ || got == 0) return got;
+    auto* bytes = static_cast<std::uint8_t*>(data);
+    uint32_t first = start < data_at_ ? data_at_ - start : 0;  // header bytes pass untouched
+    if (first >= got) return got;
+    if (have_carry_) {
+      // finish the sample split across the previous read
+      std::int16_t sample = static_cast<std::int16_t>(carry_ | (bytes[first] << 8));
+      scale_samples(&sample, 1, scale_);
+      bytes[first] = static_cast<std::uint8_t>(sample >> 8);
+      have_carry_ = false;
+      ++first;
+    }
+    const uint32_t count = (got - first) / 2;
+    scale_samples(reinterpret_cast<std::int16_t*>(bytes + first), count, scale_);
+    if ((got - first) & 1) {
+      carry_ = bytes[got - 1];
+      have_carry_ = true;
+    }
+    return got;
+  }
+
+ private:
+  AudioFileSource* inner_;
+  std::uint32_t data_at_;
+  std::int32_t scale_;
+  bool bypass_;
+  std::uint8_t carry_{0};
+  bool have_carry_{false};
+  uint32_t pos_{0};
+};
+AudioFileSourceScaled* audio_scaled = nullptr;
+bool audio_card_ready = false;
+// What is on the card, and what the owner has asked each track to be used
+// for. Assignments live in /audio.json beside the files; a track the manifest
+// does not mention falls back to its name, so the six tracks the Apple ships
+// with work before the owner ever opens the Manager.
+struct TrackEntry {
+  char file[32] = "";   // "/hr1.wav", the name on the card
+  char title[40] = "";  // what the owner calls it
+  std::uint32_t bytes = 0;
+  std::uint32_t added = 0;  // the card's file time, epoch seconds, so the page can sort by newest
+  bool home_run = false;
+  bool win = false;
+};
+TrackEntry tracks[kMaxTracks];
+std::uint8_t track_count = 0;
+
+// A track chosen for one particular hitter, played instead of the general
+// pool when they go deep.
+struct PlayerTrack {
+  std::int32_t id = 0;
+  char name[40] = "";
+  char file[32] = "";
+};
+PlayerTrack player_tracks[kMaxPlayerTracks];
+std::uint8_t player_track_count = 0;
+
+char audio_playing[40] = "";
+// Whoever is at the plate, so their track can be brought into memory before
+// they swing. Empty between batters.
+char current_batter[40] = "";
+
+// One track from each list is kept in PSRAM so a celebration can start
+// instantly and never touch the SPI bus, which the tear-free display holds in
+// a hard-timed loop while it draws. Refreshed while the Apple is idle.
+struct ResidentTrack {
+  std::uint8_t* data{nullptr};
+  std::uint32_t bytes{0};
+  char name[32] = "";
+};
+ResidentTrack resident_home_run;
+ResidentTrack resident_win;
+bool resident_refresh_wanted = false;
+// Playback runs in its own task on the second core, out of reach of the
+// display's timing.
+TaskHandle_t audio_task = nullptr;
+// Core 1 asks for a track; the audio task builds, plays and tears down
+// everything itself. Installing the I2S driver also registers its interrupt on
+// the calling core, and that interrupt is what hands recycled DMA buffers back
+// to the writer. Registered on the display's core it cannot run while a frame
+// is drawing, so the queue stalls however deep it is. It must be installed
+// from this task.
+volatile bool audio_task_should_play = false;
+volatile bool audio_task_playing = false;
+volatile bool audio_request_is_win = false;
+// A win with the whole-track setting streams its file off the card rather
+// than playing the 50 s copy in memory. The card has its own SPI bus, so the
+// audio task's blocking reads touch nothing the display uses.
+volatile bool audio_request_stream = false;
+char win_stream_file[32] = "";
+std::uint32_t win_stream_data_at = 44;
+constexpr std::uint32_t kWinExtendAllowanceMs = 7'000;   // the lift, before the dwell starts
+constexpr std::uint32_t kWinMaxDwellMs = 5UL * 60 * 1000;  // however long the track, stop here
+std::uint32_t audio_bytes_read = 0;
+std::uint32_t audio_started_ms = 0;
+std::int32_t audio_depth_min = 0;
+std::uint32_t audio_burst_max = 0;
+std::uint32_t audio_bursts = 0;
+// How long the audio goes unattended. The celebration animation pushes whole
+// frames over the SPI bus the card shares, so this is the number that decides
+// whether playback survives it.
+std::uint32_t audio_gap_worst_us = 0;
+std::uint32_t audio_gap_last_us = 0;
+std::uint32_t audio_service_calls = 0;
 bool celebration_is_win = false;
 std::uint32_t celebration_started_ms = 0;
 std::uint32_t celebration_last_key = 0xFFFFFFFFU;
@@ -386,6 +593,13 @@ const ReplayStep kReplay[] = {
     {"fourth inning", apple::fixtures::mlb::k_822929_live_mid, 55'000},
     {"final", apple::fixtures::mlb::k_822929_final, 8'000},
 };
+// A Mets win, 2026-09-02 at Tampa Bay, 6-4 in the sixth then 10-4 final.
+const ReplayStep kWinReplay[] = {
+    {"ninth inning", apple::fixtures::mlb::k_822931_live, 0},
+    {"final, Mets win", apple::fixtures::mlb::k_822931_final, 6'000},
+};
+const ReplayStep* replay_table = kReplay;
+std::size_t replay_count = sizeof(kReplay) / sizeof(kReplay[0]);
 
 std::uint64_t now_ms() { return static_cast<std::uint64_t>(esp_timer_get_time() / 1000); }
 void show_paused_screen();
@@ -413,8 +627,10 @@ ReleaseStatus release;
 
 // A celebration on screen can never outlive the engine's own bounds.
 std::uint32_t celebration_display_max_ms() {
+  const std::uint64_t dwell = engine ? engine->raised_dwell_ms()
+                                     : static_cast<std::uint64_t>(settings.raised_seconds) * 1000;
   return static_cast<std::uint32_t>(apple::core::kCelebrationLeadInMs + 2 * apple::core::kMotionDeadlineMs +
-                                    static_cast<std::uint64_t>(settings.raised_seconds) * 1000 + 5'000);
+                                    dwell + 5'000);
 }
 
 void make_engine(EventLedger& ledger) {
@@ -429,6 +645,9 @@ bool clock_valid() { return wall_epoch() > 1'700'000'000; }
 
 // ---------------------------------------------------------------------------
 // Serial protocol
+
+void start_replay(bool win = false);
+bool motion_idle();
 
 void publish_trace(const char* code, const char* detail) {
   Serial.printf("APPLE_LIVE:{\"type\":\"trace\",\"code\":\"%s\",\"detail\":\"%s\"}\n", code, detail);
@@ -537,9 +756,33 @@ void fill_status(JsonDocument& doc) {
   owner["timeZoneLabel"] = zone ? zone->label : "";
   owner["timeZoneChosen"] = settings.tz_chosen;
   owner["brightness"] = settings.brightness;
+  owner["volume"] = settings.volume;
+  owner["winFullTrack"] = settings.win_full_track;
   owner["autoUpdate"] = settings.auto_update;
   owner["beta"] = settings.beta;
   owner["tokenSet"] = settings.github_token[0] != '\0';
+  JsonObject audio = doc["audio"].to<JsonObject>();
+  audio["card"] = audio_card_ready;
+  audio["playing"] = audio_playing;
+  audio["batter"] = current_batter;
+  audio["maxTracks"] = kMaxTracks;
+  JsonArray track_list = audio["tracks"].to<JsonArray>();
+  for (std::uint8_t i = 0; i < track_count; ++i) {
+    JsonObject node = track_list.add<JsonObject>();
+    node["file"] = tracks[i].file;
+    node["title"] = tracks[i].title;
+    node["bytes"] = tracks[i].bytes;
+    node["added"] = tracks[i].added;
+    node["hr"] = tracks[i].home_run;
+    node["win"] = tracks[i].win;
+  }
+  JsonArray player_list = audio["players"].to<JsonArray>();
+  for (std::uint8_t i = 0; i < player_track_count; ++i) {
+    JsonObject node = player_list.add<JsonObject>();
+    node["id"] = player_tracks[i].id;
+    node["name"] = player_tracks[i].name;
+    node["file"] = player_tracks[i].file;
+  }
   JsonObject rel = doc["update"].to<JsonObject>();
   rel["state"] = release_state_name(release.state);
   rel["version"] = release.pick.found ? release.pick.version.c_str() : "";
@@ -731,6 +974,7 @@ void show_waiting(const char* status, std::uint16_t accent = apple::firmware::kM
   model.state = ScreenState::Waiting;
   model.waiting_accent = accent;
   model.waiting_icon = icon;
+  model.status_color = 0xFFFF;
   copy_text(model.status_message, sizeof(model.status_message), status);
   request_redraw();
 }
@@ -875,11 +1119,711 @@ void render_if_needed() {
 }
 
 // ---------------------------------------------------------------------------
+// Celebration audio
+//
+// Tracks live on the card as mono 16-bit 22.05 kHz PCM WAV, already filtered
+// and level-set by whoever put them there. The output runs at unity gain
+// always: the library applies gain with integer maths and discards resolution
+// at every lower setting, which is inaudible on a tone and obvious on music.
+// Files named hr*.wav play for home runs, win*.wav for Mets wins.
+
+// ESP8266Audio passes pin numbers straight to the ESP-IDF I2S driver, which
+// wants GPIO numbers rather than Arduino pin numbers.
+int gpio_of(std::uint8_t pin) {
+#if defined(BOARD_HAS_PIN_REMAP) && !defined(BOARD_USES_HW_GPIO_NUMBERS)
+  return digitalPinToGPIONumber(pin);
+#else
+  return pin;
+#endif
+}
+
+// Runs only on the audio task, because AudioOutputI2S::stop() uninstalls the
+// I2S driver and frees the interrupt that was allocated on this core.
+void teardown_audio() {
+  if (audio_gen != nullptr) {
+    if (audio_gen->isRunning()) audio_gen->stop();
+    delete audio_gen;
+    audio_gen = nullptr;
+  }
+  delete audio_scaled;
+  audio_scaled = nullptr;
+  delete audio_buffered;
+  audio_buffered = nullptr;
+  delete audio_file;
+  audio_file = nullptr;
+  if (audio_playing[0] != '\0') {
+    char detail[112];
+    std::snprintf(detail, sizeof(detail),
+                  "stopped; %lu KB read, biggest refill %lu bytes, %lu bursts",
+                  static_cast<unsigned long>(audio_bytes_read / 1024),
+                  static_cast<unsigned long>(audio_burst_max),
+                  static_cast<unsigned long>(audio_bursts));
+    publish_trace("AUDIO", detail);
+  }
+  audio_playing[0] = '\0';
+}
+
+// Asks the audio task to stop, then waits for it to finish tearing down.
+void stop_audio() {
+  audio_task_should_play = false;
+  for (int i = 0; i < 200 && audio_task_playing; ++i) vTaskDelay(pdMS_TO_TICKS(2));
+}
+
+// Walks a WAV's chunks to find where the samples actually begin. A file is not
+// simply a 44 byte header and then audio: encoders routinely write an extra
+// information chunk first, and assuming otherwise means writing over the header
+// instead of the music. Returns false when there is no data chunk.
+bool find_wav_data(const std::uint8_t* wav, std::uint32_t bytes, std::uint32_t& at,
+                   std::uint32_t& length) {
+  if (bytes < 44 || std::memcmp(wav, "RIFF", 4) != 0 || std::memcmp(wav + 8, "WAVE", 4) != 0) {
+    return false;
+  }
+  std::uint32_t offset = 12;
+  while (offset + 8 <= bytes) {
+    const std::uint8_t* header = wav + offset;
+    const std::uint32_t size = static_cast<std::uint32_t>(header[4]) |
+                               (static_cast<std::uint32_t>(header[5]) << 8) |
+                               (static_cast<std::uint32_t>(header[6]) << 16) |
+                               (static_cast<std::uint32_t>(header[7]) << 24);
+    if (std::memcmp(header, "data", 4) == 0) {
+      at = offset + 8;
+      // A track longer than the buffer is cut short, so trust what is here.
+      length = std::min<std::uint32_t>(size, bytes - at);
+      return length > 0;
+    }
+    offset += 8 + size + (size & 1);  // chunks are padded to even lengths
+  }
+  return false;
+}
+
+// The same walk over a file on the card, for tracks that are streamed rather
+// than held in memory. Reads only the chunk headers, so a track whose encoder
+// wrote kilobytes of tags before the samples is handled the same as a bare
+// one. Leaves the file positioned wherever it last read.
+bool find_wav_data_in_file(File& file, std::uint32_t& at, std::uint32_t& length) {
+  std::uint8_t head[12];
+  if (!file.seek(0) || file.read(head, sizeof(head)) != sizeof(head)) return false;
+  if (std::memcmp(head, "RIFF", 4) != 0 || std::memcmp(head + 8, "WAVE", 4) != 0) return false;
+  const std::uint32_t total = file.size();
+  std::uint32_t offset = 12;
+  for (int chunk = 0; chunk < 32 && offset + 8 <= total; ++chunk) {
+    std::uint8_t header[8];
+    if (!file.seek(offset) || file.read(header, sizeof(header)) != sizeof(header)) return false;
+    const std::uint32_t size = static_cast<std::uint32_t>(header[4]) |
+                               (static_cast<std::uint32_t>(header[5]) << 8) |
+                               (static_cast<std::uint32_t>(header[6]) << 16) |
+                               (static_cast<std::uint32_t>(header[7]) << 24);
+    if (std::memcmp(header, "data", 4) == 0) {
+      at = offset + 8;
+      length = std::min<std::uint32_t>(size, total - at);
+      return length > 0;
+    }
+    offset += 8 + size + (size & 1);
+  }
+  return false;
+}
+
+// Volume is applied here, once, as the track is read into memory, rather than
+// at playback. The output stage's own gain control quantises to a sixth of a
+// bit and truncates, which is audible on music at every setting below full;
+// see public/AUDIO_PLAN.md. Scaling the stored copy costs nothing at play time
+// and keeps the output at unity forever.
+void apply_volume(std::uint8_t* wav, std::uint32_t bytes, std::uint8_t percent) {
+  if (percent >= 100) return;
+  std::uint32_t at = 0, length = 0;
+  if (!find_wav_data(wav, bytes, at, length)) return;
+  // Rounded, not truncated. Truncation is what makes quiet playback grainy.
+  scale_samples(reinterpret_cast<std::int16_t*>(wav + at), length / 2,
+                (static_cast<std::int32_t>(percent) * 4096) / 100);
+}
+
+// Reads up to kResidentTrackBytes of a track into PSRAM. Only ever called
+// while the Apple is idle, because it uses the SPI bus the display shares.
+void load_resident(ResidentTrack& slot, const char* path) {
+  CardLock lock;
+  if (slot.data == nullptr) {
+    slot.data = static_cast<std::uint8_t*>(ps_malloc(kResidentTrackBytes));
+    if (slot.data == nullptr) {
+      publish_trace("AUDIO", "no PSRAM for a resident track");
+      return;
+    }
+  }
+  File file = SD.open(path, FILE_READ);
+  if (!file) {
+    slot.bytes = 0;
+    slot.name[0] = '\0';
+    return;
+  }
+  const std::uint32_t want =
+      std::min<std::uint32_t>(file.size(), kResidentTrackBytes);
+  const std::uint32_t started = millis();
+  slot.bytes = file.read(slot.data, want);
+  file.close();
+  apply_volume(slot.data, slot.bytes, settings.volume);
+  copy_text(slot.name, sizeof(slot.name), path);
+  char detail[96];
+  std::snprintf(detail, sizeof(detail), "held %s, %lu KB in %lu ms", path,
+                static_cast<unsigned long>(slot.bytes / 1024),
+                static_cast<unsigned long>(millis() - started));
+  publish_trace("AUDIO", detail);
+}
+
+// One of the songs this hitter has been given, chosen at random, or none.
+// Matched on the exact name the game feed reports, which is the same name
+// the roster gave the Manager, so a traded or released player simply stops
+// matching and the pool takes over.
+const char* track_for_player(const char* batter) {
+  if (batter == nullptr || batter[0] == '\0') return nullptr;
+  const char* picks[kMaxPlayerTracks];
+  std::uint8_t count = 0;
+  for (std::uint8_t i = 0; i < player_track_count; ++i) {
+    if (strcasecmp(player_tracks[i].name, batter) == 0) picks[count++] = player_tracks[i].file;
+  }
+  if (count == 0) return nullptr;
+  return picks[esp_random() % count];
+}
+
+// Whether a track is still one the owner wants for this kind of celebration.
+bool in_pool(const char* file, bool win) {
+  if (file == nullptr || file[0] == '\0') return false;
+  for (std::uint8_t i = 0; i < track_count; ++i) {
+    if (strcasecmp(tracks[i].file, file) != 0) continue;
+    return win ? tracks[i].win : tracks[i].home_run;
+  }
+  return false;
+}
+
+// Picks one of the tracks the owner put in a pool.
+const char* random_track(bool win) {
+  const char* picks[kMaxTracks];
+  std::uint8_t count = 0;
+  for (std::uint8_t i = 0; i < track_count; ++i) {
+    if (win ? tracks[i].win : tracks[i].home_run) picks[count++] = tracks[i].file;
+  }
+  if (count == 0) return nullptr;
+  return picks[esp_random() % count];
+}
+
+// Brings the next celebration's audio into memory. The home run slot follows
+// whoever is at the plate, so a hitter with their own track has it ready
+// before they swing; otherwise it is a fresh pick from the pool. Never runs
+// during a celebration, because reading the card needs the display's bus.
+void refresh_resident_tracks() {
+  resident_refresh_wanted = false;
+  if (!audio_card_ready) return;
+  // The home run slot follows the hitter. A pool pick only replaces another
+  // pool pick, so a track already held is not fetched again.
+  const char* wanted = track_for_player(current_batter);
+  if (wanted == nullptr && !in_pool(resident_home_run.name, false)) {
+    wanted = random_track(false);
+  }
+  if (wanted != nullptr && strcmp(wanted, resident_home_run.name) != 0) {
+    load_resident(resident_home_run, wanted);
+  }
+  // A win happens once a game, so the slot is filled when empty and left alone.
+  if (!in_pool(resident_win.name, true)) {
+    const char* win = random_track(true);
+    if (win != nullptr) load_resident(resident_win, win);
+  }
+}
+
+TrackEntry* find_track(const char* file) {
+  for (std::uint8_t i = 0; i < track_count; ++i) {
+    if (strcasecmp(tracks[i].file, file) == 0) return &tracks[i];
+  }
+  return nullptr;
+}
+
+// Assignments live beside the audio on the card, so moving the card to another
+// Apple carries the owner's choices with it.
+void save_audio_manifest() {
+  CardLock lock;
+  if (!audio_card_ready) return;
+  JsonDocument doc;
+  doc["v"] = 1;
+  doc["volume"] = settings.volume;
+  JsonArray list = doc["tracks"].to<JsonArray>();
+  for (std::uint8_t i = 0; i < track_count; ++i) {
+    JsonObject node = list.add<JsonObject>();
+    node["file"] = tracks[i].file;
+    node["title"] = tracks[i].title;
+    node["hr"] = tracks[i].home_run;
+    node["win"] = tracks[i].win;
+  }
+  JsonArray players = doc["players"].to<JsonArray>();
+  for (std::uint8_t i = 0; i < player_track_count; ++i) {
+    JsonObject node = players.add<JsonObject>();
+    node["id"] = player_tracks[i].id;
+    node["name"] = player_tracks[i].name;
+    node["file"] = player_tracks[i].file;
+  }
+  File file = SD.open(kAudioManifestPath, FILE_WRITE);
+  if (!file) {
+    publish_trace("AUDIO", "could not write the track list");
+    return;
+  }
+  serializeJson(doc, file);
+  file.close();
+}
+
+// Applies the saved assignments over the catalogue the card scan produced.
+// Anything the manifest does not mention keeps the guess made from its name.
+void load_audio_manifest() {
+  CardLock lock;
+  player_track_count = 0;
+  if (!audio_card_ready) return;
+  File file = SD.open(kAudioManifestPath, FILE_READ);
+  if (!file) return;
+  JsonDocument doc;
+  const DeserializationError failed = deserializeJson(doc, file);
+  file.close();
+  if (failed) {
+    publish_trace("AUDIO", "the track list on the card is unreadable");
+    return;
+  }
+  for (JsonObjectConst node : doc["tracks"].as<JsonArrayConst>()) {
+    TrackEntry* entry = find_track(node["file"] | "");
+    if (entry == nullptr) continue;  // the file is gone; drop the entry
+    const char* title = node["title"] | "";
+    if (title[0] != '\0') copy_text(entry->title, sizeof(entry->title), title);
+    entry->home_run = node["hr"] | false;
+    entry->win = node["win"] | false;
+  }
+  for (JsonObjectConst node : doc["players"].as<JsonArrayConst>()) {
+    if (player_track_count >= kMaxPlayerTracks) break;
+    const char* file_name = node["file"] | "";
+    const char* name = node["name"] | "";
+    if (file_name[0] == '\0' || name[0] == '\0') continue;
+    if (find_track(file_name) == nullptr) continue;  // assigned track deleted
+    PlayerTrack& slot = player_tracks[player_track_count++];
+    slot.id = node["id"] | 0;
+    copy_text(slot.name, sizeof(slot.name), name);
+    copy_text(slot.file, sizeof(slot.file), file_name);
+  }
+}
+
+// Reads the card's root, then lays the owner's assignments over the result.
+void scan_tracks() {
+  CardLock lock;
+  track_count = 0;
+  if (!audio_card_ready) return;
+  File dir = SD.open("/");
+  if (!dir) return;
+  for (File entry = dir.openNextFile(); entry; entry = dir.openNextFile()) {
+    const char* name = entry.name();
+    const std::size_t len = std::strlen(name);
+    const char* base = name[0] == '/' ? name + 1 : name;
+    const bool wav = len > 4 && strcasecmp(name + len - 4, ".wav") == 0;
+    const bool hidden = base[0] == '.' || base[0] == '_';
+    if (wav && !hidden && track_count < kMaxTracks) {
+      TrackEntry& slot = tracks[track_count++];
+      std::snprintf(slot.file, sizeof(slot.file), "/%s", base);
+      // Until the owner renames it, a track is called after its file.
+      copy_text(slot.title, sizeof(slot.title), base);
+      slot.bytes = entry.size();
+      slot.added = static_cast<std::uint32_t>(entry.getLastWrite());
+      // The tracks the Apple ships with are named for where they belong.
+      slot.home_run = strncasecmp(base, "hr", 2) == 0;
+      slot.win = strncasecmp(base, "win", 3) == 0;
+    }
+    entry.close();
+  }
+  dir.close();
+  load_audio_manifest();
+  std::uint8_t hr = 0, win = 0;
+  for (std::uint8_t i = 0; i < track_count; ++i) {
+    if (tracks[i].home_run) ++hr;
+    if (tracks[i].win) ++win;
+  }
+  char detail[80];
+  std::snprintf(detail, sizeof(detail), "%u tracks: %u home run, %u win, %u assigned",
+                static_cast<unsigned>(track_count), static_cast<unsigned>(hr),
+                static_cast<unsigned>(win), static_cast<unsigned>(player_track_count));
+  publish_trace("AUDIO", detail);
+  resident_refresh_wanted = true;
+}
+
+void mount_audio_card() {
+  audio_card_ready = SD.begin(kSdChipSelectPin, sd_spi, kSdClockHz);
+  if (!audio_card_ready) {
+    publish_trace("AUDIO", "no card; celebrations are silent");
+    return;
+  }
+  scan_tracks();
+}
+
+// Called when a celebration is accepted. Never blocks the caller for long and
+// never reports failure upward: silence is an acceptable celebration.
+// The display core only chooses the track and raises the request. Everything
+// that touches the I2S driver happens on the audio task; see the note above.
+void start_celebration_audio(bool is_win) {
+  stop_audio();
+  if (audio_out == nullptr) return;
+  // Always the resident copy in PSRAM. The display holds the SPI bus in a
+  // hard-timed loop while it draws, so a celebration never reads the card.
+  if (!(is_win && audio_request_stream)) {
+    const ResidentTrack& track = is_win ? resident_win : resident_home_run;
+    if (track.data == nullptr || track.bytes == 0) return;
+  }
+  audio_request_is_win = is_win;
+  audio_task_should_play = true;
+}
+
+// Playback runs here, on whichever core the Arduino loop is not using. The
+// celebration display holds its core in a hard-timed loop for about 24 ms a
+// frame to stay tear-free, and anything sharing that core goes unserviced for
+// as long. Audio cannot survive that, so it is moved out of reach.
+void audio_task_main(void*) {
+  for (;;) {
+    if (!audio_task_should_play) {
+      if (audio_gen != nullptr) teardown_audio();
+      audio_task_playing = false;
+      vTaskDelay(pdMS_TO_TICKS(5));
+      continue;
+    }
+    if (audio_gen == nullptr) {
+      const bool stream = audio_request_is_win && audio_request_stream;
+      const ResidentTrack& track =
+          audio_request_is_win ? resident_win : resident_home_run;
+      if (audio_out == nullptr || (!stream && (track.data == nullptr || track.bytes == 0))) {
+        audio_task_should_play = false;
+        continue;
+      }
+      AudioFileSource* source = nullptr;
+      const char* name = track.name;
+      if (stream) {
+        CardLock lock;
+        audio_file = new AudioFileSourceSD(win_stream_file);
+        audio_buffered = new AudioFileSourceBuffer(audio_file, kAudioBufferBytes);
+        audio_scaled = new AudioFileSourceScaled(audio_buffered, win_stream_data_at, settings.volume);
+        source = audio_scaled;
+        name = win_stream_file;
+      } else {
+        audio_file = new AudioFileSourcePROGMEM(track.data, track.bytes);
+        source = audio_file;
+      }
+      audio_gen = new AudioGeneratorWAV();
+      audio_out->SetGain(1.0F);  // never anything else; see the note above
+      audio_gap_worst_us = 0;
+      audio_gap_last_us = 0;
+      audio_service_calls = 0;
+      audio_bytes_read = 0;
+      if (!audio_gen->begin(source, audio_out)) {
+        publish_trace("AUDIO", "track would not start");
+        audio_task_should_play = false;
+        teardown_audio();
+        continue;
+      }
+      copy_text(audio_playing, sizeof(audio_playing), name);
+      audio_started_ms = millis();
+      audio_depth_min = 0x7FFFFFFF;
+      audio_burst_max = 0;
+      audio_bursts = 0;
+      audio_task_playing = true;
+      publish_trace("AUDIO", name);
+    }
+    const std::uint32_t now_us = micros();
+    if (audio_gap_last_us != 0) {
+      const std::uint32_t gap = now_us - audio_gap_last_us;
+      if (gap > audio_gap_worst_us) audio_gap_worst_us = gap;
+    }
+    ++audio_service_calls;
+    if (!audio_gen->loop()) audio_task_should_play = false;  // track finished
+    const std::uint32_t pos = audio_file->getPos();
+    if (pos > audio_bytes_read) {
+      const std::uint32_t delta = pos - audio_bytes_read;
+      audio_bytes_read = pos;
+      const std::uint32_t since_start = millis() - audio_started_ms;
+      if (since_start > 1000) {
+        if (delta > audio_burst_max) audio_burst_max = delta;
+        if (delta > 1000) ++audio_bursts;
+      }
+    }
+    const std::uint32_t played_ms = millis() - audio_started_ms;
+    if (played_ms > 500 && pos > 0) {
+      const std::int32_t consumed =
+          static_cast<std::int32_t>(static_cast<std::uint64_t>(played_ms) * 44100ULL / 1000ULL);
+      const std::int32_t depth = static_cast<std::int32_t>(pos) - consumed;
+      if (depth < audio_depth_min) audio_depth_min = depth;
+    }
+    audio_gap_last_us = micros();
+    vTaskDelay(1);
+  }
+}
+
+// The display core only tidies up after a finished track and reloads the
+// resident copies while nothing is celebrating. It never feeds the generator.
+void service_audio() {
+  // Never while a track is playing or being torn down: the refresh overwrites
+  // the very buffer the audio task reads from.
+  if (resident_refresh_wanted && !celebration_active && audio_gen == nullptr &&
+      !audio_task_should_play) {
+    refresh_resident_tracks();
+  }
+}
+
+// Watches who is at the plate. When the hitter changes, the next celebration's
+// audio is fetched again, which is how a player with their own track gets it
+// loaded before they swing rather than after.
+void note_batter(const GameSnapshot& snapshot) {
+  const char* batter = "";
+  if (snapshot.at_bat.has_value() && snapshot.at_bat->batter.has_value()) {
+    batter = snapshot.at_bat->batter->c_str();
+  }
+  if (strcmp(batter, current_batter) == 0) return;
+  copy_text(current_batter, sizeof(current_batter), batter);
+  resident_refresh_wanted = true;
+}
+
+// ---------------------------------------------------------------------------
+// The track library, as the Manager sees it
+
+File audio_upload_file;
+char audio_upload_path[32] = "";
+std::uint32_t audio_upload_bytes = 0;
+
+// Keeps a name safe to write to the card's root: letters, digits, dash,
+// underscore and dot only, always ending in .wav, never hidden.
+bool safe_track_name(const String& raw, char* out, std::size_t size) {
+  const char* dot = std::strrchr(raw.c_str(), '.');
+  if (dot == nullptr || strcasecmp(dot, ".wav") != 0) return false;
+  std::size_t written = 0;
+  out[written++] = '/';
+  for (std::size_t i = 0; raw[i] != '\0' && written + 1 < size; ++i) {
+    const char c = raw[i];
+    const bool ok = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+                    (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.';
+    if (ok) out[written++] = c;
+  }
+  out[written] = '\0';
+  // "/" alone, or a name that would hide the file from the scan.
+  return written > 5 && out[1] != '.' && out[1] != '_';
+}
+
+// A track arriving from the Manager. The page has already converted it to the
+// one format the Apple plays, so this only has to refuse the obvious.
+String begin_audio_upload(const String& filename) {
+  if (!audio_card_ready) return "NO_CARD";
+  if (celebration_active) return "CELEBRATING";
+  if (track_count >= kMaxTracks) return "LIBRARY_FULL";
+  if (!safe_track_name(filename, audio_upload_path, sizeof(audio_upload_path))) {
+    return "BAD_NAME";
+  }
+  stop_audio();
+  audio_upload_bytes = 0;
+  audio_upload_file = SD.open(audio_upload_path, FILE_WRITE);
+  if (!audio_upload_file) return "WRITE_FAILED";
+  return String();
+}
+
+bool write_audio_upload(const std::uint8_t* data, std::size_t length) {
+  if (!audio_upload_file) return false;
+  CardLock lock;
+  if (audio_upload_bytes + length > kMaxTrackBytes) return false;
+  esp_task_wdt_reset();
+  const std::size_t written = audio_upload_file.write(data, length);
+  audio_upload_bytes += written;
+  return written == length;
+}
+
+// A WAV the Apple can play: RIFF/WAVE, uncompressed, mono, 16-bit, 22,050 Hz.
+// The Manager page produces exactly this, so a failure here means something
+// else sent the file.
+String check_wav_header(const char* path) {
+  CardLock lock;
+  File file = SD.open(path, FILE_READ);
+  if (!file) return "WRITE_FAILED";
+  std::uint8_t head[44];
+  const std::size_t read = file.read(head, sizeof(head));
+  file.close();
+  if (read < sizeof(head)) return "NOT_WAV";
+  if (std::memcmp(head, "RIFF", 4) != 0 || std::memcmp(head + 8, "WAVE", 4) != 0) return "NOT_WAV";
+  // Find the format chunk rather than assuming where it sits; encoders put
+  // their own chunks in a WAV and the offsets move.
+  std::uint32_t offset = 12;
+  while (offset + 8 <= sizeof(head)) {
+    const std::uint8_t* header = head + offset;
+    const std::uint32_t size = static_cast<std::uint32_t>(header[4]) |
+                               (static_cast<std::uint32_t>(header[5]) << 8) |
+                               (static_cast<std::uint32_t>(header[6]) << 16) |
+                               (static_cast<std::uint32_t>(header[7]) << 24);
+    if (std::memcmp(header, "fmt ", 4) == 0) {
+      if (offset + 8 + 16 > sizeof(head)) return "NOT_WAV";
+      auto u16 = [header](int at) {
+        return static_cast<std::uint16_t>(header[8 + at] | (header[9 + at] << 8));
+      };
+      auto u32 = [header](int at) {
+        return static_cast<std::uint32_t>(header[8 + at] | (header[9 + at] << 8) |
+                                          (header[10 + at] << 16) | (header[11 + at] << 24));
+      };
+      if (u16(0) != 1) return "NOT_PCM";
+      if (u16(2) != 1) return "NOT_MONO";
+      if (u32(4) != 22050) return "WRONG_RATE";
+      if (u16(14) != 16) return "NOT_16_BIT";
+      return String();
+    }
+    offset += 8 + size + (size & 1);
+  }
+  return "NOT_WAV";
+}
+
+String end_audio_upload(bool keep) {
+  if (!audio_upload_file) return keep ? String("WRITE_FAILED") : String();
+  audio_upload_file.close();
+  if (!keep || audio_upload_bytes == 0) {
+    SD.remove(audio_upload_path);
+    return String();
+  }
+  const String bad = check_wav_header(audio_upload_path);
+  if (bad.length() > 0) {
+    SD.remove(audio_upload_path);
+    return bad;
+  }
+  // A new track joins the home run pool, which is what an owner uploading one
+  // almost always wants. They can move it afterwards.
+  scan_tracks();
+  TrackEntry* entry = find_track(audio_upload_path);
+  if (entry != nullptr) {
+    entry->home_run = true;
+    save_audio_manifest();
+  }
+  return String();
+}
+
+bool same_player(const PlayerTrack& slot, long id, const char* name) {
+  if (id != 0 && slot.id == id) return true;
+  return name != nullptr && name[0] != '\0' && strcasecmp(slot.name, name) == 0;
+}
+
+// The entry pairing this player with this song, if it exists.
+// Opens a track for the Manager page to play in the browser. The card shares
+// nothing with the display any more, but the web server is synchronous, so a
+// 4 MB stream holds the main loop for several seconds. Never during a game or
+// a celebration.
+String open_audio_file(const String& name, File& out) {
+  if (!audio_card_ready) return "NO_CARD";
+  CardLock lock;
+  if (celebration_active) return "CELEBRATING";
+  if (model.state == ScreenState::Game) return "GAME_IN_PROGRESS";
+  TrackEntry* entry = find_track(name.c_str());
+  if (entry == nullptr) return "NO_TRACK";
+  out = SD.open(entry->file, FILE_READ);
+  if (!out) return "NO_TRACK";
+  return String();
+}
+
+PlayerTrack* find_player_song(long id, const char* name, const char* file) {
+  for (std::uint8_t i = 0; i < player_track_count; ++i) {
+    if (same_player(player_tracks[i], id, name) && strcasecmp(player_tracks[i].file, file) == 0) {
+      return &player_tracks[i];
+    }
+  }
+  return nullptr;
+}
+
+void forget_player(PlayerTrack* slot) {
+  const std::uint8_t index = static_cast<std::uint8_t>(slot - player_tracks);
+  for (std::uint8_t i = index; i + 1 < player_track_count; ++i) {
+    player_tracks[i] = player_tracks[i + 1];
+  }
+  --player_track_count;
+}
+
+String change_audio(const apple::firmware::AudioChange& change) {
+  if (!audio_card_ready) return "NO_CARD";
+  if (celebration_active) return "CELEBRATING";
+  const String& action = change.action;
+
+  if (action == "test") {
+    TrackEntry* entry = find_track(change.file.c_str());
+    if (entry == nullptr) return "NO_TRACK";
+    load_resident(resident_home_run, entry->file);
+    start_celebration_audio(false);
+    // The next celebration reloads whatever it should have been playing.
+    resident_refresh_wanted = true;
+    return String();
+  }
+  if (action == "stop") {
+    stop_audio();
+    return String();
+  }
+  if (action == "delete") {
+    TrackEntry* entry = find_track(change.file.c_str());
+    if (entry == nullptr) return "NO_TRACK";
+    stop_audio();
+    if (!SD.remove(entry->file)) return "WRITE_FAILED";
+    resident_home_run.name[0] = '\0';
+    resident_win.name[0] = '\0';
+    scan_tracks();
+    save_audio_manifest();
+    return String();
+  }
+  if (action == "rename") {
+    TrackEntry* entry = find_track(change.file.c_str());
+    if (entry == nullptr) return "NO_TRACK";
+    if (change.text.length() == 0) return "BAD_NAME";
+    copy_text(entry->title, sizeof(entry->title), change.text.c_str());
+    save_audio_manifest();
+    return String();
+  }
+  if (action == "pool") {
+    TrackEntry* entry = find_track(change.file.c_str());
+    if (entry == nullptr) return "NO_TRACK";
+    if (change.home_run >= 0) entry->home_run = change.home_run == 1;
+    if (change.win >= 0) entry->win = change.win == 1;
+    resident_refresh_wanted = true;
+    save_audio_manifest();
+    return String();
+  }
+  if (action == "assign") {
+    // Adds this song to the player's pool. Already there is not an error.
+    TrackEntry* entry = find_track(change.file.c_str());
+    if (entry == nullptr) return "NO_TRACK";
+    if (change.text.length() == 0) return "NO_PLAYER";
+    if (find_player_song(change.number, change.text.c_str(), entry->file) != nullptr) return String();
+    if (player_track_count >= kMaxPlayerTracks) return "PLAYERS_FULL";
+    PlayerTrack& slot = player_tracks[player_track_count++];
+    slot.id = static_cast<std::int32_t>(change.number);
+    copy_text(slot.name, sizeof(slot.name), change.text.c_str());
+    copy_text(slot.file, sizeof(slot.file), entry->file);
+    resident_refresh_wanted = true;
+    save_audio_manifest();
+    return String();
+  }
+  if (action == "unassign") {
+    // With a file, removes that one song from the player's pool. Without one,
+    // removes the player entirely.
+    bool removed = false;
+    for (std::uint8_t i = 0; i < player_track_count;) {
+      const bool player = same_player(player_tracks[i], change.number, change.text.c_str());
+      const bool song = change.file.length() == 0 ||
+                        strcasecmp(player_tracks[i].file, change.file.c_str()) == 0;
+      if (player && song) {
+        forget_player(&player_tracks[i]);
+        removed = true;
+      } else {
+        ++i;
+      }
+    }
+    if (!removed) return "NO_PLAYER";
+    resident_refresh_wanted = true;
+    save_audio_manifest();
+    return String();
+  }
+  return "BAD_ACTION";
+}
+
+// ---------------------------------------------------------------------------
 // Celebration display
 
 void end_celebration(const char* reason) {
   if (!celebration_active) return;
   celebration_active = false;
+  if (audio_request_stream && engine) {
+    engine->set_raised_dwell_ms(static_cast<std::uint64_t>(settings.raised_seconds) * 1000);
+  }
+  stop_audio();
+  resident_refresh_wanted = true;
   scan_lock->leave();
   mark_final_card_visible();
   request_redraw();
@@ -908,6 +1852,45 @@ void begin_celebration(const apple::core::CoreEvent& event) {
   }
   celebration_active = true;
   celebration_started_ms = now32();
+  audio_request_stream = false;
+  if (celebration_is_win && settings.win_full_track && audio_card_ready) {
+    // The game is over, so stay up for the whole track: stream it off the
+    // card and stretch the raised dwell to match, less the lift itself.
+    const char* file = random_track(true);
+    TrackEntry* entry = file != nullptr ? find_track(file) : nullptr;
+    if (entry != nullptr && entry->bytes > 44) {
+      // Where the samples begin has to be exact: the streamed copy is scaled
+      // for volume from that byte on, and scaling a chunk header instead
+      // hands the decoder garbage sizes to hop through until the file ends.
+      std::uint32_t at = 44, length = 0;
+      bool found = false;
+      {
+        CardLock lock;
+        File probe = SD.open(entry->file, FILE_READ);
+        if (probe) {
+          found = find_wav_data_in_file(probe, at, length);
+          probe.close();
+        }
+      }
+      if (!found) at = 44;
+      const std::uint32_t track_ms = static_cast<std::uint32_t>((static_cast<std::uint64_t>(entry->bytes - at) * 1000ULL) / 44100ULL);
+      std::uint32_t dwell = track_ms > kWinExtendAllowanceMs ? track_ms - kWinExtendAllowanceMs : 0;
+      const std::uint32_t floor = static_cast<std::uint32_t>(settings.raised_seconds) * 1000;
+      if (dwell < floor) dwell = floor;
+      if (dwell > kWinMaxDwellMs) dwell = kWinMaxDwellMs;
+      copy_text(win_stream_file, sizeof(win_stream_file), entry->file);
+      win_stream_data_at = at;
+      audio_request_stream = true;
+      if (engine) engine->set_raised_dwell_ms(dwell);
+      char detail[96];
+      std::snprintf(detail, sizeof(detail), "win: whole track %s, %lu s, up for %lu s", entry->file,
+                    static_cast<unsigned long>(track_ms / 1000), static_cast<unsigned long>(dwell / 1000));
+      publish_trace("AUDIO", detail);
+    }
+  }
+  // The resident home run slot already follows whoever is batting, so a hitter
+  // with their own track has it loaded. Fall back to the pool otherwise.
+  start_celebration_audio(celebration_is_win);
   celebration_last_key = 0xFFFFFFFFU;
   scan_lock->enter(1);
   if (!replay_active && clock_valid()) {
@@ -1088,6 +2071,7 @@ void accept_feed(ArduinoJson::JsonVariantConst feed, std::int32_t game_number, c
                 half_name(snapshot.half), static_cast<unsigned long>(extraction.frame.changed_plays.size()),
                 static_cast<unsigned long>(extraction.play_count),
                 static_cast<unsigned long>(extraction.wait_ms));
+  note_batter(snapshot);
   const std::uint64_t now = now_ms();
   if (engine) handle_output(engine->ingest(apple::core::to_input_envelope(projector.decision_evidence()), now), now);
   show_snapshot(snapshot);
@@ -1209,6 +2193,16 @@ void start_wifi() {
   manager.set_update_hooks(update_gate, on_update_done);
   manager.set_restart_hook(on_restart_request);
   manager.set_release_hooks(on_check_request, on_install_request);
+  manager.set_audio_hooks(change_audio, begin_audio_upload, write_audio_upload,
+                          end_audio_upload);
+  manager.set_audio_file_hook(open_audio_file);
+  // The same replay the serial 'r' key runs, reachable without a USB cable.
+  manager.set_replay_hook([](const String& kind) -> String {
+    if (celebration_active) return "CELEBRATING";
+    if (!motion_idle()) return "BUSY";
+    start_replay(kind == "win");
+    return String();
+  });
   if (credentials.configured()) {
     begin_station();
     show_joining_screen();
@@ -1533,6 +2527,9 @@ void load_settings() {
   if (!set_time_zone(zone.c_str())) set_time_zone(apple::firmware::kDefaultTimeZoneId);
   settings.tz_chosen = settings_store.getBool("tzset", false);
   const std::uint8_t bright = settings_store.getUChar("bright", settings.brightness);
+  const std::uint8_t vol = settings_store.getUChar("volume", settings.volume);
+  settings.volume = vol > 100 ? 100 : vol;
+  settings.win_full_track = settings_store.getBool("winfull", settings.win_full_track);
   settings.auto_update = settings_store.getBool("autoupd", settings.auto_update);
   settings.beta = settings_store.getBool("beta", settings.beta);
   settings_store.getString("ghtok", settings.github_token, sizeof(settings.github_token));
@@ -1554,6 +2551,8 @@ void save_settings() {
   settings_store.putString("tz", settings.time_zone);
   settings_store.putBool("tzset", settings.tz_chosen);
   settings_store.putUChar("bright", settings.brightness);
+  settings_store.putUChar("volume", settings.volume);
+  settings_store.putBool("winfull", settings.win_full_track);
   settings_store.putBool("autoupd", settings.auto_update);
   settings_store.putBool("beta", settings.beta);
   settings_store.putString("ghtok", settings.github_token);
@@ -1642,6 +2641,19 @@ String on_settings(const apple::firmware::SettingsUpdate& update) {
   if (update.lock >= 0) {
     settings.require_code = update.lock == 1;
     manager.set_code_required(settings.require_code);
+  }
+  if (update.win_full >= 0) settings.win_full_track = update.win_full == 1;
+  if (update.volume >= 0) {
+    if (update.volume > 100) return "VOLUME_RANGE";
+    const bool changed = settings.volume != static_cast<std::uint8_t>(update.volume);
+    settings.volume = static_cast<std::uint8_t>(update.volume);
+    // What is already in memory was scaled at the old level, so fetch it again.
+    if (changed) {
+      resident_home_run.name[0] = '\0';
+      resident_win.name[0] = '\0';
+      resident_refresh_wanted = true;
+      save_audio_manifest();
+    }
   }
   if (update.brightness >= 0) {
     if (update.brightness < kBrightnessMin || update.brightness > 100) return "BRIGHTNESS_RANGE";
@@ -1959,14 +2971,26 @@ String on_install_request() {
 // ---------------------------------------------------------------------------
 // Owner reset button
 
+// One short press of the button. The name to type is the big orange line;
+// the numeric address underneath is the fallback for a phone that will not
+// resolve it, and the password is what the Manager asks for.
 void show_info_screen() {
-  copy_text(model.waiting_title, sizeof(model.waiting_title), "HOME RUN APPLE");
   const bool connected = WiFi.status() == WL_CONNECTED;
   char note[sizeof(model.waiting_note)];
-  std::snprintf(note, sizeof(note), "PASSWORD %s|%s", credentials.setup_key().c_str(),
-                connected ? "home-run-apple.local" : "NOT ON WI-FI");
-  copy_text(model.waiting_note, sizeof(model.waiting_note), note);
-  show_waiting(connected ? WiFi.localIP().toString().c_str() : "SETUP NEEDED");
+  if (connected) {
+    copy_text(model.waiting_title, sizeof(model.waiting_title), "OPEN IN BROWSER");
+    std::snprintf(note, sizeof(note), "OR %s|PASSWORD %s", WiFi.localIP().toString().c_str(),
+                  credentials.setup_key().c_str());
+    copy_text(model.waiting_note, sizeof(model.waiting_note), note);
+    copy_text(model.status_message, sizeof(model.status_message), "home-run-apple.local");
+    model.state = ScreenState::Info;
+    request_redraw();
+  } else {
+    copy_text(model.waiting_title, sizeof(model.waiting_title), "HOME RUN APPLE");
+    std::snprintf(note, sizeof(note), "NOT ON WI-FI|PASSWORD %s", credentials.setup_key().c_str());
+    copy_text(model.waiting_note, sizeof(model.waiting_note), note);
+    show_waiting("SETUP NEEDED");
+  }
   info_screen_until_ms = now32() + kInfoScreenMs;
 }
 
@@ -1996,7 +3020,7 @@ void service_reset_button() {
         char status[24];
         std::snprintf(status, sizeof(status), "RESET IN %ld", static_cast<long>(remaining));
         copy_text(model.waiting_title, sizeof(model.waiting_title), "HOLD TO RESET");
-        copy_text(model.waiting_note, sizeof(model.waiting_note), "LET GO TO KEEP EVERYTHING");
+        copy_text(model.waiting_note, sizeof(model.waiting_note), "RELEASE TO CANCEL");
         show_waiting(status, apple::firmware::kErrorRed, apple::firmware::WaitingIcon::Alert);
       }
       if (held >= kResetHoldMs) {
@@ -2030,8 +3054,10 @@ void service_reset_button() {
 // ---------------------------------------------------------------------------
 // Replay of the recorded game, for the bench and for demos without Wi-Fi
 
-void start_replay() {
+void start_replay(bool win) {
   if (replay_active) return;
+  replay_table = win ? kWinReplay : kReplay;
+  replay_count = win ? sizeof(kWinReplay) / sizeof(kWinReplay[0]) : sizeof(kReplay) / sizeof(kReplay[0]);
   if (!motion_idle()) {
     publish_trace("REPLAY", "refused: sequence active");
     return;
@@ -2077,12 +3103,12 @@ void finish_replay(const char* status) {
 
 void service_replay() {
   if (!replay_active) return;
-  if (replay_step >= sizeof(kReplay) / sizeof(kReplay[0])) {
+  if (replay_step >= replay_count) {
     if (motion_idle()) finish_replay("COMPLETED");
     return;
   }
   if (!due(next_replay_ms) || !motion_idle()) return;
-  const ReplayStep& step = kReplay[replay_step];
+  const ReplayStep& step = replay_table[replay_step];
   JsonDocument filter;
   deserializeJson(filter, apple::mlb_feed::live_feed_filter_json());
   JsonDocument doc(&json_allocator);
@@ -2097,7 +3123,7 @@ void service_replay() {
   Serial.printf("APPLE_LIVE:{\"type\":\"replay\",\"status\":\"STEP\",\"name\":\"%s\"}\n", step.name);
   accept_feed(doc.as<JsonVariantConst>(), 1, "replay");
   ++replay_step;
-  next_replay_ms = now32() + (replay_step < sizeof(kReplay) / sizeof(kReplay[0]) ? kReplay[replay_step].delay_ms : 0);
+  next_replay_ms = now32() + (replay_step < replay_count ? replay_table[replay_step].delay_ms : 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -2135,7 +3161,7 @@ void handle_serial() {
         break;
       case 'r':
       case 'R':
-        start_replay();
+        start_replay(false);
         break;
       case 's':
       case 'S':
@@ -2148,6 +3174,10 @@ void handle_serial() {
       case 'u':
       case 'U':
         release.check_requested = true;
+        break;
+      case 'a':
+      case 'A':
+        mount_audio_card();
         break;
       case 'w':
       case 'W':
@@ -2194,6 +3224,16 @@ void setup() {
   make_engine(nvs_ledger);
   apply_drive(Drive::Off);
 
+  // Audio. The card shares the display's SPI bus, so this comes after it. A
+  // missing card, or a card with no tracks, simply means silent celebrations.
+  audio_out = new AudioOutputI2S(0, AudioOutputI2S::EXTERNAL_I2S, kI2sDmaBuffers);
+  audio_out->SetPinout(gpio_of(kI2sBitClockPin), gpio_of(kI2sWordSelectPin),
+                       gpio_of(kI2sDataPin));
+  audio_out->SetOutputModeMono(true);
+  audio_out->SetGain(1.0F);
+  // The boot guard and the watchdog come before anything that can block. A
+  // hang in the card scan once stranded the Apple on a bad image because the
+  // guard had not yet counted the boot and the watchdog was not yet armed.
   boot_guard.begin("boot", false);
   const std::uint32_t early_crashes = boot_guard.getUInt("early", 0);
   boot_guard.putUInt("early", early_crashes + 1);
@@ -2220,9 +3260,19 @@ void setup() {
   Serial.flush();
   abort();
 #endif
-
   esp_task_wdt_init(kWatchdogSeconds, true);
   esp_task_wdt_add(nullptr);
+
+  sd_lock = xSemaphoreCreateRecursiveMutex();
+  sd_spi.begin(kSdClockPin, kSdMisoPin, kSdMosiPin, kSdChipSelectPin);
+  mount_audio_card();
+  // Deliberately the other core from this one, which is where loop() and the
+  // celebration display run.
+  const BaseType_t audio_core = xPortGetCoreID() == 0 ? 1 : 0;
+  xTaskCreatePinnedToCore(audio_task_main, "audio", 8192, nullptr, 2, &audio_task,
+                          audio_core);
+
+
 
   credentials.begin();  // so the hello below reports the saved network truthfully
   publish_hello();
@@ -2259,9 +3309,11 @@ void loop() {
     ESP.restart();
   }
   handle_serial();
+  service_audio();
   service_wifi();
   service_motion(now);
   service_replay();
+  service_audio();
   service_network();
   service_release();
   if (celebration_active) {

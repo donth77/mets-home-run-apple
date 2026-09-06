@@ -29,12 +29,37 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
+#include <stdint.h>
+
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <utility>
 #include <vector>
+
+// Custom-font structures and the PROGMEM no-op, so the Adafruit-generated
+// Fonts/*.h headers compile unmodified in the browser build (gfxfont.h).
+#ifndef PROGMEM
+#define PROGMEM
+#endif
+
+typedef struct {
+  uint16_t bitmapOffset;
+  uint8_t width;
+  uint8_t height;
+  uint8_t xAdvance;
+  int8_t xOffset;
+  int8_t yOffset;
+} GFXglyph;
+
+typedef struct {
+  uint8_t* bitmap;
+  GFXglyph* glyph;
+  uint16_t first;
+  uint16_t last;
+  uint8_t yAdvance;
+} GFXfont;
 
 class GFXcanvas16 {
  public:
@@ -295,6 +320,17 @@ class GFXcanvas16 {
 
   void setTextWrap(bool wrap) { wrap_ = wrap; }
 
+  void setFont(const GFXfont* font = nullptr) {
+    // Adafruit shifts the cursor by one classic-font ascent when switching
+    // between font systems, because custom fonts position by baseline.
+    if (font != nullptr) {
+      if (gfx_font_ == nullptr) cursor_y_ = static_cast<std::int16_t>(cursor_y_ + 6);
+    } else if (gfx_font_ != nullptr) {
+      cursor_y_ = static_cast<std::int16_t>(cursor_y_ - 6);
+    }
+    gfx_font_ = font;
+  }
+
   void setCursor(std::int16_t x, std::int16_t y) {
     cursor_x_ = x;
     cursor_y_ = y;
@@ -325,6 +361,31 @@ class GFXcanvas16 {
     if (value == nullptr) return;
     while (*value != '\0') {
       const auto character = static_cast<std::uint8_t>(*value++);
+      if (gfx_font_ != nullptr) {
+        if (character == '\n') {
+          x = 0;
+          y = static_cast<std::int16_t>(y + text_size_y_ * gfx_font_->yAdvance);
+          continue;
+        }
+        if (character == '\r') continue;
+        if (character < gfx_font_->first || character > gfx_font_->last) continue;
+        const GFXglyph& glyph = gfx_font_->glyph[character - gfx_font_->first];
+        if (wrap_ &&
+            x + text_size_x_ * (glyph.xOffset + glyph.width) > width()) {
+          x = 0;
+          y = static_cast<std::int16_t>(y + text_size_y_ * gfx_font_->yAdvance);
+        }
+        const auto left = static_cast<std::int16_t>(x + glyph.xOffset * text_size_x_);
+        const auto top = static_cast<std::int16_t>(y + glyph.yOffset * text_size_y_);
+        const auto right = static_cast<std::int16_t>(left + glyph.width * text_size_x_ - 1);
+        const auto bottom = static_cast<std::int16_t>(top + glyph.height * text_size_y_ - 1);
+        minimum_x = std::min(minimum_x, left);
+        minimum_y = std::min(minimum_y, top);
+        maximum_x = std::max(maximum_x, right);
+        maximum_y = std::max(maximum_y, bottom);
+        x = static_cast<std::int16_t>(x + glyph.xAdvance * text_size_x_);
+        continue;
+      }
       if (character == '\n') {
         x = 0;
         y = static_cast<std::int16_t>(y + text_size_y_ * 8);
@@ -355,6 +416,10 @@ class GFXcanvas16 {
 
  private:
   void write(std::uint8_t character) {
+    if (gfx_font_ != nullptr) {
+      writeCustomFont(character);
+      return;
+    }
     if (character == '\n') {
       cursor_x_ = 0;
       cursor_y_ = static_cast<std::int16_t>(cursor_y_ + text_size_y_ * 8);
@@ -368,6 +433,61 @@ class GFXcanvas16 {
     drawChar(cursor_x_, cursor_y_, character, text_color_, text_background_,
              text_size_x_, text_size_y_);
     cursor_x_ = static_cast<std::int16_t>(cursor_x_ + text_size_x_ * 6);
+  }
+
+  void writeCustomFont(std::uint8_t character) {
+    if (character == '\n') {
+      cursor_x_ = 0;
+      cursor_y_ = static_cast<std::int16_t>(cursor_y_ + text_size_y_ * gfx_font_->yAdvance);
+      return;
+    }
+    if (character == '\r') return;
+    if (character < gfx_font_->first || character > gfx_font_->last) return;
+    const GFXglyph& glyph = gfx_font_->glyph[character - gfx_font_->first];
+    if (glyph.width > 0 && glyph.height > 0) {
+      if (wrap_ &&
+          cursor_x_ + text_size_x_ * (glyph.xOffset + glyph.width) > width()) {
+        cursor_x_ = 0;
+        cursor_y_ = static_cast<std::int16_t>(cursor_y_ + text_size_y_ * gfx_font_->yAdvance);
+      }
+      drawCharCustomFont(cursor_x_, cursor_y_, character, text_color_,
+                         text_size_x_, text_size_y_);
+    }
+    cursor_x_ = static_cast<std::int16_t>(cursor_x_ + glyph.xAdvance * text_size_x_);
+  }
+
+  // Custom fonts draw by baseline and ignore the background color, matching
+  // Adafruit GFX.
+  void drawCharCustomFont(std::int16_t x, std::int16_t y,
+                          std::uint8_t character, std::uint16_t color,
+                          std::uint8_t size_x, std::uint8_t size_y) {
+    const GFXglyph& glyph = gfx_font_->glyph[character - gfx_font_->first];
+    const std::uint8_t* bitmap = gfx_font_->bitmap;
+    std::uint16_t bitmap_offset = glyph.bitmapOffset;
+    std::uint8_t bits = 0;
+    std::uint8_t bit = 0;
+    std::int16_t xo16 = 0;
+    std::int16_t yo16 = 0;
+    if (size_x > 1 || size_y > 1) {
+      xo16 = glyph.xOffset;
+      yo16 = glyph.yOffset;
+    }
+    for (std::uint8_t yy = 0; yy < glyph.height; ++yy) {
+      for (std::uint8_t xx = 0; xx < glyph.width; ++xx) {
+        if ((bit++ & 7U) == 0) bits = bitmap[bitmap_offset++];
+        if ((bits & 0x80U) != 0) {
+          if (size_x == 1 && size_y == 1) {
+            drawPixel(static_cast<std::int16_t>(x + glyph.xOffset + xx),
+                      static_cast<std::int16_t>(y + glyph.yOffset + yy), color);
+          } else {
+            fillRect(static_cast<std::int16_t>(x + (xo16 + xx) * size_x),
+                     static_cast<std::int16_t>(y + (yo16 + yy) * size_y),
+                     size_x, size_y, color);
+          }
+        }
+        bits = static_cast<std::uint8_t>(bits << 1U);
+      }
+    }
   }
 
   void drawChar(std::int16_t x, std::int16_t y, std::uint8_t character,
@@ -514,4 +634,5 @@ class GFXcanvas16 {
   std::uint8_t text_size_x_ = 1;
   std::uint8_t text_size_y_ = 1;
   bool wrap_ = true;
+  const GFXfont* gfx_font_ = nullptr;
 };

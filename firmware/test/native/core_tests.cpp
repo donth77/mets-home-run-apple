@@ -95,7 +95,7 @@ PlayEvidence home_run(std::string key = "777001:play-42",
 
 PlayEvidence grand_slam(std::string key = "777001:play-43") {
   return PlayEvidence{
-      std::move(key),      43,   apple::core::kMetsTeamId, "Pete Alonso",
+      std::move(key),      43,   apple::core::kMetsTeamId, "Bo Bichette",
       PlayKind::GrandSlam, true, ReviewState::None};
 }
 
@@ -191,7 +191,7 @@ void test_grand_slam_uses_home_run_motion_with_special_presentation() {
   EXPECT_EQ(decision.events.size(), 1U);
   EXPECT_EQ(decision.events[0].type, EventType::CelebrationStarted);
   EXPECT_EQ(decision.events[0].celebration, CelebrationKind::GrandSlam);
-  EXPECT_EQ(decision.events[0].subject, "Pete Alonso");
+  EXPECT_EQ(decision.events[0].subject, "Bo Bichette");
   EXPECT_TRUE(ledger.keys.count("777001:play-43") == 1);
   EXPECT_TRUE(has_command(engine.tick(2'100), CommandType::MotionExtend));
 }

@@ -80,9 +80,14 @@ void ManagerServer::begin(StatusFn status, JoinFn join, ForgetFn forget, Setting
   server_.on("/api/settings", HTTP_POST, [this] { handle_settings(); });
   server_.on("/api/timezones", HTTP_GET, [this] { handle_time_zones(); });
   server_.on("/api/update", HTTP_POST, [this] { handle_update_done(); }, [this] { handle_update_upload(); });
+  server_.on("/api/audio/set", HTTP_POST, [this] { handle_audio_set(); });
+  server_.on("/api/audio/file", HTTP_GET, [this] { handle_audio_file(); });
+  server_.on("/api/audio/upload", HTTP_POST, [this] { handle_audio_done(); },
+             [this] { handle_audio_upload(); });
   server_.on("/api/restart", HTTP_POST, [this] { handle_restart(); });
   server_.on("/api/update/check", HTTP_POST, [this] { handle_release_action(release_check_); });
   server_.on("/api/update/install", HTTP_POST, [this] { handle_release_action(release_install_); });
+  server_.on("/api/replay", HTTP_POST, [this] { handle_replay(); });
   // Captive-portal probes from phones and laptops.
   for (const char* probe : {"/generate_204", "/gen_204", "/hotspot-detect.html", "/library/test/success.html",
                             "/connecttest.txt", "/ncsi.txt", "/fwlink", "/success.txt", "/canonical.html"}) {
@@ -340,6 +345,8 @@ void ManagerServer::handle_settings() {
   if (server_.hasArg("lock")) update.lock = on_off(server_.arg("lock"));
   if (server_.hasArg("tz")) update.time_zone = server_.arg("tz");
   if (server_.hasArg("bright")) update.brightness = server_.arg("bright").toInt();
+  if (server_.hasArg("volume")) update.volume = server_.arg("volume").toInt();
+  if (server_.hasArg("winfull")) update.win_full = on_off(server_.arg("winfull"));
   if (server_.hasArg("auto")) update.auto_update = on_off(server_.arg("auto"));
   if (server_.hasArg("beta")) update.beta = on_off(server_.arg("beta"));
   if (server_.hasArg("token")) {
@@ -373,6 +380,105 @@ void ManagerServer::handle_time_zones() {
   server_.send(200, "application/json", body);
 }
 
+// One change to the track library: rename, pool membership, a player's track,
+// deleting a file, or playing one so the owner can hear it in place.
+void ManagerServer::handle_audio_set() {
+  if (!audio_change_) {
+    server_.send(404, "application/json", "{\"ok\":false,\"error\":\"NO_AUDIO\"}");
+    return;
+  }
+  if (!authorized()) return;
+  AudioChange change;
+  change.action = server_.arg("action");
+  change.file = server_.arg("file");
+  change.text = server_.arg("text");
+  if (server_.hasArg("id")) change.number = server_.arg("id").toInt();
+  if (server_.hasArg("hr")) change.home_run = on_off(server_.arg("hr"));
+  if (server_.hasArg("win")) change.win = on_off(server_.arg("win"));
+  const String failed = audio_change_(change);
+  if (failed.length() > 0) {
+    const int status = failed == "CELEBRATING" || failed == "BUSY" ? 409
+                       : failed == "NO_CARD"                       ? 503
+                                                                   : 400;
+    server_.send(status, "application/json",
+                 String("{\"ok\":false,\"error\":\"") + failed + "\"}");
+    return;
+  }
+  server_.send(200, "application/json", "{\"ok\":true}");
+}
+
+// A track off the card, for the page's preview player.
+void ManagerServer::handle_audio_file() {
+  if (!audio_file_) {
+    server_.send(404, "application/json", "{\"ok\":false,\"error\":\"NO_AUDIO\"}");
+    return;
+  }
+  File file;
+  const String failed = audio_file_(server_.arg("file"), file);
+  if (failed.length() > 0) {
+    const int status = failed == "CELEBRATING" || failed == "GAME_IN_PROGRESS" ? 409
+                       : failed == "NO_CARD"                                    ? 503
+                                                                                : 404;
+    server_.send(status, "application/json",
+                 String("{\"ok\":false,\"error\":\"") + failed + "\"}");
+    return;
+  }
+  server_.sendHeader("Cache-Control", "max-age=3600");
+  server_.streamFile(file, "audio/wav");
+  file.close();
+}
+
+// A track streams straight to the card in ~1.4 KB pieces. As with firmware, a
+// refusal is remembered and answered once the body has finished arriving,
+// because the browser sends it all either way.
+void ManagerServer::handle_audio_upload() {
+  HTTPUpload& up = server_.upload();
+  if (up.status == UPLOAD_FILE_START) {
+    audio_ok_ = false;
+    audio_error_ = "";
+    if (!audio_begin_) {
+      audio_error_ = "NO_AUDIO";
+      return;
+    }
+    const int auth = auth_status();
+    if (auth != 0) {
+      audio_error_ = auth == 429 ? "LOCKED" : "CODE";
+      return;
+    }
+    audio_error_ = audio_begin_(up.filename);
+  } else if (up.status == UPLOAD_FILE_WRITE) {
+    if (audio_error_.length() == 0 && audio_write_) {
+      if (!audio_write_(up.buf, up.currentSize)) audio_error_ = "WRITE_FAILED";
+    }
+  } else if (up.status == UPLOAD_FILE_END) {
+    if (audio_end_) {
+      const String failed = audio_end_(audio_error_.length() == 0);
+      if (audio_error_.length() == 0) audio_error_ = failed;
+    }
+    audio_ok_ = audio_error_.length() == 0;
+  } else if (up.status == UPLOAD_FILE_ABORTED) {
+    if (audio_end_) audio_end_(false);
+    if (audio_error_.length() == 0) audio_error_ = "ABORTED";
+  }
+}
+
+void ManagerServer::handle_audio_done() {
+  if (audio_ok_) {
+    audio_ok_ = false;
+    server_.send(200, "application/json", "{\"ok\":true}");
+    return;
+  }
+  const String& e = audio_error_;
+  const int status = e == "CODE"       ? 401
+                     : e == "LOCKED"   ? 429
+                     : e == "NO_AUDIO" ? 404
+                     : (e == "CELEBRATING" || e == "BUSY") ? 409
+                     : e == "NO_CARD"                      ? 503
+                                                           : 400;
+  server_.send(status, "application/json",
+               String("{\"ok\":false,\"error\":\"") + (e.length() ? e : "FAILED") + "\"}");
+}
+
 void ManagerServer::handle_restart() {
   if (!authorized()) return;
   String why = restart_ ? restart_() : String("NO_RESTART");
@@ -388,6 +494,17 @@ void ManagerServer::handle_release_action(const ActionFn& action) {
   const String why = action ? action() : String("NO_RELEASES");
   if (why.length() > 0) {
     server_.send(why == "NO_RELEASES" ? 404 : 409, "application/json", String("{\"ok\":false,\"error\":\"") + why + "\"}");
+    return;
+  }
+  server_.send(200, "application/json", "{\"ok\":true}");
+}
+
+void ManagerServer::handle_replay() {
+  if (!authorized()) return;
+  const String why = replay_ ? replay_(server_.arg("kind")) : String("NO_REPLAY");
+  if (why.length() > 0) {
+    server_.send(why == "NO_REPLAY" ? 404 : 409, "application/json",
+                 String("{\"ok\":false,\"error\":\"") + why + "\"}");
     return;
   }
   server_.send(200, "application/json", "{\"ok\":true}");

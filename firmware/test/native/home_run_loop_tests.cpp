@@ -101,8 +101,8 @@ void test_name_normalization_and_fit() {
   expect_lines(loop.name(), "JOS", "IGLESIAS", nullptr);
 
   // Two lines stay when a third would not make the block bigger.
-  loop.begin(Headline::HomeRun, "Pete Alonso", 1);
-  expect_lines(loop.name(), "PETE", "ALONSO", nullptr);
+  loop.begin(Headline::HomeRun, "Bo Bichette", 1);
+  expect_lines(loop.name(), "BO", "BICHETTE", nullptr);
   EXPECT_EQ(loop.name().scale_x, 3);
   EXPECT_EQ(loop.name().scale_y, 3);
 
@@ -145,7 +145,7 @@ void test_name_normalization_and_fit() {
 void test_name_never_repeats_headline_picks() {
   HomeRunLoop loop;
   for (std::uint32_t seed = 0; seed < 50; ++seed) {
-    loop.begin(Headline::HomeRun, "Pete Alonso", seed * 2654435761u);
+    loop.begin(Headline::HomeRun, "Bo Bichette", seed * 2654435761u);
     bool varied = false;
     SequencePicks first = loop.picks_for_loop(0);
     for (std::uint32_t n = 0; n < 40; ++n) {
@@ -253,7 +253,7 @@ void test_names_never_overflow_the_screen() {
 
   HomeRunLoop loop;
   std::vector<std::uint16_t> fb(kPixels, 0);
-  const char *names[] = {"Juan Soto", "Pete Alonso", "Francisco Lindor", "Jazz Chisholm Jr.",
+  const char *names[] = {"Juan Soto", "Bo Bichette", "Francisco Lindor", "Jazz Chisholm Jr.",
                          "Isiah Kiner-Falefa", "Christopher Encarnacion-Strand",
                          "Supercalifragilisticexpialidocious", "X", "Jose De La Cruz Martinez"};
   for (const char *name : names) {

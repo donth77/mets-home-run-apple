@@ -287,11 +287,11 @@ describe("MLB recording transport", () => {
     const priorPlay = play({ atBatIndex: 8, halfInning: "bottom" });
     const grandSlam = play({
       atBatIndex: 9,
-      batterName: "Pete Alonso",
+      batterName: "Bo Bichette",
       eventType: "home_run",
       halfInning: "bottom",
       rbi: 4,
-      resultDescription: "Pete Alonso hits a grand slam.",
+      resultDescription: "Bo Bichette hits a grand slam.",
     });
     const fetcher = vi
       .fn<typeof fetch>()
@@ -306,11 +306,11 @@ describe("MLB recording transport", () => {
 
     const update = await client.poll({ gamePk: 777001, gameNumber: 1 });
     expect(update.capture?.coreInput.plays).toMatchObject([
-      { kind: "GRAND_SLAM", batterName: "Pete Alonso", battingTeamId: 121 },
+      { kind: "GRAND_SLAM", batterName: "Bo Bichette", battingTeamId: 121 },
     ]);
     if (!update.capture) throw new Error("Expected a grand-slam capture.");
     expect(core.ingest(update.capture.coreInput, 100).events).toMatchObject([
-      { type: "CELEBRATION_STARTED", celebration: "GRAND_SLAM", subject: "Pete Alonso" },
+      { type: "CELEBRATION_STARTED", celebration: "GRAND_SLAM", subject: "Bo Bichette" },
     ]);
     core.dispose();
   });
@@ -400,7 +400,7 @@ describe("MLB recording transport", () => {
     const payload = feed("20260827_190000", [completedPlay], "In Progress", {
       defense: { pitcher: { id: 202, fullName: "Pitcher" } },
       offense: {
-        batter: { id: 303, fullName: "Pete Alonso" },
+        batter: { id: 303, fullName: "Bo Bichette" },
         first: { id: 404, fullName: "Juan Soto" },
       },
     });
@@ -411,7 +411,7 @@ describe("MLB recording transport", () => {
     expect(result.capture?.gameSnapshot.atBat).toMatchObject({
       balls: 0,
       strikes: 0,
-      batter: "Pete Alonso",
+      batter: "Bo Bichette",
       bases: { first: true, second: false, third: false },
     });
   });
@@ -831,7 +831,7 @@ describe("MLB recording transport", () => {
       atBatIndex: 19,
       halfInning: "bottom",
       eventType: "home_run",
-      batterName: "Pete Alonso",
+      batterName: "Bo Bichette",
       rbi: 4,
     });
     const archivedHomeRun = {
@@ -861,7 +861,7 @@ describe("MLB recording transport", () => {
       },
       {
         kind: "GRAND_SLAM",
-        label: "Grand slam · Pete Alonso",
+        label: "Grand slam · Bo Bichette",
         beforeTimecode: "20260827_190010",
         targetTimecode: "20260827_190020",
         battingTeamId: 121,

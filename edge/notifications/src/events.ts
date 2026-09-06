@@ -1,6 +1,7 @@
 import type { GameCore } from "@apple/game-core-wasm";
 import type { NormalizedFeedCapture } from "@apple/mlb-live-feed";
 import type { GameSnapshot, NormalizedGameInput, NormalizedPlayEvidence } from "@apple/protocol";
+import { selectHomeRunNotificationTitle } from "./homeRunCopy";
 import type { VerifiedNotificationEvent } from "./types";
 
 const BASELINE_CURSOR = "00000000_000000";
@@ -29,7 +30,7 @@ function notificationCopy(
     title:
       event.kind === "GRAND_SLAM"
         ? `${event.subject || "A Met"} hit a grand slam!`
-        : `${event.subject || "A Met"} hit a home run!`,
+        : selectHomeRunNotificationTitle(event.subject),
     body: `${scoreLine(snapshot)} · ${inningLabel(snapshot)}`,
   };
 }

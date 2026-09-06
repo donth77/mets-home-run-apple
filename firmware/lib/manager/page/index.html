@@ -30,6 +30,7 @@ select:focus,input:focus{outline:2px solid var(--orange);outline-offset:1px}
 .eye svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .eye svg.off{display:none}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.row.between{margin-bottom:10px}  /* a button row between two paragraphs: same gap below as the paragraph leaves above */
 button{font:inherit;font-size:15px;font-weight:600;padding:11px 16px;border-radius:9px;border:0;background:var(--orange);color:#fff;margin-top:12px;cursor:pointer;display:inline-flex;align-items:center;gap:8px}
 button.quiet{background:transparent;border:1px solid var(--blue-line);color:var(--text)}
 button[disabled]{opacity:.55;cursor:default}
@@ -69,6 +70,71 @@ button[disabled]{opacity:.55;cursor:default}
 .toast button:hover{opacity:1}
 input[type=file]{padding:9px 12px;font-size:14px;color:var(--muted);margin-top:8px}
 input[type=file]::file-selector-button{font:inherit;font-weight:600;padding:7px 12px;border-radius:7px;border:1px solid var(--blue-line);background:transparent;color:var(--text);margin-right:10px;cursor:pointer}
+.tiny{font-size:12.5px;margin-top:6px}
+.sub{margin-top:22px}
+.dropzone{display:flex;align-items:center;gap:14px;margin-top:12px;padding:16px 18px;border:2px dashed var(--blue-line);border-radius:12px;color:var(--muted);cursor:pointer;background:rgba(0,0,0,.14);transition:border-color .12s,background .12s,color .12s}
+.dropzone:hover,.dropzone.over{border-color:var(--orange);background:rgba(255,89,16,.08);color:var(--text)}
+.dropzone.has{border-style:solid;border-color:var(--orange-soft);color:var(--text)}
+.dropzone input{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden}
+.dz-icon{flex:none;color:var(--orange-soft)}
+.dz-text{display:flex;flex-direction:column;gap:2px;min-width:0}
+.dz-text b{font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dz-text small{font-size:12.5px;color:var(--muted)}
+.dropzone.has .dz-text small{color:var(--orange-soft)}
+.group{margin-top:16px}
+.group h4{margin:0 0 4px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.group .empty{font-size:13px;color:var(--muted);padding:8px 0}
+.track{display:flex;flex-direction:column;gap:8px;padding:13px 0;border-top:1px solid var(--blue-line)}
+.track:first-of-type{border-top:0}
+.track-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+.track-head b{font-size:15.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.track-head small{color:var(--muted);font-size:12.5px;white-space:nowrap}
+.track-uses{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.track-uses .lbl{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-right:2px}
+.track-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.track-actions .links{margin-left:auto;display:flex;gap:4px;align-items:center}
+.link{font:inherit;font-size:13px;padding:6px 6px;background:none;border:0;color:var(--muted);cursor:pointer;margin:0;border-radius:6px}
+.link:hover{color:var(--text);background:rgba(255,255,255,.06)}
+.link.danger:hover{color:var(--bad)}
+.link:disabled{opacity:.5;cursor:default}
+.chip{font:inherit;font-size:12.5px;font-weight:600;padding:5px 11px;border-radius:999px;border:1px solid var(--blue-line);background:transparent;color:var(--muted);margin:0;cursor:pointer;transition:background .12s,color .12s,border-color .12s}
+.chip:hover{border-color:var(--orange-soft);color:var(--text)}
+.chip.on{background:var(--orange);border-color:var(--orange);color:#fff}
+.chip:disabled,.act:disabled,.icon-btn:disabled{opacity:.5;cursor:default}
+.act{font:inherit;font-size:13px;font-weight:600;padding:6px 11px;border-radius:7px;border:1px solid var(--blue-line);background:transparent;color:var(--text);margin:0;cursor:pointer;transition:background .12s,border-color .12s}
+.act:hover{background:rgba(255,255,255,.06);border-color:var(--orange-soft)}
+.act:active{transform:translateY(1px)}
+.act.danger:hover{border-color:var(--bad);color:var(--bad)}
+.act.quiet{color:var(--muted)}
+.preview{grid-column:1/-1;margin:4px 0 2px}
+.preview audio{width:100%;height:36px}
+.player{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:12px 0;border-top:1px solid var(--blue-line)}
+.player:first-child{border-top:0}
+.player-who{flex:1;min-width:160px}
+.player-who b{display:block;font-size:15.5px}
+.player-who small{color:var(--muted);font-size:12.5px}
+.tag{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.04em;padding:2px 8px;border-radius:999px;background:rgba(255,168,168,.15);color:var(--bad);margin-left:8px;vertical-align:middle}
+.songs{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.song{display:inline-flex;align-items:center;gap:6px;font-size:13px;padding:5px 6px 5px 11px;border-radius:999px;background:rgba(255,255,255,.07);color:var(--text)}
+.song button{margin:0;padding:0 5px;background:none;border:0;color:var(--muted);font-size:16px;line-height:1;cursor:pointer}
+.song button:hover{color:var(--bad)}
+.songs select{font:inherit;font-size:13px;padding:5px 8px;border-radius:7px;border:1px solid var(--blue-line);background:var(--blue-deep);color:var(--text)}
+.for-row{display:flex;flex-direction:column;gap:6px;margin-top:12px}
+.for-label{font-size:13px;color:var(--muted)}
+#track-for{font:inherit;font-size:14px;padding:9px 10px;border-radius:8px;border:1px solid var(--blue-line);background:var(--blue-deep);color:var(--text);max-width:360px}
+.list-tools{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:14px}
+.sort{display:flex;align-items:center;gap:6px;color:var(--muted)}
+.sort select,#track-search{font:inherit;font-size:14px;padding:8px 10px;border-radius:8px;border:1px solid var(--blue-line);background:var(--blue-deep);color:var(--text)}
+#track-search{flex:1;min-width:160px}
+.pager{display:flex;gap:6px;align-items:center;justify-content:center;margin-top:14px;flex-wrap:wrap}
+.pager button{font:inherit;font-size:13px;font-weight:600;min-width:34px;padding:6px 10px;border-radius:7px;border:1px solid var(--blue-line);background:transparent;color:var(--text);margin:0;cursor:pointer}
+.pager button.on{background:var(--orange);border-color:var(--orange);color:#fff}
+.pager button:disabled{opacity:.4;cursor:default}
+.pager .count{font-size:12.5px;color:var(--muted);margin:0 6px}
+.player-remove{margin-left:auto}
+.player-add{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px}
+.player-add select{font:inherit;font-size:14px;padding:8px 10px;border-radius:8px;border:1px solid var(--blue-line);background:var(--blue-deep);color:var(--text);flex:1;min-width:150px}
+.player-add button{margin-top:0}
 .progress{height:8px;border-radius:4px;background:rgba(0,0,0,.28);margin-top:12px;overflow:hidden}.progress i{display:block;height:100%;width:0;background:var(--orange);transition:width .2s}
 .modal{position:fixed;inset:0;z-index:30;background:rgba(2,10,30,.6);display:flex;align-items:center;justify-content:center;padding:20px}
 .modal-card{background:var(--blue-card);border:1px solid var(--blue-line);border-radius:14px;padding:18px;width:100%;max-width:420px;box-shadow:0 16px 40px rgba(0,0,0,.5);animation:toast-in .2s ease-out}
@@ -128,19 +194,50 @@ a.btn{display:inline-block;font-size:15px;font-weight:600;padding:11px 16px;bord
 <section id="settings" hidden>
 <h2>Settings</h2>
 <div class="switch"><div><b>Raised time</b><small>How long the Apple stays up</small><div class="range"><input id="raised" type="range" min="5" max="120" step="5" value="30" aria-label="Raised time in seconds"><output id="raised-out">30 s</output></div></div></div>
+<div class="switch"><div><b>Stay up for the whole track on a win</b><small>The game is over, so the Apple stays raised until the win track ends. Off, a win uses the raised time like a home run</small></div><label class="toggle"><input id="winfull" type="checkbox" aria-label="Stay up for the whole track on a win"><i></i></label></div>
 <div class="switch"><div><b>Motor</b><small>Off keeps the Apple still; celebrations still show on the screen</small></div><label class="toggle"><input id="motor" type="checkbox" aria-label="Motor"><i></i></label></div>
 <div class="switch"><div><b>Pause the Apple</b><small>Stops following games and celebrating until you turn it off</small></div><label class="toggle"><input id="pause" type="checkbox" aria-label="Pause the Apple"><i></i></label></div>
 <div class="switch"><div><b>Sleep screen between games</b><small>Screen off until the next game starts</small></div><label class="toggle"><input id="sleep" type="checkbox" aria-label="Sleep screen between games"><i></i></label></div>
 <div class="switch"><div><b>Update automatically</b><small>Installs new firmware between games, early in the morning. The Apple restarts and is back in a minute</small></div><label class="toggle"><input id="autoupd" type="checkbox" aria-label="Update automatically"><i></i></label></div>
 <div class="switch"><div><b>Screen brightness</b><small>Dims the display without turning it off</small><div class="range"><input id="bright" type="range" min="10" max="100" step="10" value="100" aria-label="Screen brightness in percent"><output id="bright-out">100%</output></div></div></div>
+<div class="switch"><div><b>Volume</b><small>How loud celebrations play through the speaker</small><div class="range"><input id="volume" type="range" min="0" max="100" step="5" value="80" aria-label="Volume in percent"><output id="volume-out">80%</output></div></div></div>
 <div class="switch"><div style="flex:1"><b>Time zone</b><small>Game times on the Apple's screen and on this page</small><div class="combo"><input id="tz" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="City, zone, or abbreviation" aria-label="Time zone" aria-autocomplete="list"><div id="tz-list" class="combo-list" hidden></div></div><small id="tz-hint"></small></div></div>
 <div class="switch"><div><b>Password lock</b><small>Off: anyone on your Wi-Fi can change settings. On: changes need the Apple's eight-digit password</small></div><label class="toggle"><input id="lock" type="checkbox" aria-label="Password lock"><i></i></label></div>
 <div class="row"><button id="save" type="button" disabled>Save</button><button id="revert" class="quiet" type="button" hidden>Cancel</button></div>
 </section>
+<section id="audio" hidden>
+<h2>Celebration audio</h2>
+<p class="note" id="audio-note">Add your own tracks. Choose which play for a home run and which play when the Mets win, and give any player tracks of his own.</p>
+<label class="dropzone" id="dropzone" for="track-file">
+  <svg class="dz-icon" viewBox="0 0 24 24" width="28" height="28" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M12 16V5m0 0l-4 4m4-4l4 4M4 15v3a2 2 0 002 2h12a2 2 0 002-2v-3"/></svg>
+  <span class="dz-text"><b id="track-pick-label">Tap to choose an audio file</b><small id="track-pick-hint">or drop one here</small></span>
+  <input id="track-file" type="file" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.flac" aria-label="Audio file">
+</label>
+<div class="for-row"><label class="for-label" for="track-for">Plays for</label><select id="track-for"><option value="hr">Home runs</option><option value="win">Mets wins</option><option value="both">Home runs and Mets wins</option><optgroup id="track-for-players" label="One player's home runs"></optgroup></select></div>
+<div class="row"><button id="track-add" type="button" disabled>Add track</button></div>
+<p class="note tiny">MP3, M4A, WAV and most others. Up to 30 MB. The first 90 seconds are kept, converted here on your device to what the Apple plays.</p>
+<p class="note tiny"><b>Preview</b> plays a track here, on this device. <b>Play on the Apple</b> plays it through the Apple's own speaker, at the volume set in Settings.</p>
+<div class="progress" id="track-bar" hidden><i id="track-bar-fill"></i></div>
+<p class="note" id="track-note" aria-live="polite"></p>
+<div class="list-tools" id="list-tools" hidden>
+  <label class="sort" for="track-sort"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M7 4v16m0 0l-3-3m3 3l3-3M17 20V4m0 0l-3 3m3-3l3 3"/></svg><select id="track-sort" aria-label="Sort tracks"><option value="name">Name, A to Z</option><option value="name-desc">Name, Z to A</option><option value="newest">Newest first</option><option value="longest">Longest first</option><option value="inuse">In use first</option></select></label>
+  <input id="track-search" type="search" placeholder="Search tracks" aria-label="Search tracks" autocomplete="off" hidden>
+</div>
+<div id="track-groups"></div>
+<nav class="pager" id="track-pager" hidden aria-label="Track pages"></nav>
+<h3 class="sub">Player tracks</h3>
+<p class="note">Give a player tracks of his own. When he hits a home run, one of his tracks plays instead of the general home run tracks. Players without their own tracks use the general ones.</p>
+<div id="player-list"></div>
+<div class="player-add">
+  <select id="player-pick" aria-label="Player"><option value="">Loading the roster…</option></select>
+  <select id="player-track" aria-label="Track"></select>
+  <button id="player-add" type="button" disabled>Give him this track</button>
+</div>
+</section>
 <section id="update" hidden>
 <h2>Update</h2>
 <p class="note" id="update-status">Installed <strong id="fw-installed">…</strong>.</p>
-<div class="row"><button id="check-updates" type="button" class="quiet">Check for updates</button><button id="install-latest" type="button" hidden>Install now</button><span id="check-note" class="note"></span></div>
+<div class="row between"><button id="check-updates" type="button" class="quiet">Check for updates</button><button id="install-latest" type="button" hidden>Install now</button><span id="check-note" class="note"></span></div>
 <p class="note">Or pick a firmware file from the project's releases page. The Apple restarts and is back in about a minute. If the new firmware fails to start, the Apple goes back to this version on its own.</p>
 <input id="fw-file" type="file" accept=".bin" aria-label="Firmware file">
 <div class="progress" id="fw-bar" hidden><i id="fw-bar-fill"></i></div>
@@ -164,7 +261,8 @@ function toast(msg,cls,opts){opts=opts||{};var box=$("toasts"),id=opts.id||"",pr
 function notice(msg,cls){return toast(msg,cls,{id:"wifi",sticky:true})}
 function spin(id,label){var el=$(id);el.className="";el.innerHTML="";var s=document.createElement("span");s.className="spin";el.appendChild(s);el.appendChild(document.createTextNode(" "+label))}
 function mode(m){return {SETUP:"Setup",OFFLINE:"Offline",BETWEEN_GAMES:"Between games",BOOTSTRAPPING:"Loading game",UPCOMING:"Next game",PAUSED:"Paused",PREGAME:"Pregame",LIVE:"Live",REVIEW:"Under review",DELAYED:"Delayed",FINAL:"Final",SLEEP:"Idle",CELEBRATING:"Celebrating",REPLAY:"Replay",SAFE_FAULT:"Stopped: fault",SAFE_MODE:"Safe mode"}[m]||m||""}
-function when(iso){if(!iso)return "";var o={weekday:"short",month:"short",day:"numeric",hour:"numeric",minute:"2-digit"};if(lastSettings&&lastSettings.timeZone)o.timeZone=lastSettings.timeZone;try{return new Date(iso).toLocaleString([],o)}catch(e){delete o.timeZone;return new Date(iso).toLocaleString([],o)}}
+/* Times on this page are the reader's own: the browser's locale and zone, with the zone code shown. The Apple's time zone setting is for its screen. */
+function when(iso){if(!iso)return "";var o={weekday:"short",month:"short",day:"numeric",hour:"numeric",minute:"2-digit",timeZoneName:"short"};try{return new Date(iso).toLocaleString([],o)}catch(e){delete o.timeZoneName;return new Date(iso).toLocaleString([],o)}}
 var zones=[],browserZone="";try{browserZone=Intl.DateTimeFormat().resolvedOptions().timeZone||""}catch(e){}
 function zoneFor(name){var i,z;if(!name)return null;for(i=0;i<zones.length;i++){z=zones[i];if(z.id===name||(" "+z.aliases+" ").indexOf(" "+name+" ")>=0)return z}return null}
 var tzSelected="",tzCursor=-1;
@@ -202,7 +300,7 @@ function render(s){
   var setupOnly=!connected&&(!w.configured||w.setupNetwork);
   var showSetup=setupOnly||wantSetup||w.setupNetwork;
   $("setup").hidden=!showSetup;$("change").hidden=showSetup;$("forget").hidden=!w.configured;
-  $("status").hidden=setupOnly;$("settings").hidden=setupOnly;$("update").hidden=setupOnly;
+  $("status").hidden=setupOnly;$("settings").hidden=setupOnly;$("update").hidden=setupOnly;$("audio").hidden=setupOnly;if(!setupOnly)renderAudio(s);
   if(joining){
     b=$("join");
     if(w.state==="CONNECTED"){joining=false;b.disabled=false;b.textContent="Join";notice("");host=(s.hostname||"home-run-apple")+".local";text("joined-ssid",w.ssid||"your Wi-Fi");$("joined-link").href="http://"+w.ip+"/";text("joined-ip","http://"+w.ip);text("joined-host","http://"+host);$("join-form").hidden=true;$("joined").hidden=false}
@@ -247,15 +345,16 @@ $("join").addEventListener("click",function(){
   authFetch("/api/wifi",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:"ssid="+encodeURIComponent(ssid)+"&password="+encodeURIComponent(pw)+(browserZone?"&tz="+encodeURIComponent(browserZone):"")})
     .then(function(r){if(!r.ok)throw new Error();}).catch(function(){joining=false;b.disabled=false;b.textContent="Join";notice("Failed to start joining. Try again.","bad")});
 });
-function fillSettings(st){var z=null;$("raised").value=st.raisedSeconds;$("raised-out").value=st.raisedSeconds+" s";if(st.brightness){$("bright").value=st.brightness;$("bright-out").value=st.brightness+"%"}$("motor").checked=!!st.motor;$("pause").checked=!st.follow;$("sleep").checked=!!st.sleepDisplay;$("lock").checked=!!st.requireCode;$("autoupd").checked=st.autoUpdate!==false;if(zones.length){z=zoneFor(st.timeZone||"");tzSelected=z?z.id:"";$("tz").value=z?z.label:"";zoneHint()}}
+function fillSettings(st){var z=null;$("raised").value=st.raisedSeconds;$("raised-out").value=st.raisedSeconds+" s";if(st.brightness){$("bright").value=st.brightness;$("bright-out").value=st.brightness+"%"}if(typeof st.volume==="number"){$("volume").value=st.volume;$("volume-out").value=st.volume+"%"}$("motor").checked=!!st.motor;$("winfull").checked=st.winFullTrack!==false;$("pause").checked=!st.follow;$("sleep").checked=!!st.sleepDisplay;$("lock").checked=!!st.requireCode;$("autoupd").checked=st.autoUpdate!==false;if(zones.length){z=zoneFor(st.timeZone||"");tzSelected=z?z.id:"";$("tz").value=z?z.label:"";zoneHint()}}
 function markDirty(){settingsDirty=true;$("save").disabled=false;$("revert").hidden=false;}
-["motor","pause","sleep","lock","autoupd"].forEach(function(id){$(id).addEventListener("change",markDirty)});
+["motor","pause","sleep","lock","autoupd","winfull"].forEach(function(id){$(id).addEventListener("change",markDirty)});
 $("tz").addEventListener("input",function(){var z=resolveText(this.value);tzSelected=z&&(z.label.toLowerCase()===this.value.trim().toLowerCase()||zoneFor(this.value.trim()))?z.id:"";showZoneList();markDirty();zoneHint(true)});
 $("tz").addEventListener("focus",showZoneList);
 $("tz").addEventListener("blur",function(){var self=this;setTimeout(function(){var z,cur;$("tz-list").hidden=true;z=resolveText(self.value);if(z){tzSelected=z.id;self.value=z.label}else if(!self.value.trim()&&lastSettings){cur=zoneFor(lastSettings.timeZone||"");tzSelected=cur?cur.id:"";self.value=cur?cur.label:""}zoneHint()},150)});
 $("tz").addEventListener("keydown",function(ev){var box=$("tz-list"),items=box.querySelectorAll("div");if(box.hidden||!items.length)return;if(ev.key==="ArrowDown"||ev.key==="ArrowUp"){ev.preventDefault();tzCursor=(tzCursor+(ev.key==="ArrowDown"?1:items.length-1))%items.length;items.forEach(function(d,i){d.className=i===tzCursor?"on":""})}else if(ev.key==="Enter"&&tzCursor>=0){ev.preventDefault();items[tzCursor].dispatchEvent(new Event("mousedown"))}else if(ev.key==="Escape"){box.hidden=true}});
 $("raised").addEventListener("input",function(){$("raised-out").value=this.value+" s";markDirty()});
 $("bright").addEventListener("input",function(){$("bright-out").value=this.value+"%";markDirty()});
+$("volume").addEventListener("input",function(){$("volume-out").value=this.value+"%";markDirty()});
 $("revert").addEventListener("click",function(){settingsDirty=false;if(lastSettings)fillSettings(lastSettings);$("save").disabled=true;$("revert").hidden=true;});
 $("save").addEventListener("click",function(){
   if($("tz").value.trim()&&!tzSelected){toast("Time zone not recognized. Pick one from the list.","bad",{id:"settings"});return}
@@ -266,7 +365,7 @@ $("save").addEventListener("click",function(){
 });
 function saveSettings(){
   var b=$("save");b.disabled=true;b.innerHTML="";var sp=document.createElement("span");sp.className="spin";b.appendChild(sp);b.appendChild(document.createTextNode("Saving"));
-  var body="raised="+$("raised").value+"&motor="+($("motor").checked?"on":"off")+"&follow="+($("pause").checked?"paused":"auto")+"&sleep="+($("sleep").checked?"on":"off")+"&lock="+($("lock").checked?"on":"off")+"&auto="+($("autoupd").checked?"on":"off")+"&bright="+$("bright").value+(tzSelected?"&tz="+encodeURIComponent(tzSelected):"");
+  var body="raised="+$("raised").value+"&motor="+($("motor").checked?"on":"off")+"&follow="+($("pause").checked?"paused":"auto")+"&sleep="+($("sleep").checked?"on":"off")+"&lock="+($("lock").checked?"on":"off")+"&auto="+($("autoupd").checked?"on":"off")+"&bright="+$("bright").value+"&volume="+$("volume").value+"&winfull="+($("winfull").checked?"on":"off")+(tzSelected?"&tz="+encodeURIComponent(tzSelected):"");
   authFetch("/api/settings",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:body})
     .then(function(r){b.textContent="Save";if(!r.ok){b.disabled=false;toast(r.status===401?"Not saved: the password is needed.":"Failed to save.","bad",{id:"settings"});return}settingsDirty=false;$("revert").hidden=true;toast("Saved.","ok",{id:"settings"});status()})
     .catch(function(){b.textContent="Save";b.disabled=false;toast("Failed to save.","bad",{id:"settings"})});
@@ -316,7 +415,282 @@ $("install-latest").addEventListener("click",function(){var v=(lastStatus&&lastS
 $("restart").addEventListener("click",function(){dialog({title:"Restart the Apple?",text:"It is back in about 30 seconds. Settings and Wi-Fi are kept.",ok:"Restart"}).then(function(ok){if(!ok)return;authFetch("/api/restart",{method:"POST"}).then(function(r){if(r.ok){toast("Restarting. This page reconnects on its own.","ok",{id:"update",sticky:true});return}var err="";try{}catch(e){}r.json().then(function(j){toast(j&&j.error==="CELEBRATING"?"The Apple is celebrating. Try again in a minute.":"Could not restart.","bad",{id:"update",sticky:true})}).catch(function(){toast("Could not restart.","bad",{id:"update",sticky:true})})}).catch(function(){toast("No answer from the Apple.","bad",{id:"update",sticky:true})})})});
 $("fw-file").addEventListener("change",function(){var f=this.files[0];$("install").disabled=!f;text("fw-note",f?Math.round(f.size/1024)+" KB":"")});
 $("install").addEventListener("click",function(){var f=$("fw-file").files[0];if(!f)return;dialog({title:"Install this firmware?",text:f.name+". The Apple restarts and is back in about a minute.",ok:"Install"}).then(function(ok){if(ok)sendFirmware(f)})});
-status();setInterval(status,4000);networks();loadZones();
+/* Celebration music. The Apple plays one format only: mono, 16-bit, 22,050 Hz
+   PCM WAV, with the bass its small speaker cannot reproduce rolled off. The
+   conversion happens here rather than on the Apple, which has no processor time
+   to spare during a celebration. */
+var APPLE_RATE=22050,HIGHPASS_HZ=180,HEADROOM=0.89,MAX_SECONDS=90,MAX_SOURCE_BYTES=30*1024*1024;
+var AUDIO_EXT=/\.(mp3|m4a|aac|wav|ogg|oga|flac|aiff?|wma|opus|webm)$/i;
+var PAGE_SIZE=10,trackSort="name",trackPage=1,trackQuery="";try{trackSort=localStorage.getItem("apple-track-sort")||"name"}catch(e){}
+var trackSig="",roster=[],rosterLoaded=false,audioBusy=false,previewing="",lastAudio=null;
+function encodeWav(samples,scale){
+  var bytes=new ArrayBuffer(44+samples.length*2),view=new DataView(bytes),i;
+  function tag(at,value){for(var j=0;j<value.length;j++)view.setUint8(at+j,value.charCodeAt(j))}
+  tag(0,"RIFF");view.setUint32(4,36+samples.length*2,true);tag(8,"WAVE");tag(12,"fmt ");
+  view.setUint32(16,16,true);view.setUint16(20,1,true);view.setUint16(22,1,true);
+  view.setUint32(24,APPLE_RATE,true);view.setUint32(28,APPLE_RATE*2,true);
+  view.setUint16(32,2,true);view.setUint16(34,16,true);
+  tag(36,"data");view.setUint32(40,samples.length*2,true);
+  for(i=0;i<samples.length;i++){var v=samples[i]*scale;if(v>1)v=1;if(v<-1)v=-1;view.setInt16(44+i*2,Math.round(v*32767),true)}
+  return bytes;
+}
+function convertForApple(file){
+  return file.arrayBuffer().then(function(raw){
+    var ctx=new (window.AudioContext||window.webkitAudioContext)();
+    return ctx.decodeAudioData(raw).then(function(decoded){
+      ctx.close();
+      var seconds=Math.min(decoded.duration,MAX_SECONDS),frames=Math.max(1,Math.round(seconds*APPLE_RATE));
+      var off=new OfflineAudioContext(1,frames,APPLE_RATE),src=off.createBufferSource();src.buffer=decoded;
+      var a=off.createBiquadFilter();a.type="highpass";a.frequency.value=HIGHPASS_HZ;
+      var b=off.createBiquadFilter();b.type="highpass";b.frequency.value=HIGHPASS_HZ;
+      src.connect(a);a.connect(b);b.connect(off.destination);src.start();
+      return off.startRendering();
+    },function(){ctx.close();throw new Error("decode")});
+  }).then(function(rendered){
+    var s=rendered.getChannelData(0),peak=0,i;
+    for(i=0;i<s.length;i++){var m=Math.abs(s[i]);if(m>peak)peak=m}
+    return {wav:encodeWav(s,peak>0?HEADROOM/peak:1),seconds:Math.round(s.length/APPLE_RATE)};
+  });
+}
+function trackFileName(name){
+  var base=name.replace(/\.[^.]*$/,"").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"")||"track";
+  return base.slice(0,20)+"-"+Math.floor(Math.random()*9000+1000)+".wav";
+}
+function seconds(t){var s=Math.round((t.bytes||0)/44100);return s>=60?Math.floor(s/60)+":"+("0"+s%60).slice(-2):s+" s"}
+function busy(btn,label){btn.disabled=true;btn.dataset.was=btn.textContent;btn.textContent=label||"…"}
+function unbusy(btn){btn.disabled=false;if(btn.dataset.was)btn.textContent=btn.dataset.was}
+function audioMessage(code,err){
+  var map={LIBRARY_FULL:"The Apple is full. Delete a track first.",NOT_WAV:"That file did not convert cleanly.",WRONG_RATE:"That file did not convert cleanly.",
+    NOT_MONO:"That file did not convert cleanly.",NOT_PCM:"That file did not convert cleanly.",NOT_16_BIT:"That file did not convert cleanly.",
+    BAD_NAME:"That file name will not work.",WRITE_FAILED:"The memory card would not take it.",NO_CARD:"No memory card in the Apple.",
+    CELEBRATING:"Not now: a celebration is playing.",GAME_IN_PROGRESS:"Not during a game.",PLAYERS_FULL:"That is as many player tracks as the Apple holds.",
+    CODE:"The password is needed.",LOCKED:"Too many wrong passwords. Wait a minute."};
+  if(err&&map[err])return map[err];
+  if(code===401)return map.CODE;if(code===409)return map.CELEBRATING;if(code===503)return map.NO_CARD;
+  return "That did not work.";
+}
+function audioSet(params){
+  var body=[];for(var k in params)if(params.hasOwnProperty(k))body.push(k+"="+encodeURIComponent(params[k]));
+  return authFetch("/api/audio/set",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:body.join("&")})
+    .then(function(r){
+      if(!r.ok){return r.json().catch(function(){return{}}).then(function(j){toast(audioMessage(r.status,j.error),"bad",{id:"audio"});return false})}
+      trackSig="";status();return true;
+    }).catch(function(){toast("The Apple did not answer.","bad",{id:"audio"});return false});
+}
+function el(tag,cls,text){var e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e}
+function trackTitle(t){return t.title||t.file.replace(/^\//,"")}
+function usedBy(file,players){return players.filter(function(p){return p.file===file}).map(function(p){return p.name.split(" ").slice(-1)[0]})}
+function stopPreview(){if(lastAudio){try{lastAudio.pause()}catch(e){}lastAudio=null}previewing=""}
+function trackRow(t,a){
+  var players=a.players||[],row=el("div","track");
+  var head=el("div","track-head");
+  head.appendChild(el("b",null,trackTitle(t)));
+  var who=usedBy(t.file,players),meta=seconds(t)+(who.length?" · "+who.join(", "):"")+(a.playing===t.file?" · playing on the Apple":"");
+  head.appendChild(el("small",null,meta));
+  var uses=el("div","track-uses");uses.appendChild(el("span","lbl","Plays for"));
+  [["hr","Home runs"],["win","Mets win"]].forEach(function(pair){
+    var chip=el("button","chip"+(t[pair[0]]?" on":""),pair[1]);chip.type="button";chip.setAttribute("aria-pressed",t[pair[0]]?"true":"false");
+    chip.addEventListener("click",function(){
+      var on=!chip.classList.contains("on");chip.classList.toggle("on",on);chip.setAttribute("aria-pressed",on?"true":"false");chip.disabled=true;
+      var p={action:"pool",file:t.file};p[pair[0]]=on?"on":"off";
+      audioSet(p).then(function(ok){chip.disabled=false;if(!ok){chip.classList.toggle("on",!on);chip.setAttribute("aria-pressed",!on?"true":"false")}});
+    });
+    uses.appendChild(chip);
+  });
+  var actions=el("div","track-actions");
+  var preview=el("button","act",previewing===t.file?"■ Stop preview":"▶ Preview");preview.type="button";preview.title="Play it here, on this device";
+  preview.addEventListener("click",function(){
+    if(previewing===t.file){stopPreview();trackSig="";renderAudio(lastStatus);return}
+    stopPreview();previewing=t.file;trackSig="";renderAudio(lastStatus);
+  });
+  var onApple=el("button","act",a.playing===t.file?"■ Stop the Apple":"Play on the Apple");onApple.type="button";onApple.title="Play it through the Apple's own speaker";
+  onApple.addEventListener("click",function(){busy(onApple);audioSet(a.playing===t.file?{action:"stop"}:{action:"test",file:t.file}).then(function(){unbusy(onApple)})});
+  var links=el("div","links");
+  var rename=el("button","link","Rename");rename.type="button";
+  rename.addEventListener("click",function(){
+    dialog({title:"Rename",text:"Now called “"+trackTitle(t)+"”. What should it be?",input:true,ok:"Rename"}).then(function(v){
+      if(v){busy(rename);audioSet({action:"rename",file:t.file,text:v}).then(function(){unbusy(rename)})}
+    });
+  });
+  var del=el("button","link danger","Delete");del.type="button";
+  del.addEventListener("click",function(){
+    dialog({title:"Delete this track?",text:"“"+trackTitle(t)+"” is removed from the memory card"+(who.length?" and from "+who.join(", ")+"'s tracks":"")+". This cannot be undone.",ok:"Delete"}).then(function(v){
+      if(v!==null){busy(del);audioSet({action:"delete",file:t.file}).then(function(ok){if(!ok)unbusy(del)})}
+    });
+  });
+  links.appendChild(rename);links.appendChild(el("span","note","·"));links.appendChild(del);
+  actions.appendChild(preview);actions.appendChild(onApple);actions.appendChild(links);
+  row.appendChild(head);row.appendChild(uses);row.appendChild(actions);
+  if(previewing===t.file){
+    var box=el("div","preview"),audio=document.createElement("audio");audio.controls=true;audio.autoplay=true;audio.preload="auto";
+    audio.src="/api/audio/file?file="+encodeURIComponent(t.file);
+    audio.addEventListener("error",function(){toast(lastStatus&&lastStatus.mode==="LIVE"?"Preview waits until the game is over. Play on the Apple works now.":"The Apple could not send that track right now.","bad",{id:"audio"});stopPreview();trackSig="";renderAudio(lastStatus)});
+    audio.addEventListener("ended",function(){stopPreview();trackSig="";renderAudio(lastStatus)});
+    box.appendChild(audio);row.appendChild(box);lastAudio=audio;
+  }
+  return row;
+}
+function renderAudio(s){
+  lastStatus=s;var a=s.audio||{},sig=JSON.stringify([a.card,a.tracks,a.players,a.playing,previewing,rosterLoaded,trackSort,trackPage,trackQuery]);
+  $("audio").hidden=false;
+  $("audio-note").textContent=a.card?"Add your own tracks. Choose which play for a home run and which play when the Mets win, and give any player tracks of his own.":"No memory card. Put one in and restart the Apple to add tracks.";
+  if(sig===trackSig)return;
+  trackSig=sig;
+  var all=(a.tracks||[]).slice(),byName=function(x,y){return trackTitle(x).localeCompare(trackTitle(y))};
+  var sorters={name:byName,"name-desc":function(x,y){return byName(y,x)},newest:function(x,y){return (y.added||0)-(x.added||0)||byName(x,y)},
+    longest:function(x,y){return (y.bytes||0)-(x.bytes||0)||byName(x,y)},inuse:function(x,y){var ax=(x.hr||x.win)?0:1,ay=(y.hr||y.win)?0:1;return ax-ay||byName(x,y)}};
+  all.sort(sorters[trackSort]||byName);
+  var manyPages=all.length>PAGE_SIZE;
+  $("list-tools").hidden=all.length<2;$("track-search").hidden=!manyPages;$("track-sort").value=trackSort;
+  if(!manyPages&&trackQuery){trackQuery="";$("track-search").value=""}
+  var q=trackQuery.trim().toLowerCase(),tracks=q?all.filter(function(t){return trackTitle(t).toLowerCase().indexOf(q)>=0}):all;
+  var pages=Math.max(1,Math.ceil(tracks.length/PAGE_SIZE));if(trackPage>pages)trackPage=pages;
+  var shown=tracks.slice((trackPage-1)*PAGE_SIZE,trackPage*PAGE_SIZE);
+  var groups=$("track-groups");groups.textContent="";
+  var hr=all.filter(function(t){return t.hr}).length,win=all.filter(function(t){return t.win}).length;
+  if(all.length){
+    var sum=el("div","group");
+    sum.appendChild(el("h4",null,(q?tracks.length+" of "+all.length:all.length)+(all.length===1?" track":" tracks")+" · "+hr+" for home runs · "+win+" for wins"));
+    if(!hr)sum.appendChild(el("div","empty","Nothing plays for a home run yet. Turn on Home runs for a track below."));
+    if(!win)sum.appendChild(el("div","empty","Nothing plays for a win yet. Turn on Mets win for a track below."));
+    if(q&&!tracks.length)sum.appendChild(el("div","empty","No tracks match “"+trackQuery.trim()+"”."));
+    shown.forEach(function(t){sum.appendChild(trackRow(t,a))});
+    groups.appendChild(sum);
+  }
+  if(!all.length&&a.card){groups.appendChild(el("p","note","No tracks on the card yet."))}
+  var pager=$("track-pager");pager.textContent="";pager.hidden=pages<2;
+  if(pages>1){
+    var prev=el("button",null,"‹");prev.type="button";prev.disabled=trackPage===1;prev.setAttribute("aria-label","Previous page");prev.addEventListener("click",function(){trackPage--;trackSig="";renderAudio(lastStatus)});pager.appendChild(prev);
+    for(var i=1;i<=pages;i++){(function(n){var b=el("button",n===trackPage?"on":"",String(n));b.type="button";if(n===trackPage)b.setAttribute("aria-current","page");b.addEventListener("click",function(){trackPage=n;trackSig="";renderAudio(lastStatus)});pager.appendChild(b)})(i)}
+    var next=el("button",null,"›");next.type="button";next.disabled=trackPage===pages;next.setAttribute("aria-label","Next page");next.addEventListener("click",function(){trackPage++;trackSig="";renderAudio(lastStatus)});pager.appendChild(next);
+    pager.appendChild(el("span","count",(trackPage-1)*PAGE_SIZE+1+"–"+Math.min(trackPage*PAGE_SIZE,tracks.length)+" of "+tracks.length));
+  }
+  var chooser=$("player-track");chooser.textContent="";
+  all.forEach(function(t){var o=el("option",null,trackTitle(t));o.value=t.file;chooser.appendChild(o)});
+  renderPlayers(a,all);refreshAssignButton();
+}
+function renderPlayers(a,tracks){
+  var list=$("player-list");list.textContent="";
+  var byName={},order=[];
+  (a.players||[]).forEach(function(p){if(!byName[p.name]){byName[p.name]={id:p.id,name:p.name,files:[]};order.push(p.name)}byName[p.name].files.push(p.file)});
+  if(!order.length){list.appendChild(el("p","note","No player tracks yet."));return}
+  order.forEach(function(name){
+    var p=byName[name],row=el("div","player"),who=el("div","player-who");
+    var b=el("b",null,p.name);
+    if(rosterLoaded&&!roster.some(function(r){return r.name===p.name})){var tag=el("span","tag","not on the roster");b.appendChild(tag)}
+    who.appendChild(b);who.appendChild(el("small",null,p.files.length===1?"1 track":p.files.length+" tracks, one at random"));
+    var songs=el("div","songs");
+    p.files.forEach(function(f){
+      var t=tracks.filter(function(x){return x.file===f})[0],pill=el("span","song",t?trackTitle(t):f.replace(/^\//,""));
+      var x=el("button",null,"×");x.type="button";x.title="Remove this track from "+p.name;
+      x.addEventListener("click",function(){x.disabled=true;audioSet({action:"unassign",id:p.id||0,text:p.name,file:f}).then(function(ok){if(!ok)x.disabled=false})});
+      pill.appendChild(x);songs.appendChild(pill);
+    });
+    var spare=tracks.filter(function(t){return p.files.indexOf(t.file)<0});
+    if(spare.length){
+      var add=document.createElement("select");add.setAttribute("aria-label","Add a track for "+p.name);
+      var first=el("option",null,"+ add a track");first.value="";add.appendChild(first);
+      spare.forEach(function(t){var o=el("option",null,trackTitle(t));o.value=t.file;add.appendChild(o)});
+      add.addEventListener("change",function(){if(!add.value)return;add.disabled=true;audioSet({action:"assign",id:p.id||0,text:p.name,file:add.value}).then(function(ok){if(!ok){add.disabled=false;add.value=""}})});
+      songs.appendChild(add);
+    }
+    var drop=el("button","link danger player-remove","Remove player");drop.type="button";drop.title="Take "+p.name+" off the list. His tracks stay in the library.";
+    drop.addEventListener("click",function(){
+      dialog({title:"Remove "+p.name+"?",text:"He comes off the player list. His tracks stay in the library and can be used for anyone.",ok:"Remove"}).then(function(v){
+        if(v!==null){busy(drop);audioSet({action:"unassign",id:p.id||0,text:p.name}).then(function(ok){if(!ok)unbusy(drop)})}
+      });
+    });
+    row.appendChild(who);row.appendChild(songs);row.appendChild(drop);list.appendChild(row);
+  });
+}
+function refreshAssignButton(){$("player-add").disabled=!($("player-pick").value&&$("player-track").value)}
+/* The roster comes straight from the same public MLB service the Apple uses,
+   so the names match the ones the game feed will report. */
+function loadRoster(){
+  fetch("https://statsapi.mlb.com/api/v1/teams/121/roster?rosterType=active",{cache:"no-store"})
+    .then(function(r){return r.json()})
+    .then(function(d){
+      roster=(d.roster||[]).map(function(p){return {id:p.person.id,name:p.person.fullName,pos:p.position?p.position.abbreviation:""}}).sort(function(x,y){return x.name<y.name?-1:1});
+      rosterLoaded=true;
+      var pick=$("player-pick");pick.textContent="";
+      var first=el("option",null,"Choose a player");first.value="";pick.appendChild(first);
+      roster.forEach(function(p){var o=el("option",null,p.name+(p.pos?" · "+p.pos:""));o.value=p.id;pick.appendChild(o)});
+      var forSel=$("track-for"),keep=forSel.value,group=$("track-for-players");group.textContent="";
+      roster.forEach(function(p){var o=el("option",null,p.name);o.value=p.id;group.appendChild(o)});
+      forSel.value=keep;
+      trackSig="";if(lastStatus)renderAudio(lastStatus);
+    })
+    .catch(function(){
+      var pick=$("player-pick");pick.textContent="";
+      var only=el("option",null,"Player list needs internet");only.value="";pick.appendChild(only);
+    });
+}
+$("track-sort").addEventListener("change",function(){trackSort=this.value;trackPage=1;try{localStorage.setItem("apple-track-sort",trackSort)}catch(e){}trackSig="";renderAudio(lastStatus)});
+$("track-search").addEventListener("input",function(){trackQuery=this.value;trackPage=1;trackSig="";renderAudio(lastStatus)});
+$("player-pick").addEventListener("change",refreshAssignButton);
+$("player-track").addEventListener("change",refreshAssignButton);
+$("player-add").addEventListener("click",function(){
+  var id=$("player-pick").value,file=$("player-track").value,btn=$("player-add");
+  var who=roster.filter(function(p){return String(p.id)===String(id)})[0];
+  if(!who||!file)return;
+  busy(btn);audioSet({action:"assign",file:file,id:who.id,text:who.name}).then(function(){unbusy(btn);$("player-pick").value="";refreshAssignButton()});
+});
+function pickedFile(){return $("track-file").files&&$("track-file").files[0]}
+function resetPicker(){$("track-pick-label").textContent="Tap to choose an audio file";$("track-pick-hint").textContent="or drop one here";$("dropzone").classList.remove("has");$("track-add").disabled=true}
+function takeFile(f){
+  $("track-note").textContent="";
+  if(!f){resetPicker();return}
+  var okType=(f.type&&f.type.indexOf("audio/")===0)||AUDIO_EXT.test(f.name);
+  if(!okType){resetPicker();$("track-file").value="";toast("That is not an audio file.","bad",{id:"audio"});return}
+  if(f.size>MAX_SOURCE_BYTES){resetPicker();$("track-file").value="";toast("That file is over 30 MB. Trim it first.","bad",{id:"audio"});return}
+  $("track-pick-label").textContent=f.name;$("track-pick-hint").textContent=Math.round(f.size/1048576*10)/10+" MB · ready to add";
+  $("dropzone").classList.add("has");$("track-add").disabled=audioBusy;
+}
+$("track-file").addEventListener("change",function(){takeFile(pickedFile())});
+(function(){var dz=$("dropzone");
+  ["dragenter","dragover"].forEach(function(ev){dz.addEventListener(ev,function(e){e.preventDefault();dz.classList.add("over")})});
+  ["dragleave","drop"].forEach(function(ev){dz.addEventListener(ev,function(e){e.preventDefault();dz.classList.remove("over")})});
+  dz.addEventListener("drop",function(e){var f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0];if(!f)return;try{var dt=new DataTransfer();dt.items.add(f);$("track-file").files=dt.files}catch(err){}takeFile(f)});
+})();
+$("track-add").addEventListener("click",function(){
+  var f=pickedFile(),btn=$("track-add");if(!f||audioBusy)return;
+  audioBusy=true;busy(btn,"Converting…");$("track-note").textContent="";
+  convertForApple(f).then(function(out){
+    btn.textContent="Sending…";$("track-note").textContent="Kept "+out.seconds+" seconds.";
+    sendTrack(out.wav,trackFileName(f.name),true);
+  }).catch(function(){
+    audioBusy=false;unbusy(btn);toast("That file could not be read as audio.","bad",{id:"audio"});
+  });
+});
+function sendTrack(wav,name,retry){
+  var bar=$("track-bar"),fill=$("track-bar-fill"),btn=$("track-add");
+  bar.hidden=false;fill.style.width="0%";
+  var fd=new FormData();fd.append("track",new Blob([wav],{type:"audio/wav"}),name);
+  var x=new XMLHttpRequest();x.open("POST","/api/audio/upload");x.setRequestHeader("X-Apple-Code",code());
+  x.upload.onprogress=function(e){if(e.lengthComputable)fill.style.width=Math.round(100*e.loaded/e.total)+"%"};
+  function done(){audioBusy=false;bar.hidden=true;unbusy(btn);btn.textContent="Add track";$("track-file").value="";resetPicker();$("track-for").value="hr"}
+  x.onload=function(){
+    if(x.status===200){
+      var choice=$("track-for").value,who=roster.filter(function(p){return String(p.id)===String(choice)})[0];
+      done();$("track-note").textContent="";trackSig="";
+      /* The Apple files a new track under home runs; anything else is set here, right after. */
+      if(who){
+        audioSet({action:"assign",file:"/"+name,id:who.id,text:who.name}).then(function(){return audioSet({action:"pool",file:"/"+name,hr:"off"})})
+          .then(function(){toast("Added for "+who.name+".","ok",{id:"audio"})});
+      } else if(choice==="win"){
+        audioSet({action:"pool",file:"/"+name,hr:"off",win:"on"}).then(function(){toast("Added to the Mets win tracks.","ok",{id:"audio"})});
+      } else if(choice==="both"){
+        audioSet({action:"pool",file:"/"+name,win:"on"}).then(function(){toast("Added to the home run and Mets win tracks.","ok",{id:"audio"})});
+      } else {toast("Added to the home run tracks.","ok",{id:"audio"});status()}
+      return}
+    if(x.status===401&&retry!==false){askCode().then(function(v){if(v!==null)sendTrack(wav,name,false);else done()});return}
+    done();var err="";try{err=(JSON.parse(x.responseText)||{}).error||""}catch(e){}
+    toast(audioMessage(x.status,err),"bad",{id:"audio"});
+  };
+  x.onerror=function(){done();toast("The Apple did not answer.","bad",{id:"audio"})};
+  x.send(fd);
+}
+status();setInterval(status,4000);networks();loadZones();loadRoster();
 })();
 </script>
 </body>

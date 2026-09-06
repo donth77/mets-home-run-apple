@@ -2,6 +2,7 @@ import type { NormalizedFeedCapture } from "@apple/mlb-live-feed";
 import type { NormalizedGameInput, NormalizedPlayEvidence } from "@apple/protocol";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { verifiedNotificationEvents } from "./events";
+import { HOME_RUN_NOTIFICATION_TEMPLATES } from "./homeRunCopy";
 
 const createGameCore = () => GameCore.create();
 
@@ -99,15 +100,19 @@ describe("notification event decisions", () => {
       {
         eventKey: "777001:play-1",
         kind: "HOME_RUN",
-        title: "Francisco Lindor hit a home run!",
         body: "ATL 2, NYM 3 · Bottom 7",
       },
     ]);
+    expect(result[0]?.title).toSatisfy((title: string) =>
+      HOME_RUN_NOTIFICATION_TEMPLATES.some(
+        (template) => template.replace("{player}", "Francisco Lindor") === title,
+      ),
+    );
   });
 
   it("handles back-to-back homers and a win without dropping queued core events", async () => {
     const result = await verifiedNotificationEvents(
-      capture([play("777001:play-7", 121, "Juan Soto"), play("777001:play-8", 121, "Pete Alonso", "GRAND_SLAM")], {
+      capture([play("777001:play-7", 121, "Juan Soto"), play("777001:play-8", 121, "Bo Bichette", "GRAND_SLAM")], {
         final: true,
         metsWon: true,
       }),

@@ -31,3 +31,6 @@ user-assets/
 # Generated from firmware/lib/manager/page by firmware/tools/embed_page.py
 firmware/lib/manager/include/apple/firmware/manager_page.hpp
 firmware/lib/manager/include/apple/firmware/manager_logo.hpp
+
+# Temporary bench-only embeds (e.g. a celebration clip held in flash).
+firmware/src/bench_clip.hpp

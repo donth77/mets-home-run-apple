@@ -44,6 +44,7 @@ enum class ScreenState : std::uint8_t {
   Cancelled,
   Final,
   Setup,
+  Info,  // one short press of the owner button: the Manager's address
   SetupQr,
 };
 
@@ -100,6 +101,10 @@ struct ScreenModel {
   char state_detail[40] = "WAITING FOR UPDATE";
   char waiting_title[24] = "HOME RUN APPLE";
   char status_message[80] = "STARTING";
+  // Colour of the big status line on the waiting screen. White for nearly
+  // everything; the info screen paints the address in orange so it is the
+  // one thing the eye lands on.
+  std::uint16_t status_color{0xFFFF};
   char waiting_note[48] = "MOTION OUTPUTS DISARMED";
   std::uint16_t waiting_accent = 0xFAC2;  // header rule and card border: orange, yellow, or red
   WaitingIcon waiting_icon = WaitingIcon::None;
@@ -148,6 +153,7 @@ class ScreenPainter {
   void draw_state_layout(const ScreenModel& model, ScreenState state);
   void draw_final_layout(const ScreenModel& model);
   void draw_game_layout(const ScreenModel& model);
+  void draw_info_layout(const ScreenModel& model);
   void draw_setup_layout(const ScreenModel& model);
   void draw_setup_qr_layout(const ScreenModel& model);
   void draw_waiting_icon(WaitingIcon icon, std::uint16_t accent, std::int16_t top);

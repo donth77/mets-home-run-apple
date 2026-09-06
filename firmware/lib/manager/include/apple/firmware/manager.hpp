@@ -15,6 +15,7 @@
 #include "apple/firmware/firmware_update.hpp"
 #include <ArduinoJson.h>
 #include <DNSServer.h>
+#include <FS.h>
 #include <WebServer.h>
 
 #include <functional>
@@ -56,10 +57,22 @@ struct SettingsUpdate {
   int lock{-1};    ///< -1 unchanged, 0 no password for changes, 1 ask for the password
   String time_zone;  ///< IANA id from the Manager's table, empty when unchanged
   int brightness{-1};  ///< -1 unchanged, else 10..100 percent
+  int volume{-1};      ///< -1 unchanged, else 0..100 percent
+  int win_full{-1};    ///< -1 unchanged, 1 stay up for the whole track on a win, 0 use the raised time
   int auto_update{-1};  ///< -1 unchanged, 0 only check, 1 install new firmware on its own
   int beta{-1};         ///< -1 unchanged, 1 also take pre-releases (developer setting)
   bool token_given{false};  ///< `github_token` was sent (empty clears it)
   String github_token;      ///< read-only token for a private repository (developer setting)
+};
+
+/// One change to the track library from the page.
+struct AudioChange {
+  String action;    ///< "delete", "rename", "pool", "assign", "unassign", "test"
+  String file;      ///< the track on the card, "/hr1.wav"
+  String text;      ///< new title, or the player's name
+  long number{0};   ///< the player's MLB id
+  int home_run{-1}; ///< -1 unchanged, else in or out of the home run pool
+  int win{-1};      ///< -1 unchanged, else in or out of the win pool
 };
 
 class ManagerServer {
@@ -71,6 +84,17 @@ class ManagerServer {
   using ForgetFn = std::function<void()>;
   /// Returns an empty string when applied, otherwise a short error code.
   using SettingsFn = std::function<String(const SettingsUpdate&)>;
+  /// Returns an empty string when applied, otherwise a short error code.
+  using AudioChangeFn = std::function<String(const AudioChange&)>;
+  /// Opens a track for writing. Empty string to accept, else an error code.
+  using AudioBeginFn = std::function<String(const String& filename)>;
+  /// Appends to the open track. False when the card refused the write.
+  using AudioWriteFn = std::function<bool(const std::uint8_t* data, std::size_t length)>;
+  /// Closes the track. `keep` is false when the upload failed part way.
+  using AudioEndFn = std::function<String(bool keep)>;
+  /// Opens a track for the page to play. Empty string with `out` open, else a code.
+  using AudioFileFn = std::function<String(const String& file, File& out)>;
+  void set_audio_file_hook(AudioFileFn open) { audio_file_ = std::move(open); }
 
   static constexpr char kSetupNetworkName[] = "Home Run Apple";
 
@@ -97,6 +121,11 @@ class ManagerServer {
     release_check_ = std::move(check);
     release_install_ = std::move(install);
   }
+  /// Runs a built-in replay, for testing the whole sequence over Wi-Fi with
+  /// nothing plugged into the board. `kind` is "" for the home run replay or
+  /// "win" for the one that ends in a Mets win.
+  using ReplayFn = std::function<String(const String& kind)>;
+  void set_replay_hook(ReplayFn replay) { replay_ = std::move(replay); }
   void loop();
 
   /// Opens the WPA2 setup network with a captive DNS so phones show the page
@@ -112,6 +141,15 @@ class ManagerServer {
   /// Changes from the home network must carry this code (the setup key) in
   /// the X-Apple-Code header or a `code` field. Requests that arrive over the
   /// setup network are trusted: joining it already required the code.
+  /// Track library hooks. Without them the audio routes answer 404.
+  void set_audio_hooks(AudioChangeFn change, AudioBeginFn begin, AudioWriteFn write,
+                       AudioEndFn end) {
+    audio_change_ = std::move(change);
+    audio_begin_ = std::move(begin);
+    audio_write_ = std::move(write);
+    audio_end_ = std::move(end);
+  }
+
   void set_admin_code(const String& code) { admin_code_ = code; }
   /// Off by default; the owner turns it on from the settings card.
   void set_code_required(bool required) { code_required_ = required; }
@@ -132,6 +170,10 @@ class ManagerServer {
   void handle_time_zones();
   void handle_update_upload();
   void handle_update_done();
+  void handle_audio_set();
+  void handle_audio_file();
+  void handle_audio_upload();
+  void handle_audio_done();
   /// 0 when the request may proceed, else the HTTP status to answer with.
   int auth_status();
 
@@ -143,6 +185,8 @@ class ManagerServer {
   RestartFn restart_;
   ActionFn release_check_;
   ActionFn release_install_;
+  ReplayFn replay_;
+  void handle_replay();
   void handle_restart();
   void handle_release_action(const ActionFn& action);
   void handle_not_found();
@@ -158,6 +202,13 @@ class ManagerServer {
   JoinFn join_;
   ForgetFn forget_;
   SettingsFn settings_;
+  AudioChangeFn audio_change_;
+  AudioBeginFn audio_begin_;
+  AudioWriteFn audio_write_;
+  AudioEndFn audio_end_;
+  AudioFileFn audio_file_;
+  String audio_error_;
+  bool audio_ok_{false};
   String admin_code_;
   bool code_required_{false};
   bool forget_pending_{false};

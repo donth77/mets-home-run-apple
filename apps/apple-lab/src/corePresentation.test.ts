@@ -11,7 +11,7 @@ describe("Apple Lab core presentation", () => {
           type: "CELEBRATION_STARTED",
           celebration: "GRAND_SLAM",
           eventKey: "777686:play-48",
-          subject: "Pete Alonso",
+          subject: "Bo Bichette",
         },
       ],
     });

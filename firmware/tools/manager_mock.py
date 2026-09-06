@@ -98,6 +98,7 @@ def make_handler(state):
                      "nextInMs": 42000, "lastError": ""},
             "settings": dict(settings, timeZoneLabel=zone_label(settings["timeZone"]),
                              setupKey="" if settings["requireCode"] else "00000000"),
+            "audio": state["audio"],
             "update": release_status(),
             "lastCelebration": {"kind": "HR", "subject": "Juan Soto", "at": 1788392040, "moved": True},
             "sequence": "IDLE", "fault": False, "positionMm": 0,
@@ -126,6 +127,22 @@ def make_handler(state):
                     self.send_response(503)
                     self.end_headers()
                     return None
+            if self.path.startswith("/api/audio/file"):
+                import math, struct
+                q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+                target = q.get("file", [""])[0]
+                if not any(t["file"] == target for t in state["audio"]["tracks"]):
+                    return self.send_json({"ok": False, "error": "NO_TRACK"}, 404)
+                rate, secs = 22050, 2
+                pcm = b"".join(struct.pack("<h", int(9000 * math.sin(2 * math.pi * 440 * i / rate))) for i in range(rate * secs))
+                head = b"RIFF" + struct.pack("<I", 36 + len(pcm)) + b"WAVEfmt " + struct.pack("<IHHIIHH", 16, 1, 1, rate, rate * 2, 2, 16) + b"data" + struct.pack("<I", len(pcm))
+                body = head + pcm
+                self.send_response(200)
+                self.send_header("Content-Type", "audio/wav")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return None
             if self.path.startswith("/api/timezones"):
                 return self.send_json(ZONES)
             if self.path.startswith("/api/networks"):
@@ -143,6 +160,31 @@ def make_handler(state):
             settings = state["settings"]
             if settings["requireCode"] and self.headers.get("X-Apple-Code", "") != "00000000":
                 return self.send_json({"ok": False, "error": "CODE"}, 401)
+            if self.path == "/api/audio/upload":
+                audio = state["audio"]
+                if len(audio["tracks"]) >= audio["maxTracks"]:
+                    return self.send_json({"ok": False, "error": "LIBRARY_FULL"}, 400)
+                # Check the WAV the page built really is what the Apple accepts.
+                start = body.find(b"RIFF")
+                if start < 0 or body[start + 8:start + 12] != b"WAVE":
+                    return self.send_json({"ok": False, "error": "NOT_WAV"}, 400)
+                head = body[start:start + 44]
+                rate = int.from_bytes(head[24:28], "little")
+                channels = int.from_bytes(head[22:24], "little")
+                bits = int.from_bytes(head[34:36], "little")
+                if channels != 1:
+                    return self.send_json({"ok": False, "error": "NOT_MONO"}, 400)
+                if bits != 16:
+                    return self.send_json({"ok": False, "error": "NOT_16_BIT"}, 400)
+                if rate != 22050:
+                    return self.send_json({"ok": False, "error": "WRONG_RATE"}, 400)
+                name = "/uploaded-%d.wav" % (len(audio["tracks"]) + 1)
+                m = re.search(rb'filename="([^"]+)"', body[:400])
+                if m:
+                    name = "/" + m.group(1).decode(errors="replace")
+                audio["tracks"].append({"file": name, "title": name.lstrip("/"),
+                                        "bytes": len(body), "hr": True, "win": False})
+                return self.send_json({"ok": True})
             if self.path == "/api/update":
                 # Any multipart body counts as a signed image here; the real
                 # Apple checks the signature. The "new" version shows up after
@@ -174,6 +216,43 @@ def make_handler(state):
                     return self.send_json({"ok": False, "error": "NO_UPDATE"}, 409)
                 rel.update(state="DOWNLOADING", ticks=0)
                 return self.send_json({"ok": True})
+            if self.path == "/api/audio/set":
+                audio = state["audio"]
+                action = args.get("action", [""])[0]
+                target = args.get("file", [""])[0]
+                track = next((t for t in audio["tracks"] if t["file"] == target), None)
+                if action == "stop":
+                    audio["playing"] = ""
+                    return self.send_json({"ok": True})
+                if action in ("test", "delete", "rename", "pool") and track is None:
+                    return self.send_json({"ok": False, "error": "NO_TRACK"}, 400)
+                if action == "test":
+                    audio["playing"] = target
+                elif action == "delete":
+                    audio["tracks"].remove(track)
+                    audio["players"] = [p for p in audio["players"] if p["file"] != target]
+                elif action == "rename":
+                    track["title"] = args.get("text", [""])[0]
+                elif action == "pool":
+                    for key in ("hr", "win"):
+                        if key in args:
+                            track[key] = args[key][0] in ("on", "1", "true")
+                elif action == "assign":
+                    name = args.get("text", [""])[0]
+                    who = int(args.get("id", ["0"])[0])
+                    if track is None:
+                        return self.send_json({"ok": False, "error": "NO_TRACK"}, 400)
+                    if not any(p["name"] == name and p["file"] == target for p in audio["players"]):
+                        audio["players"].append({"id": who, "name": name, "file": target})
+                elif action == "unassign":
+                    name = args.get("text", [""])[0]
+                    before = len(audio["players"])
+                    audio["players"] = [p for p in audio["players"] if not (p["name"] == name and (not target or p["file"] == target))]
+                    if len(audio["players"]) == before:
+                        return self.send_json({"ok": False, "error": "NO_PLAYER"}, 400)
+                else:
+                    return self.send_json({"ok": False, "error": "BAD_ACTION"}, 400)
+                return self.send_json({"ok": True})
             if self.path == "/api/wifi/forget":
                 state["joined"] = False
                 return self.send_json({"ok": True})
@@ -188,10 +267,12 @@ def make_handler(state):
                     settings["raisedSeconds"] = int(args["raised"][0])
                 if "bright" in args:
                     settings["brightness"] = int(args["bright"][0])
+                if "volume" in args:
+                    settings["volume"] = int(args["volume"][0])
                 if "token" in args:
                     settings["tokenSet"] = bool(args["token"][0])
                 for key, name in (("motor", "motor"), ("follow", "follow"), ("sleep", "sleepDisplay"), ("lock", "requireCode"),
-                                  ("auto", "autoUpdate"), ("beta", "beta")):
+                                  ("auto", "autoUpdate"), ("beta", "beta"), ("winfull", "winFullTrack")):
                     if key in args:
                         settings[name] = args[key][0] in ("on", "auto", "1", "true")
                 return self.send_json({"ok": True})
@@ -212,7 +293,25 @@ def main():
         "setup_network": args.setup,
         "settings": {"raisedSeconds": 30, "motor": True, "follow": True, "sleepDisplay": False,
                      "requireCode": False, "timeZone": "America/New_York", "timeZoneChosen": False,
-                     "brightness": 100, "autoUpdate": True, "beta": False, "tokenSet": False},
+                     "brightness": 100, "volume": 80, "winFullTrack": True, "autoUpdate": True, "beta": False, "tokenSet": False},
+        "audio": {"card": True, "playing": "", "batter": "Francisco Lindor", "maxTracks": 20,
+                  "tracks": [
+                      {"file": "/hr1.wav", "title": "hr1.wav", "bytes": 1_600_000, "added": 1_788_200_000, "hr": True, "win": False},
+                      {"file": "/hr2.wav", "title": "Takeover", "bytes": 1_900_000, "added": 1_788_250_000, "hr": True, "win": False},
+                      {"file": "/win1.wav", "title": "win1.wav", "bytes": 2_100_000, "added": 1_788_300_000, "hr": False, "win": True},
+                      {"file": "/extra-01.wav", "title": "Extra track 01", "bytes": 537000, "added": 1788403600, "hr": False, "win": False},
+                      {"file": "/extra-02.wav", "title": "Extra track 02", "bytes": 574000, "added": 1788407200, "hr": False, "win": False},
+                      {"file": "/extra-03.wav", "title": "Extra track 03", "bytes": 611000, "added": 1788410800, "hr": False, "win": False},
+                      {"file": "/extra-04.wav", "title": "Extra track 04", "bytes": 648000, "added": 1788414400, "hr": False, "win": False},
+                      {"file": "/extra-05.wav", "title": "Extra track 05", "bytes": 685000, "added": 1788418000, "hr": False, "win": False},
+                      {"file": "/extra-06.wav", "title": "Extra track 06", "bytes": 722000, "added": 1788421600, "hr": False, "win": False},
+                      {"file": "/extra-07.wav", "title": "Extra track 07", "bytes": 759000, "added": 1788425200, "hr": False, "win": False},
+                      {"file": "/extra-08.wav", "title": "Extra track 08", "bytes": 796000, "added": 1788428800, "hr": False, "win": False},
+                      {"file": "/extra-09.wav", "title": "Extra track 09", "bytes": 833000, "added": 1788432400, "hr": False, "win": False},
+                      {"file": "/extra-10.wav", "title": "Extra track 10", "bytes": 870000, "added": 1788436000, "hr": False, "win": False}],
+                  "players": [{"id": 596019, "name": "Francisco Lindor", "file": "/hr2.wav"},
+                              {"id": 596019, "name": "Francisco Lindor", "file": "/hr1.wav"},
+                              {"id": 1, "name": "Old Timer", "file": "/win1.wav"}]},
         "release": {"state": "IDLE", "version": "", "prerelease": False, "checkedAt": 0, "error": "", "found": False, "ticks": 0},
     }
     print(f"Apple Manager mock on http://127.0.0.1:{args.port}/  ({len(ZONES)} time zones, "

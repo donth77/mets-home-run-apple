@@ -104,7 +104,7 @@ describe("canonical core WASM boundary", () => {
         eventKey: "777001:play-43",
         atBatIndex: 43,
         battingTeamId: 121,
-        batterName: "Pete Alonso",
+        batterName: "Bo Bichette",
         kind: "GRAND_SLAM",
         complete: true,
         review: "NONE",
@@ -113,7 +113,7 @@ describe("canonical core WASM boundary", () => {
 
     const decision = instance.ingest(update, 100);
     expect(decision.events).toMatchObject([
-      { type: "CELEBRATION_STARTED", celebration: "GRAND_SLAM", subject: "Pete Alonso" },
+      { type: "CELEBRATION_STARTED", celebration: "GRAND_SLAM", subject: "Bo Bichette" },
     ]);
     expect(instance.tick(2_100).commands[0]).toMatchObject({ type: "MOTION_EXTEND", positionMm: 50 });
   });
