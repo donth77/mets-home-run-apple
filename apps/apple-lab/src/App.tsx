@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { AppleConnectionPanel } from "./AppleConnection";
+import { describeSequence } from "./appleDevice";
 import { createRecordedDiagnosticEvent, type DeviceTimelineEvent, fakeDeviceTimeline } from "./fakeDevice";
+import { useAppleDevice } from "./useAppleDevice";
 import { useUsbBenchDevice } from "./useUsbBenchDevice";
 import { DiagnosticsWorkspace } from "./workspaces/DiagnosticsWorkspace";
 import { HardwareTestsWorkspace } from "./workspaces/HardwareTestsWorkspace";
@@ -30,10 +33,16 @@ export function App() {
   const [recordedEvents, setRecordedEvents] = useState<DeviceTimelineEvent[]>([]);
   const usbBench = useUsbBenchDevice();
   const benchConnected = usbBench.connection === "CONNECTED";
+  const apple = useAppleDevice();
+  const appleLinked = apple.connection === "CONNECTED" || apple.connection === "STALE";
+  // With the Apple connected the timeline is what the Lab actually observed;
+  // the reference timeline is only for the Lab running on its own.
   const allEvents = useMemo(
     () =>
-      [...recordedEvents, ...fakeDeviceTimeline].sort((a, b) => Date.parse(b.occurredAt) - Date.parse(a.occurredAt)),
-    [recordedEvents],
+      [...recordedEvents, ...apple.events, ...(appleLinked ? [] : fakeDeviceTimeline)].sort(
+        (a, b) => Date.parse(b.occurredAt) - Date.parse(a.occurredAt),
+      ),
+    [recordedEvents, apple.events, appleLinked],
   );
   useEffect(() => {
     if (!serviceArmed) return;
@@ -64,14 +73,7 @@ export function App() {
             <small>Local engineering tool</small>
           </div>
         </div>
-        <section className="sidebar-device" aria-label="Selected device">
-          <div>
-            <span className={benchConnected ? "connection-dot" : "connection-dot connection-dot--offline"} />
-            <strong>{benchConnected ? "Nano ESP32" : "No physical device"}</strong>
-          </div>
-          <small>{benchConnected ? "USB serial · local bench" : "Simulator and feed tools available"}</small>
-          <span>{benchConnected ? "USB BENCH · CONNECTED" : "HARDWARE · DISCONNECTED"}</span>
-        </section>
+        <AppleConnectionPanel apple={apple} benchConnected={benchConnected} />
         <nav className="workspace-nav" aria-label="Apple Lab workspaces">
           {workspaces.map((item) => (
             <button
@@ -100,25 +102,41 @@ export function App() {
         <header className="manager-topbar">
           <div>
             <span>APPLE LAB / {activeWorkspace.label.toUpperCase()}</span>
-            <strong>{benchConnected ? "Nano ESP32 · USB bench" : "Reference device · demo"}</strong>
+            <strong>
+              {appleLinked
+                ? `Home Run Apple · ${apple.host}`
+                : benchConnected
+                  ? "Nano ESP32 · USB bench"
+                  : "Reference device · demo"}
+            </strong>
           </div>
           <div className="topbar-status">
             <span>
               <i className="status-light status-light--good" /> Lab tools ready
             </span>
             <span>
-              <i className={`status-light ${benchConnected ? "status-light--safe" : ""}`} />{" "}
-              {benchConnected
-                ? usbBench.driverState?.state === "STOP"
-                  ? "Outputs low"
-                  : "Bench active"
-                : "Hardware disconnected"}
+              <i
+                className={`status-light ${
+                  appleLinked ? (apple.idle ? "status-light--safe" : "status-light--good") : benchConnected ? "status-light--safe" : ""
+                }`}
+              />{" "}
+              {appleLinked && apple.status
+                ? apple.connection === "STALE"
+                  ? "Apple not answering"
+                  : `Apple ${describeSequence(apple.status.sequence, apple.status.fault).toLowerCase()}`
+                : benchConnected
+                  ? usbBench.driverState?.state === "STOP"
+                    ? "Outputs low"
+                    : "Bench active"
+                  : "Hardware disconnected"}
             </span>
-            <span className="transport-pill">{benchConnected ? "USB serial" : "No device"}</span>
+            <span className="transport-pill">{appleLinked ? "Wi-Fi" : benchConnected ? "USB serial" : "No device"}</span>
           </div>
         </header>
         <div id="workspace-content" className="manager-content" tabIndex={-1}>
-          {workspace === "overview" && <OverviewWorkspace events={allEvents} onOpenLive={() => setWorkspace("live")} />}
+          {workspace === "overview" && (
+            <OverviewWorkspace events={allEvents} onOpenLive={() => setWorkspace("live")} apple={apple} />
+          )}
           {workspace === "live" && <LiveWorkspace events={allEvents} />}
           {workspace === "replay" && <HistoricalReplayWorkspace />}
           {workspace === "simulator" && <SimulatorWorkspace />}
@@ -132,7 +150,7 @@ export function App() {
               bench={usbBench}
             />
           )}
-          {workspace === "diagnostics" && <DiagnosticsWorkspace events={allEvents} />}
+          {workspace === "diagnostics" && <DiagnosticsWorkspace events={allEvents} apple={apple} />}
         </div>
       </section>
     </main>

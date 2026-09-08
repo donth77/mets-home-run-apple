@@ -10,5 +10,6 @@
 @import "./styles/simulator-trace.css";
 @import "./styles/hardware-tests.css";
 @import "./styles/diagnostics.css";
+@import "./styles/apple-connection.css";
 @import "./styles/responsive.css";
 @import "./styles/typography.css";

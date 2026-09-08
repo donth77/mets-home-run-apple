@@ -1,15 +1,33 @@
+import { describeRssi } from "../appleDevice";
 import { fakeManagedDevice, type DeviceTimelineEvent } from "../fakeDevice";
 import { Timeline, WorkspaceHeading } from "../managerComponents";
+import type { AppleDeviceState } from "../useAppleDevice";
 
-export function DiagnosticsWorkspace({ events }: { events: readonly DeviceTimelineEvent[] }) {
-  const device = fakeManagedDevice;
+function kilobytes(bytes: number): string {
+  return `${Math.round(bytes / 1024)} KB`;
+}
+
+export function DiagnosticsWorkspace({
+  events,
+  apple,
+}: {
+  events: readonly DeviceTimelineEvent[];
+  apple?: AppleDeviceState;
+}) {
+  const live = apple !== undefined && apple.device !== null && apple.status !== null && apple.connection !== "DISCONNECTED";
+  const device = live ? apple.device! : fakeManagedDevice;
+  const status = live ? apple.status! : null;
   return (
     <section className="workspace" aria-labelledby="diagnostics-title">
       <WorkspaceHeading
-        eyebrow="Telemetry model"
+        eyebrow={live ? "Live telemetry" : "Telemetry model"}
         title="Diagnostics"
         titleId="diagnostics-title"
-        description="Preview the transport, feed, safety, and event-ledger data a future read-only autonomous-device connection could expose."
+        description={
+          live
+            ? "What the Apple reports over Wi-Fi, and the events Apple Lab has observed since it connected. The Apple keeps its own ledger; this is a window, not a copy."
+            : "Preview the transport, feed, safety, and event-ledger data the read-only Wi-Fi connection exposes once your Apple is connected."
+        }
       />
       <div className="diagnostics-grid">
         <article className="manager-panel diagnostic-summary">
@@ -18,7 +36,9 @@ export function DiagnosticsWorkspace({ events }: { events: readonly DeviceTimeli
               <span>Connection summary</span>
               <h2>{device.name}</h2>
             </div>
-            <span className="state-badge state-badge--safe">Demo data</span>
+            <span className={live ? (apple.connection === "STALE" ? "state-badge" : "state-badge state-badge--live") : "state-badge state-badge--safe"}>
+              {live ? (apple.connection === "STALE" ? "Not answering" : "Live") : "Demo data"}
+            </span>
           </header>
           <dl className="detail-list detail-list--wide">
             <div>
@@ -29,7 +49,7 @@ export function DiagnosticsWorkspace({ events }: { events: readonly DeviceTimeli
             </div>
             <div>
               <dt>Local host</dt>
-              <dd>{device.host}</dd>
+              <dd>{status ? `${device.host} · ${status.wifi.ip}` : device.host}</dd>
             </div>
             <div>
               <dt>Transport</dt>
@@ -37,65 +57,131 @@ export function DiagnosticsWorkspace({ events }: { events: readonly DeviceTimeli
             </div>
             <div>
               <dt>Firmware</dt>
-              <dd>v{device.firmwareVersion}</dd>
+              <dd>{status ? `v${status.firmwareVersion} · slot ${status.firmwareSlot}` : `v${device.firmwareVersion}`}</dd>
             </div>
             <div>
               <dt>Wi-Fi</dt>
               <dd>
-                {device.wifiNetwork} · {device.wifiSignalDbm} dBm
+                {device.wifiNetwork} · {device.wifiSignalDbm} dBm{status ? ` · ${describeRssi(status.wifi.rssi)}` : ""}
               </dd>
             </div>
             <div>
-              <dt>Power</dt>
+              <dt>{status ? "Motor" : "Power"}</dt>
               <dd>{device.power}</dd>
             </div>
             <div>
-              <dt>Uptime</dt>
+              <dt>{status ? "Clock" : "Uptime"}</dt>
               <dd>{device.uptime}</dd>
             </div>
             <div>
               <dt>Motion adapter</dt>
               <dd>{device.motionAdapter}</dd>
             </div>
+            {status ? (
+              <>
+                <div>
+                  <dt>Memory</dt>
+                  <dd>
+                    heap {kilobytes(status.heapFree)} free · largest {kilobytes(status.heapLargest)} · PSRAM{" "}
+                    {kilobytes(status.psramFree)}
+                  </dd>
+                </div>
+                <div>
+                  <dt>MLB polls</dt>
+                  <dd>
+                    {status.poll.ok} ok · {status.poll.failed} failed
+                    {status.poll.lastMs ? ` · last ${status.poll.lastMs} ms` : ""}
+                    {status.poll.lastError ? ` · ${status.poll.lastError}` : ""}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Update channel</dt>
+                  <dd>
+                    {status.update.state}
+                    {status.update.version ? ` · ${status.update.version}` : ""}
+                    {status.update.error ? ` · ${status.update.error}` : ""}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Last celebration</dt>
+                  <dd>
+                    {status.lastCelebration
+                      ? `${status.lastCelebration.kind} · ${status.lastCelebration.subject} · ${new Date(status.lastCelebration.at * 1000).toLocaleString()}`
+                      : "None recorded"}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Last status</dt>
+                  <dd>{apple?.lastSeenAt ? new Date(apple.lastSeenAt).toLocaleTimeString() : "—"}</dd>
+                </div>
+              </>
+            ) : null}
           </dl>
         </article>
         <article className="manager-panel safety-audit">
           <header className="panel-title">
             <div>
               <span>Safety invariants</span>
-              <h2>Example audit</h2>
+              <h2>{live ? "Reported by the Apple" : "Example audit"}</h2>
             </div>
           </header>
-          <ul className="check-list">
-            <li>
-              <i />
-              Accepted event key persisted before motion intent
-            </li>
-            <li>
-              <i />
-              Review-pending candidates remain motion-disabled
-            </li>
-            <li>
-              <i />
-              Apple is at the retracted home limit
-            </li>
-            <li>
-              <i />
-              No active or queued motion sequence
-            </li>
-            <li>
-              <i />
-              Lab adapter is recording-only
-            </li>
-          </ul>
+          {status ? (
+            <ul className="check-list">
+              <li data-ok={!status.fault}>
+                <i />
+                {status.fault ? "The Apple has a fault set; motion is disabled on the device" : "No fault set; motion is available to the engine"}
+              </li>
+              <li data-ok={status.sequence === "IDLE"}>
+                <i />
+                {status.sequence === "IDLE" ? "No active motion sequence" : `Sequence in progress: ${status.sequence}`}
+              </li>
+              <li data-ok={status.positionMm === 0}>
+                <i />
+                {status.positionMm === 0 ? "Apple is at the retracted home limit" : `Apple at ${status.positionMm} mm`}
+              </li>
+              <li data-ok={status.drive === "OFF" || status.sequence !== "IDLE"}>
+                <i />
+                Drive {status.drive} · {status.settings.motor ? "motor enabled in the Manager" : "motor disabled in the Manager"}
+              </li>
+              <li data-ok={status.settings.requireCode}>
+                <i />
+                {status.settings.requireCode
+                  ? "Setup code required for anything that acts"
+                  : "Setup code not required: anyone on this Wi-Fi can trigger motion or update firmware"}
+              </li>
+            </ul>
+          ) : (
+            <ul className="check-list">
+              <li>
+                <i />
+                Accepted event key persisted before motion intent
+              </li>
+              <li>
+                <i />
+                Review-pending candidates remain motion-disabled
+              </li>
+              <li>
+                <i />
+                Apple is at the retracted home limit
+              </li>
+              <li>
+                <i />
+                No active or queued motion sequence
+              </li>
+              <li>
+                <i />
+                Lab adapter is recording-only
+              </li>
+            </ul>
+          )}
         </article>
         <article className="manager-panel diagnostic-timeline">
           <header className="panel-title panel-title--timeline">
             <div>
-              <span>Bounded history</span>
-              <h2>Example event ledger</h2>
+              <span>{live ? "Observed since connecting" : "Bounded history"}</span>
+              <h2>{live ? "Apple event log" : "Example event ledger"}</h2>
             </div>
-            <small>Stable IDs prevent replay</small>
+            <small>{live ? "The Apple's own ledger stays on the device" : "Stable IDs prevent replay"}</small>
           </header>
           <Timeline events={events} filters exportFileName="apple-lab-device-event-ledger" />
         </article>

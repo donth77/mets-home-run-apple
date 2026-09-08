@@ -1,0 +1,151 @@
+{
+  "type": "status",
+  "mode": "UPCOMING",
+  "firmwareVersion": "0.3.0-rc.8",
+  "hostname": "home-run-apple",
+  "motion": "L298N",
+  "firmwareSlot": "app0",
+  "updatePending": false,
+  "settings": {
+    "raisedSeconds": 30,
+    "motor": true,
+    "follow": true,
+    "sleepDisplay": false,
+    "requireCode": false,
+    "timeZone": "America/New_York",
+    "timeZoneLabel": "Eastern Time - New York",
+    "timeZoneChosen": true,
+    "brightness": 100,
+    "volume": 45,
+    "winFullTrack": true,
+    "autoUpdate": true,
+    "beta": true,
+    "tokenSet": true,
+    "setupKey": "00000000",
+    "backlight": true
+  },
+  "audio": {
+    "card": true,
+    "playing": "",
+    "batter": "",
+    "maxTracks": 50,
+    "tracks": [
+      {
+        "file": "/hr1.wav",
+        "title": "OMG",
+        "bytes": 6500878,
+        "added": 1788468728,
+        "hr": true,
+        "win": false
+      },
+      {
+        "file": "/hr2.wav",
+        "title": "hr2.wav",
+        "bytes": 1651182,
+        "added": 1788468728,
+        "hr": true,
+        "win": false
+      },
+      {
+        "file": "/hr3.wav",
+        "title": "hr3.wav",
+        "bytes": 7655118,
+        "added": 1788468730,
+        "hr": true,
+        "win": false
+      },
+      {
+        "file": "/hr4.wav",
+        "title": "hr4.wav",
+        "bytes": 4685262,
+        "added": 1788468730,
+        "hr": true,
+        "win": false
+      },
+      {
+        "file": "/win1.wav",
+        "title": "New York Groove",
+        "bytes": 8101966,
+        "added": 1788468730,
+        "hr": false,
+        "win": true
+      },
+      {
+        "file": "/win2.wav",
+        "title": "Lazy Mary (Luna Mezzo Mare)",
+        "bytes": 7104590,
+        "added": 1788468732,
+        "hr": false,
+        "win": true
+      }
+    ],
+    "players": [
+      {
+        "id": 596019,
+        "name": "Francisco Lindor",
+        "file": "/hr2.wav"
+      },
+      {
+        "id": 596019,
+        "name": "Francisco Lindor",
+        "file": "/hr1.wav"
+      }
+    ]
+  },
+  "update": {
+    "state": "UP_TO_DATE",
+    "version": "",
+    "prerelease": false,
+    "size": 0,
+    "checkedAt": 1788834730,
+    "nextCheckIn": 84067,
+    "error": "",
+    "windowOpen": false
+  },
+  "lastCelebration": {
+    "kind": "WIN",
+    "subject": "SF 2, NYM 4",
+    "at": 1788725294,
+    "moved": true
+  },
+  "wifi": {
+    "configured": true,
+    "state": "CONNECTED",
+    "ssid": "Home Wi-Fi",
+    "rssi": -76,
+    "ip": "192.168.1.139",
+    "setupNetwork": false,
+    "setupClients": 0,
+    "scanning": false,
+    "networksFound": 5
+  },
+  "clock": true,
+  "heapFree": 208544,
+  "heapLargest": 155636,
+  "psramFree": 3578399,
+  "game": {
+    "gamePk": 823821,
+    "gameNumber": 1,
+    "away": "NYM",
+    "home": "MIA",
+    "scheduled": "2026-09-08T22:40:00Z",
+    "state": "Scheduled"
+  },
+  "snapshot": null,
+  "poll": {
+    "ok": 0,
+    "failed": 0,
+    "lastMs": 0,
+    "lastBytes": 0,
+    "nextInMs": 27148,
+    "lastError": ""
+  },
+  "ledger": 12,
+  "sequence": "IDLE",
+  "fault": false,
+  "drive": "OFF",
+  "positionMm": 0,
+  "ena": 0,
+  "in1": 0,
+  "in2": 0
+}

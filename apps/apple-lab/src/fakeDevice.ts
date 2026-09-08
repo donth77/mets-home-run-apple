@@ -16,15 +16,18 @@ export interface DeviceTimelineEvent {
   result?: "completed" | "safe-hold" | "connected" | "recorded";
 }
 
-export interface FakeManagedDevice {
+// The shape every workspace renders. The reference device below fills it with
+// representative values; a physical Apple reached over Wi-Fi fills it from its
+// live status (see appleDevice.ts).
+export interface ManagedDevice {
   id: string;
   name: string;
   host: string;
   firmwareVersion: string;
   connection: "CONNECTED";
-  operatingMode: "AUTONOMOUS_LIVE";
-  transport: "FAKE_DEVICE";
-  motionAdapter: "RECORDING";
+  operatingMode: "AUTONOMOUS_LIVE" | "PAUSED" | "UPCOMING" | "OFFSEASON" | string;
+  transport: "FAKE_DEVICE" | "WIFI";
+  motionAdapter: "RECORDING" | "L298N" | string;
   wifiNetwork: string;
   wifiSignalDbm: number;
   feedStatus: string;
@@ -32,13 +35,15 @@ export interface FakeManagedDevice {
   power: string;
   uptime: string;
   positionMm: number;
-  motionState: "HOME";
+  motionState: string;
   raisedDwellMs: number;
   nextGame: string;
-  snapshot: GameSnapshot;
+  snapshot: GameSnapshot | null;
 }
 
-export const fakeManagedDevice: FakeManagedDevice = {
+export type FakeManagedDevice = ManagedDevice;
+
+export const fakeManagedDevice: ManagedDevice & { snapshot: GameSnapshot } = {
   id: "apple-demo-01",
   name: "Home Run Apple",
   host: "mets-apple.local",

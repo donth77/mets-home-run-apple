@@ -1,6 +1,7 @@
 # Apple Lab
 
 Apple Lab is the local workshop for building and testing the project. It can
+connect to your Apple over Wi-Fi to watch it and fire test celebrations,
 simulate games, replay MLB history, inspect feed behavior, preview the physical
 display, and talk to guarded commissioning firmware over USB.
 
@@ -60,12 +61,37 @@ controls. Each motion request needs a new short-lived arm and returns a receipt.
 Follow the Hardware Tests instructions in order before connecting motor power
 or an actuator.
 
+## Connect to your Apple over Wi-Fi
+
+Use **Connect to Apple** in the sidebar. The address defaults to
+`home-run-apple.local` (an IP such as `192.168.1.139` also works) and the
+setup code is the one on the Apple's info screen (short press of the owner
+button). Both are remembered in this browser, and the Lab reconnects on the
+next visit.
+
+While connected, Overview shows what the Apple is showing — the live
+scoreboard during a game, the next game otherwise — plus its position, motion
+state, Wi-Fi signal, card and track counts, and firmware slot. **Test home run**
+and **Test Mets win** ask the Apple to replay its own recorded game through the
+real engine: display, audio, lights, and the full lift. They are enabled only
+while the Apple is idle, and the Apple still owns every timeout, stop, and
+fault. Diagnostics shows the Apple's telemetry and the events the Lab observed
+since it connected.
+
+The browser never talks to the Apple directly. The Lab's dev server relays
+`/device/*` to the Apple (see `vite-apple-relay.ts`), so this works from
+`pnpm dev:lab` and `vite preview`; a copy of the Lab hosted elsewhere cannot
+reach a LAN device. Set `APPLE_HOST` to change the default address.
+
+Turn on **Require code** in the Apple Manager: without it, anyone on the same
+Wi-Fi can trigger motion or upload firmware, code or no code.
+
 ## What is still a preview
 
-Overview and Diagnostics use representative device data. Hardware Tests' USB
-receipts are live; local-network pairing with the game-running firmware is not
-wired up yet. The disabled **Run fixture on device** button belongs to that
-separate connection.
+Without a connected Apple, Overview and Diagnostics fall back to
+representative device data and say so. The disabled **Run fixture on device**
+button in the Simulator waits on a firmware endpoint that accepts external
+fixtures, which does not exist yet.
 
 ## Apple Lab and Apple Manager
 
