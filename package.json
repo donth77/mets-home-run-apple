@@ -25,7 +25,9 @@
     "check:assets": "node scripts/check-3d-assets.mjs",
     "check:constants": "node scripts/check-core-constants.mjs",
     "test:unit": "pnpm --filter @apple/protocol --filter @apple/test-fixtures --filter @apple/game-state-wasm --filter @apple/game-core-wasm --filter @apple/device-display-wasm --filter @apple/mlb-live-feed --filter @apple/apple-3d --filter @apple/scoreboard-ui --filter @apple/web-debug --filter @apple/apple-lab --filter @apple/virtual-apple --filter @apple/notification-worker run test",
-    "test": "pnpm run check:public && pnpm run check:assets && pnpm run check:constants && pnpm run test:native && pnpm run wasm:build && pnpm run test:unit"
+    "test": "pnpm run check:public && pnpm run check:assets && pnpm run check:constants && pnpm run check:fixtures && pnpm run test:native && pnpm run wasm:build && pnpm run test:unit",
+    "fixtures:generate": "node scripts/generate-device-fixtures.mjs",
+    "check:fixtures": "node scripts/generate-device-fixtures.mjs --check"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.10",

@@ -109,3 +109,15 @@ elseif(MSVC)
 endif()
 
 add_test(NAME apple_release_pick_tests COMMAND apple_release_pick_tests)
+
+add_executable(apple_lab_protocol_tests lab_protocol_tests.cpp)
+target_link_libraries(apple_lab_protocol_tests PRIVATE apple_game_core apple_game_state apple_motion)
+target_include_directories(apple_lab_protocol_tests PRIVATE ${CMAKE_SOURCE_DIR}/lib/manager/include)
+target_include_directories(apple_lab_protocol_tests SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/third_party/ArduinoJson/src)
+target_compile_features(apple_lab_protocol_tests PRIVATE cxx_std_17)
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+  target_compile_options(apple_lab_protocol_tests PRIVATE -Wall -Wextra -Wpedantic -Werror)
+endif()
+add_test(NAME apple_lab_protocol_tests COMMAND apple_lab_protocol_tests
+  ${CMAKE_SOURCE_DIR}/test/native/fixtures/lab-protocol.trace
+  ${CMAKE_SOURCE_DIR}/test/native/fixtures/status-snapshot.json)

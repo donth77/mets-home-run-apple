@@ -335,6 +335,34 @@ export function UsbBenchPanel({
     return "This profile exercises the L298N logic inputs only. It is not an actuator-control interface and must never be used with motor power connected.";
   })();
 
+  if (bench.production && connected)
+    return (
+      <section className="manager-panel usb-bench-panel" aria-label="Production USB telemetry">
+        <h2>Production Apple connected over USB</h2>
+        <p>
+          {bench.liveFresh ? "Live status" : "Waiting for fresh status"} ·{" "}
+          {bench.liveStatus?.firmwareVersion ?? "Identifying firmware"}
+        </p>
+        <p>
+          Overview, Live Game, and Diagnostics can show this USB telemetry. When Wi-Fi is connected, those pages use
+          Wi-Fi. Physical Simulator runs require a Wi-Fi maintenance session.
+        </p>
+        <button type="button" onClick={() => void bench.queryStatus()}>
+          Refresh USB status
+        </button>
+        <button type="button" onClick={() => void bench.disconnect()}>
+          Disconnect USB
+        </button>
+        <ol className="bench-serial-log" aria-label="Nano serial output">
+          {bench.log.map((line) => (
+            <li key={line.id}>
+              <code>{line.text}</code>
+            </li>
+          ))}
+        </ol>
+      </section>
+    );
+
   return (
     <>
       <section className="manager-panel usb-bench-panel" aria-labelledby="usb-bench-title">

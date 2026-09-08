@@ -10,6 +10,7 @@ import {
   toManagedDevice,
 } from "./appleDevice";
 import statusFixture from "./fixtures/apple-status.json";
+import snapshotGolden from "../../../firmware/test/native/fixtures/status-snapshot.json";
 
 const status = parseAppleStatus(statusFixture);
 
@@ -39,6 +40,38 @@ describe("parseAppleStatus", () => {
     expect(sparse.game).toBeNull();
     expect(sparse.wifi.rssi).toBe(-100);
     expect(sparse.settings.raisedSeconds).toBe(30);
+    expect(sparse.motionKnown).toBe(false);
+    expect(sparse.fault).toBeNull();
+    expect(sparse.positionMm).toBeNull();
+    expect(appleIsIdle(sparse)).toBe(false);
+  });
+
+  it.each([undefined, null, "OFF", Number.NaN, -1])("never enables motion with invalid position %s", (positionMm) => {
+    expect(appleIsIdle(parseAppleStatus({ ...statusFixture, positionMm }))).toBe(false);
+  });
+
+  it.each(["sequence", "drive", "fault"])("requires explicit %s telemetry", (field) => {
+    const incomplete = { ...statusFixture, [field]: undefined };
+    expect(appleIsIdle(parseAppleStatus(incomplete))).toBe(false);
+  });
+
+  it("renders the complete snapshot emitted by the native firmware serializer", () => {
+    const parsed = parseAppleStatus({ ...statusFixture, snapshot: snapshotGolden });
+    expect(parsed.snapshot?.atBat).toMatchObject({
+      balls: 2,
+      strikes: 1,
+      batter: "Fixture Batter",
+      bases: { first: true, second: false, third: true },
+    });
+    expect(parsed.snapshot?.linescore?.innings[1]).toEqual({ inning: 2, away: 2, home: null });
+    expect(parsed.snapshot?.away.abbreviation).toBe("ATL");
+    expect(parsed.snapshot?.home.abbreviation).toBe("NYM");
+    expect(
+      parseAppleStatus({ ...statusFixture, snapshot: { ...snapshotGolden, atBat: { balls: 4 } } }).snapshot,
+    ).toBeNull();
+    expect(
+      parseAppleStatus({ ...statusFixture, snapshot: { gamePk: 1, awayRuns: 2, homeRuns: 3 } }).snapshot,
+    ).toBeNull();
   });
 });
 

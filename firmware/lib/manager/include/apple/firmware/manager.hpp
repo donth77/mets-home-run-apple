@@ -13,6 +13,7 @@
 #include <Arduino.h>
 
 #include "apple/firmware/firmware_update.hpp"
+#include "apple/firmware/maintenance_session.hpp"
 #include <ArduinoJson.h>
 #include <DNSServer.h>
 #include <FS.h>
@@ -121,11 +122,19 @@ class ManagerServer {
     release_check_ = std::move(check);
     release_install_ = std::move(install);
   }
-  /// Runs a built-in replay, for testing the whole sequence over Wi-Fi with
-  /// nothing plugged into the board. `kind` is "" for the home run replay or
-  /// "win" for the one that ends in a Mets win.
+  /// Runs a built-in replay after authenticated physical approval.
+  /// `kind` is "hr" for a home run or "win" for a Mets win.
   using ReplayFn = std::function<String(const String& kind)>;
+  void set_fixture_hooks(ReplayFn run, ActionFn stop) { fixture_run_ = std::move(run); fixture_stop_ = std::move(stop); }
   void set_replay_hook(ReplayFn replay) { replay_ = std::move(replay); }
+  void set_maintenance_gate(ActionFn gate) { maintenance_gate_ = std::move(gate); }
+  bool confirm_maintenance() { return maintenance_.confirm(millis()); }
+  void clear_maintenance() { maintenance_.clear(); }
+  // The device loop shows a prompt while a request waits for the button.
+  bool maintenance_pending() const { return maintenance_.pending(millis()); }
+  std::uint32_t maintenance_remaining_ms() const { return maintenance_.remaining_ms(millis()); }
+  void fill_maintenance_status(JsonObject out) const;
+
   void loop();
 
   /// Opens the WPA2 setup network with a captive DNS so phones show the page
@@ -175,7 +184,7 @@ class ManagerServer {
   void handle_audio_upload();
   void handle_audio_done();
   /// 0 when the request may proceed, else the HTTP status to answer with.
-  int auth_status();
+  int auth_status(bool require_code = false);
 
   FirmwareUpdater updater_;
   String update_error_;
@@ -186,6 +195,14 @@ class ManagerServer {
   ActionFn release_check_;
   ActionFn release_install_;
   ReplayFn replay_;
+  ReplayFn fixture_run_;
+  ActionFn fixture_stop_;
+  String fixture_stop_token_;
+  void handle_fixture();
+  void handle_fixture_stop();
+  ActionFn maintenance_gate_;
+  MaintenanceSession maintenance_;
+  void handle_maintenance();
   void handle_replay();
   void handle_restart();
   void handle_release_action(const ActionFn& action);

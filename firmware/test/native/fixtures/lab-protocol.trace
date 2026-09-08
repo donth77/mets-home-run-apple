@@ -1,0 +1,15 @@
+maintenance: unauthenticated=denied presence=30s session=60s single-use rollover=ok stop-before-start=retired cancellation=fault-latched
+live home
+home-run 2900:extend 39900:retract home
+grand-slam 2900:extend 39900:retract home
+review-confirmed 5200:extend 42200:retract home
+review-overturned home
+rain-delay home
+game-delay home
+game-suspended home
+game-postponed home
+game-cancelled home
+mets-win 3200:extend 40200:retract home
+doubleheader 3200:extend 40200:retract home
+sleep home
+offseason home

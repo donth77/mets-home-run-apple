@@ -26,7 +26,7 @@ export interface ManagedDevice {
   firmwareVersion: string;
   connection: "CONNECTED";
   operatingMode: "AUTONOMOUS_LIVE" | "PAUSED" | "UPCOMING" | "OFFSEASON" | string;
-  transport: "FAKE_DEVICE" | "WIFI";
+  transport: "FAKE_DEVICE" | "WIFI" | "USB";
   motionAdapter: "RECORDING" | "L298N" | string;
   wifiNetwork: string;
   wifiSignalDbm: number;
@@ -34,7 +34,7 @@ export interface ManagedDevice {
   feedFreshness: string;
   power: string;
   uptime: string;
-  positionMm: number;
+  positionMm: number | null;
   motionState: string;
   raisedDwellMs: number;
   nextGame: string;

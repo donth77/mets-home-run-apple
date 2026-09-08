@@ -5,17 +5,18 @@ import {
   describeAppleError,
   fetchAppleStatus,
   requestAppleCelebration,
+  requestMaintenance,
+  requestFixture,
+  stopFixture,
+  type AppleClientOptions,
 } from "./appleClient";
 import { type AppleStatus, appleIsIdle, deriveTransitionEvents, toManagedDevice } from "./appleDevice";
 import type { DeviceTimelineEvent, ManagedDevice } from "./fakeDevice";
 
-// One Wi-Fi connection to the physical Apple, shared by every workspace. The
-// Lab only reads status and asks for test celebrations; the Apple decides.
-
 export type AppleConnection = "DISCONNECTED" | "CONNECTING" | "CONNECTED" | "STALE";
-
 export interface AppleDeviceState {
   connection: AppleConnection;
+  transport: "WIFI" | "USB";
   host: string;
   code: string;
   status: AppleStatus | null;
@@ -23,64 +24,64 @@ export interface AppleDeviceState {
   error: string | null;
   lastSeenAt: string | null;
   events: readonly DeviceTimelineEvent[];
-  pending: CelebrationKind | null;
+  pending: string | null;
+  // A test that is waiting for the owner button: requested, not yet approved.
+  // It runs by itself the moment the Apple reports the tap.
+  queued: string | null;
+  cancelQueued: () => void;
   idle: boolean;
+  canTest: boolean;
+  maintenancePending: boolean;
+  canStopTest: boolean;
+  disarmTest: () => void;
   connect: (host: string, code: string) => Promise<void>;
   disconnect: () => void;
+  requestTestSession: () => Promise<void>;
   testCelebration: (kind: CelebrationKind) => Promise<void>;
+  runFixture: (scenarioId: string) => Promise<void>;
+  stopFixture: () => Promise<void>;
 }
 
 const STORAGE_KEY = "apple-lab.apple-connection";
-const POLL_MS = 1000;
-const STALE_AFTER_FAILURES = 3;
-const DROP_AFTER_FAILURES = 15;
-const MAX_EVENTS = 60;
-
+export const STATUS_FRESH_MS = 3000;
+const isVisible = () => document.visibilityState !== "hidden";
 interface StoredConnection {
   host: string;
   code: string;
   autoConnect: boolean;
 }
-
 function readStored(): StoredConnection {
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as Partial<StoredConnection>;
+    const value = JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "null");
+    if (value && typeof value === "object")
       return {
-        host: typeof parsed.host === "string" && parsed.host ? parsed.host : DEFAULT_APPLE_HOST,
-        code: typeof parsed.code === "string" ? parsed.code : "",
-        autoConnect: parsed.autoConnect === true,
+        host: typeof value.host === "string" && value.host ? value.host : DEFAULT_APPLE_HOST,
+        code: typeof value.code === "string" ? value.code : "",
+        autoConnect: value.autoConnect === true,
       };
-    }
   } catch {
-    // Storage unavailable or corrupt: start fresh.
+    /* Storage is optional. */
   }
   return { host: DEFAULT_APPLE_HOST, code: "", autoConnect: false };
 }
-
-function writeStored(value: StoredConnection) {
+function store(value: StoredConnection) {
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(value));
   } catch {
-    // Nothing to do; the session still works without persistence.
+    /* Storage is optional. */
   }
 }
 
-function connectionEvent(title: string, detail: string, occurredAt: string): DeviceTimelineEvent {
-  return {
-    id: `apple-link-${occurredAt}-${title}`,
-    occurredAt,
-    category: "system",
-    kind: "connection",
-    title,
-    detail,
-    result: "connected",
-  };
+// An Apple the workspaces can render live: linked, with a status and a
+// device model. Narrows both fields so callers need no assertions.
+export type LiveApple = AppleDeviceState & { status: AppleStatus; device: ManagedDevice };
+export function liveApple(apple: AppleDeviceState | undefined): LiveApple | null {
+  if (!apple || apple.connection === "DISCONNECTED" || apple.status === null || apple.device === null) return null;
+  return apple as LiveApple;
 }
 
 export function useAppleDevice(): AppleDeviceState {
-  const stored = useMemo(readStored, []);
+  const [stored] = useState(readStored);
   const [host, setHost] = useState(stored.host);
   const [code, setCode] = useState(stored.code);
   const [connection, setConnection] = useState<AppleConnection>("DISCONNECTED");
@@ -88,160 +89,311 @@ export function useAppleDevice(): AppleDeviceState {
   const [error, setError] = useState<string | null>(null);
   const [lastSeenAt, setLastSeenAt] = useState<string | null>(null);
   const [events, setEvents] = useState<DeviceTimelineEvent[]>([]);
-  const [pending, setPending] = useState<CelebrationKind | null>(null);
-  const failures = useRef(0);
-  const previous = useRef<AppleStatus | null>(null);
-  const timer = useRef<number | null>(null);
-  const active = useRef(false);
-  const inFlight = useRef(false);
+  const [pending, setPending] = useState<string | null>(null);
+  const [queued, setQueued] = useState<string | null>(null);
+  const [sessionToken, setSessionToken] = useState("");
+  const [canStopTest, setCanStopTest] = useState(false);
   const credentials = useRef({ host: stored.host, code: stored.code });
-
-  const pushEvents = useCallback((added: DeviceTimelineEvent[]) => {
-    if (added.length === 0) return;
-    setEvents((current) => [...added, ...current].slice(0, MAX_EVENTS));
+  const current = useRef<AppleStatus | null>(null);
+  const lastSeen = useRef(-Infinity);
+  const generation = useRef(0);
+  const active = useRef(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const freshness = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollController = useRef<AbortController | null>(null);
+  const actionController = useRef<AbortController | null>(null);
+  const actionName = useRef("");
+  const token = useRef("");
+  const stopToken = useRef("");
+  const failures = useRef(0);
+  const queuedRef = useRef<{ name: string; operation: (options: AppleClientOptions) => Promise<void>; at: number } | null>(
+    null,
+  );
+  const runQueued = useRef<((name: string, operation: (options: AppleClientOptions) => Promise<void>) => Promise<boolean>) | null>(null);
+  const clearQueued = useCallback(() => {
+    queuedRef.current = null;
+    setQueued(null);
   }, []);
-
-  const stopPolling = useCallback(() => {
-    if (timer.current !== null) {
-      window.clearInterval(timer.current);
-      timer.current = null;
-    }
+  const clearToken = useCallback(() => {
+    token.current = "";
+    setSessionToken("");
   }, []);
-
-  const poll = useCallback(async () => {
-    // One request at a time: during a celebration the Apple answers slowly,
-    // and stacking polls on a weak link only makes it slower.
-    if (!active.current || inFlight.current || document.visibilityState === "hidden") return;
-    inFlight.current = true;
-    try {
-      const next = await fetchAppleStatus(credentials.current);
-      if (!active.current) return;
-      const now = new Date().toISOString();
-      failures.current = 0;
-      pushEvents(deriveTransitionEvents(previous.current, next, now));
-      previous.current = next;
-      setStatus(next);
-      setLastSeenAt(now);
-      setError(null);
-      setConnection("CONNECTED");
-    } catch (caught) {
-      if (!active.current) return;
-      failures.current += 1;
-      if (failures.current >= DROP_AFTER_FAILURES) {
-        active.current = false;
-        stopPolling();
-        setConnection("DISCONNECTED");
-        setError(`Lost the Apple: ${describeAppleError(caught)}`);
-        pushEvents([connectionEvent("Apple connection dropped", describeAppleError(caught), new Date().toISOString())]);
-      } else if (failures.current >= STALE_AFTER_FAILURES) {
-        setConnection("STALE");
-        setError(describeAppleError(caught));
-      }
-    } finally {
-      inFlight.current = false;
-    }
-  }, [pushEvents, stopPolling]);
-
-  const disconnect = useCallback(() => {
+  const cleanup = useCallback(() => {
+    generation.current += 1;
     active.current = false;
-    stopPolling();
-    previous.current = null;
+    if (timer.current) clearTimeout(timer.current);
+    if (freshness.current) clearTimeout(freshness.current);
+    pollController.current?.abort();
+    pollController.current = null;
+    actionController.current?.abort();
+    actionController.current = null;
+    token.current = "";
+    stopToken.current = "";
+  }, []);
+
+  const poll = useCallback(
+    async function pollStatus(epoch: number): Promise<void> {
+      if (!active.current || epoch !== generation.current || pollController.current) return;
+      if (timer.current) clearTimeout(timer.current);
+      if (!isVisible()) return;
+      const controller = new AbortController();
+      pollController.current = controller;
+      const deadline = setTimeout(() => controller.abort(), 8000);
+      const options = { ...credentials.current, signal: controller.signal };
+      try {
+        const next = await fetchAppleStatus(options);
+        if (!active.current || epoch !== generation.current || controller.signal.aborted || !isVisible()) return;
+        const at = new Date().toISOString();
+        const added = deriveTransitionEvents(current.current, next, at);
+        if (added.length) setEvents((previous) => [...added, ...previous].slice(0, 60));
+        current.current = next;
+        lastSeen.current = performance.now();
+        failures.current = 0;
+        setStatus(next);
+        setLastSeenAt(at);
+        setConnection("CONNECTED");
+        // Action errors stay visible until another deliberate action.
+        if (!actionController.current) setError((previous) => (previous?.startsWith("Connection:") ? null : previous));
+        // A queued test waits here for the owner's tap. Once the Apple reports
+        // the session armed, run it without another click; if the presence
+        // window lapses, or the token was dropped by a stale link, let go.
+        const waiting = queuedRef.current;
+        if (waiting && !actionController.current) {
+          const settled = performance.now() - waiting.at > 2000;
+          if (!token.current) {
+            clearQueued();
+            setError("The connection hiccupped while waiting for the button. Click the test again.");
+          } else if (next.maintenance.armed) {
+            clearQueued();
+            void runQueued.current?.(waiting.name, waiting.operation);
+          } else if (settled && !next.maintenance.pending) {
+            clearQueued();
+            clearToken();
+            setError("The Apple's button wasn't tapped in time. Click the test again to retry.");
+          }
+        }
+        if (freshness.current) clearTimeout(freshness.current);
+        freshness.current = setTimeout(() => {
+          if (active.current && epoch === generation.current) {
+            setConnection("STALE");
+            clearToken();
+          }
+        }, STATUS_FRESH_MS);
+      } catch (caught) {
+        if (!active.current || epoch !== generation.current) return;
+        failures.current += 1;
+        setConnection("STALE");
+        clearToken();
+        setError(`Connection: ${describeAppleError(caught)} Retrying automatically.`);
+      } finally {
+        clearTimeout(deadline);
+        if (pollController.current === controller) pollController.current = null;
+        if (active.current && epoch === generation.current && isVisible()) {
+          const delay = failures.current ? Math.min(15000, 1000 * 2 ** Math.min(failures.current - 1, 4)) : 1000;
+          timer.current = setTimeout(() => void pollStatus(epoch), delay);
+        }
+      }
+    },
+    [clearToken, clearQueued],
+  );
+
+  const connect = useCallback(
+    async (nextHost: string, nextCode: string) => {
+      cleanup();
+      clearToken();
+      clearQueued();
+      setCanStopTest(false);
+      setPending(null);
+      setStatus(null);
+      setLastSeenAt(null);
+      setEvents([]);
+      setError(null);
+      current.current = null;
+      lastSeen.current = -Infinity;
+      failures.current = 0;
+      credentials.current = { host: nextHost.trim() || DEFAULT_APPLE_HOST, code: nextCode.trim() };
+      setHost(credentials.current.host);
+      setCode(credentials.current.code);
+      setConnection("CONNECTING");
+      store({ ...credentials.current, autoConnect: true });
+      active.current = true;
+      await poll(generation.current);
+    },
+    [cleanup, clearToken, clearQueued, poll],
+  );
+  const disconnect = useCallback(() => {
+    cleanup();
+    clearToken();
+    clearQueued();
+    setCanStopTest(false);
+    current.current = null;
     setConnection("DISCONNECTED");
     setStatus(null);
     setPending(null);
     setError(null);
-    writeStored({ ...credentials.current, autoConnect: false });
-  }, [stopPolling]);
+    setLastSeenAt(null);
+    setEvents([]);
+    store({ ...credentials.current, autoConnect: false });
+  }, [cleanup, clearToken, clearQueued]);
 
-  const connect = useCallback(
-    async (nextHost: string, nextCode: string) => {
-      const cleanHost = nextHost.trim() || DEFAULT_APPLE_HOST;
-      credentials.current = { host: cleanHost, code: nextCode.trim() };
-      setHost(cleanHost);
-      setCode(nextCode.trim());
-      stopPolling();
-      failures.current = 0;
-      previous.current = null;
-      setError(null);
-      setConnection("CONNECTING");
-      try {
-        const first = await fetchAppleStatus(credentials.current);
-        const now = new Date().toISOString();
-        previous.current = first;
-        setStatus(first);
-        setLastSeenAt(now);
-        setConnection("CONNECTED");
-        active.current = true;
-        writeStored({ ...credentials.current, autoConnect: true });
-        pushEvents([
-          connectionEvent(
-            "Apple connected over Wi-Fi",
-            `${cleanHost} · firmware ${first.firmwareVersion} on ${first.firmwareSlot} · ${first.wifi.rssi} dBm`,
-            now,
-          ),
-        ]);
-        timer.current = window.setInterval(() => {
-          void poll();
-        }, POLL_MS);
-      } catch (caught) {
-        active.current = false;
-        setConnection("DISCONNECTED");
-        setError(describeAppleError(caught));
+  const runAction = useCallback(
+    async (name: string, operation: (options: AppleClientOptions) => Promise<void>, consume = true) => {
+      const s = current.current;
+      if (actionController.current) {
+        if (name !== "stop" || actionName.current === "stop") return false;
+        actionController.current.abort();
       }
-    },
-    [poll, pushEvents, stopPolling],
-  );
-
-  const testCelebration = useCallback(
-    async (kind: CelebrationKind) => {
-      if (!active.current) return;
-      setPending(kind);
+      if (
+        !active.current ||
+        (name !== "stop" &&
+          (!s || performance.now() - lastSeen.current >= STATUS_FRESH_MS || !isVisible() || !appleIsIdle(s)))
+      ) {
+        setError("Wait for fresh, idle status from the Apple.");
+        return false;
+      }
+      if (
+        consume &&
+        (!token.current || !s?.maintenance.armed || s.maintenance.remainingMs <= performance.now() - lastSeen.current)
+      ) {
+        setError("Tap the Apple's owner button to approve this test.");
+        return false;
+      }
+      const epoch = generation.current;
+      const controller = new AbortController();
+      actionController.current = controller;
+      actionName.current = name;
+      const options = {
+        ...credentials.current,
+        maintenanceToken: name === "stop" ? stopToken.current : token.current,
+        signal: controller.signal,
+      };
+      if (consume) {
+        stopToken.current = token.current;
+        setCanStopTest(name !== "hr" && name !== "win");
+        clearToken();
+      }
+      setPending(name);
       setError(null);
+      const deadline = setTimeout(() => controller.abort(), 8000);
       try {
-        await requestAppleCelebration(credentials.current, kind);
-        pushEvents([
-          {
-            id: `apple-test-${Date.now()}`,
-            occurredAt: new Date().toISOString(),
-            category: "apple",
-            kind: kind === "win" ? "mets-win" : "home-run",
-            title: kind === "win" ? "Test Mets win requested" : "Test home run requested",
-            detail: "Apple Lab asked the Apple to replay its recorded game. The Apple runs the sequence itself.",
-            result: "recorded",
-          },
-        ]);
-        void poll();
+        await operation(options);
+        if (epoch !== generation.current || controller.signal.aborted) return false;
+        if (name === "stop") {
+          stopToken.current = "";
+          setCanStopTest(false);
+        }
+        if (consume) {
+          lastSeen.current = -Infinity;
+          setConnection("STALE");
+        }
+        await poll(epoch);
+        return true;
       } catch (caught) {
-        setError(describeAppleError(caught));
+        if (epoch === generation.current && actionController.current === controller)
+          setError(describeAppleError(caught));
+        return false;
       } finally {
-        setPending(null);
+        clearTimeout(deadline);
+        if (actionController.current === controller) {
+          actionController.current = null;
+          if (epoch === generation.current) setPending(null);
+        }
       }
     },
-    [poll, pushEvents],
+    [clearToken, poll],
   );
-
-  // Auto-reconnect to the last Apple, and pause the poll while the tab is
-  // hidden so a background Lab does not hammer a weak Wi-Fi link.
   useEffect(() => {
-    if (stored.autoConnect && stored.code) void connect(stored.host, stored.code);
-    const onVisible = () => {
-      if (document.visibilityState === "visible" && active.current) void poll();
+    runQueued.current = runAction;
+  }, [runAction]);
+  const requestTestSession = useCallback(async () => {
+    clearToken();
+    await runAction(
+      "maintenance",
+      async (options) => {
+        const epoch = generation.current;
+        const value = await requestMaintenance(options);
+        if (epoch === generation.current && !options.signal?.aborted) {
+          token.current = value;
+          setSessionToken(value);
+        }
+      },
+      false,
+    );
+  }, [clearToken, runAction]);
+  // One click: if the Apple is already armed, run; otherwise ask for a
+  // session and queue the run for the owner's tap. Clicking again cancels.
+  const armAndRun = useCallback(
+    async (name: string, operation: (options: AppleClientOptions) => Promise<void>) => {
+      const s = current.current;
+      if (queuedRef.current) {
+        clearQueued();
+        clearToken();
+        return;
+      }
+      if (!active.current || !s) {
+        setError("Connect to the Apple over Wi-Fi first.");
+        return;
+      }
+      if (!s.maintenance.supported) {
+        setError("Update the Apple's firmware to run tests from Apple Lab.");
+        return;
+      }
+      if (token.current && s.maintenance.armed) {
+        await runAction(name, operation);
+        return;
+      }
+      queuedRef.current = { name, operation, at: performance.now() };
+      setQueued(name);
+      clearToken();
+      const requested = await runAction(
+        "maintenance",
+        async (options) => {
+          const epoch = generation.current;
+          const value = await requestMaintenance(options);
+          if (epoch === generation.current && !options.signal?.aborted) {
+            token.current = value;
+            setSessionToken(value);
+          }
+        },
+        false,
+      );
+      if (!requested) clearQueued();
+    },
+    [clearQueued, clearToken, runAction],
+  );
+  const testCelebration = useCallback(
+    (kind: CelebrationKind) => armAndRun(kind, (options) => requestAppleCelebration(options, kind)),
+    [armAndRun],
+  );
+  const runFixture = useCallback((id: string) => armAndRun(id, (options) => requestFixture(options, id)), [armAndRun]);
+  const cancelQueued = useCallback(() => {
+    clearQueued();
+    clearToken();
+  }, [clearQueued, clearToken]);
+  const stop = useCallback(async () => {
+    await runAction("stop", stopFixture, false);
+  }, [runAction]);
+
+  useEffect(() => {
+    if (stored.autoConnect) void connect(stored.host, stored.code);
+    const visibility = () => {
+      if (!active.current) return;
+      if (!isVisible()) {
+        setConnection("STALE");
+        clearToken();
+      } else void poll(generation.current);
     };
-    document.addEventListener("visibilitychange", onVisible);
+    document.addEventListener("visibilitychange", visibility);
     return () => {
-      document.removeEventListener("visibilitychange", onVisible);
-      active.current = false;
-      stopPolling();
+      document.removeEventListener("visibilitychange", visibility);
+      cleanup();
     };
-    // Mount-only: the stored connection is read once.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
+  }, [stored, connect, cleanup, clearToken, poll]);
   const device = useMemo(() => (status ? toManagedDevice(status, host) : null), [status, host]);
-  const idle = status !== null && connection !== "DISCONNECTED" && appleIsIdle(status);
-
+  const idle = connection === "CONNECTED" && status !== null && appleIsIdle(status);
   return {
     connection,
+    transport: "WIFI",
     host,
     code,
     status,
@@ -250,9 +402,23 @@ export function useAppleDevice(): AppleDeviceState {
     lastSeenAt,
     events,
     pending,
+    queued,
+    cancelQueued,
     idle,
+    canTest:
+      idle &&
+      !!sessionToken &&
+      status?.maintenance.armed === true &&
+      status.maintenance.remainingMs > 0 &&
+      pending === null,
+    maintenancePending: !!sessionToken && status?.maintenance.pending === true,
+    canStopTest,
+    disarmTest: cancelQueued,
     connect,
     disconnect,
+    requestTestSession,
     testCelebration,
+    runFixture,
+    stopFixture: stop,
   };
 }

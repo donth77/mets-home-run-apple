@@ -298,15 +298,15 @@ describe("Apple Lab manager", () => {
     expect(commands).not.toContain("x");
   });
 
-  it("stages every Simulator scenario for a future guarded Nano run", () => {
+  it("keeps physical Simulator runs disarmed without a connected Apple", () => {
     render(<App />);
     fireEvent.click(screen.getByRole("button", { name: /Simulator/ }));
     fireEvent.click(screen.getByRole("button", { name: /Home run/ }));
 
     expect(screen.getByText(/1 raise \/ lower sequence expected/)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Run fixture on device" }).hasAttribute("disabled")).toBe(true);
-    fireEvent.click(screen.getByRole("button", { name: "Physical cycle" }));
-    expect(screen.getByRole("button", { name: "Physical cycle" }).getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(screen.getByRole("switch", { name: "Physical Apple" }));
+    expect((screen.getByRole("switch", { name: "Physical Apple" }) as HTMLInputElement).checked).toBe(true);
   });
 
   it("labels the grand-slam Simulator scenario distinctly", () => {

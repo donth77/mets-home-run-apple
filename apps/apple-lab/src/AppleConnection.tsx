@@ -23,11 +23,13 @@ export function AppleConnectionPanel({ apple, benchConnected }: { apple: AppleDe
   };
 
   if (linked && status) {
-    const tone = sequenceTone(status.sequence, status.fault);
+    const tone = status.motionKnown ? sequenceTone(status.sequence, status.fault) : "warning";
     return (
       <section className="sidebar-device sidebar-device--apple" aria-label="Connected Apple">
         <div>
-          <span className={apple.connection === "STALE" ? "connection-dot connection-dot--offline" : "connection-dot"} />
+          <span
+            className={apple.connection === "STALE" ? "connection-dot connection-dot--offline" : "connection-dot"}
+          />
           <strong>Home Run Apple</strong>
         </div>
         <small>{apple.host}</small>
@@ -36,7 +38,9 @@ export function AppleConnectionPanel({ apple, benchConnected }: { apple: AppleDe
           {status.firmwareSlot}
         </small>
         <span data-tone={tone}>
-          {apple.connection === "STALE" ? "WI-FI · NOT ANSWERING" : `WI-FI · ${describeSequence(status.sequence, status.fault).toUpperCase()}`}
+          {apple.connection === "STALE"
+            ? "WI-FI · NOT ANSWERING"
+            : `WI-FI · ${(status.motionKnown ? describeSequence(status.sequence, status.fault) : "Unknown").toUpperCase()}`}
         </span>
         <button type="button" className="secondary-button apple-connect__button" onClick={apple.disconnect}>
           Disconnect

@@ -1,3 +1,5 @@
+import type { AppleDeviceState } from "../useAppleDevice";
+import { ConnectedLiveView } from "./ConnectedLiveView";
 import { useState } from "react";
 import type { DeviceTimelineEvent } from "../fakeDevice";
 import { WorkspaceHeading } from "../managerComponents";
@@ -5,9 +7,10 @@ import { useMlbRecordingFeed } from "../useMlbRecordingFeed";
 import { DeviceLiveView } from "./DeviceLiveView";
 import { MlbRecordingView } from "./MlbRecordingView";
 
-export function LiveWorkspace({ events }: { events: readonly DeviceTimelineEvent[] }) {
+export function LiveWorkspace({ events, apple }: { events: readonly DeviceTimelineEvent[]; apple?: AppleDeviceState }) {
   const [source, setSource] = useState<"device" | "mlb-recording">("device");
   const recording = useMlbRecordingFeed();
+  const connected = apple?.status != null && apple.connection !== "DISCONNECTED";
 
   return (
     <section className="workspace" aria-labelledby="live-title">
@@ -15,10 +18,17 @@ export function LiveWorkspace({ events }: { events: readonly DeviceTimelineEvent
         eyebrow="Read-only game workspace"
         title="Live game"
         titleId="live-title"
-        description="Inspect an example autonomous-device view or a direct MLB feed through the compiled C++ game-state and decision layers. Neither source can reach physical outputs from this browser."
+        description="View the connected Apple or inspect a separate MLB recording. This page reads device status and does not drive motion."
       >
         <span className={source === "device" ? "mode-pill mode-pill--read" : "mode-pill mode-pill--safe"}>
-          <i /> {source === "device" ? "Demo data" : "Recording only"}
+          <i />{" "}
+          {source === "device"
+            ? connected
+              ? apple.connection === "STALE"
+                ? "Status stale"
+                : "Device telemetry"
+              : "Demo data"
+            : "Recording only"}
         </span>
       </WorkspaceHeading>
       <fieldset className="live-source-switch">
@@ -32,8 +42,10 @@ export function LiveWorkspace({ events }: { events: readonly DeviceTimelineEvent
             setSource("device");
           }}
         >
-          <span>Example autonomous Apple</span>
-          <small>Static demo data — not connected-device telemetry</small>
+          <span>{connected ? "Connected Apple" : "Example autonomous Apple"}</span>
+          <small>
+            {connected ? `${apple.transport} device telemetry` : "Static demo data — not connected-device telemetry"}
+          </small>
         </button>
         <button
           type="button"
@@ -46,7 +58,9 @@ export function LiveWorkspace({ events }: { events: readonly DeviceTimelineEvent
         </button>
       </fieldset>
 
-      {source === "device" ? (
+      {source === "device" && connected ? (
+        <ConnectedLiveView apple={apple} events={events} />
+      ) : source === "device" ? (
         <>
           <div className="live-notice">
             <strong>Demo device view</strong>

@@ -1,3 +1,5 @@
+import { AppleTestSession } from "../AppleTestSession";
+import type { AppleDeviceState } from "../useAppleDevice";
 import {
   ACTUATOR_FULL_STROKE_SECONDS,
   ACTUATOR_SPEED_MM_PER_SECOND,
@@ -13,12 +15,15 @@ import { CsvExportButton, useReducedMotion, WorkspaceHeading } from "../managerC
 import { PhysicalOutputPreview } from "../PhysicalOutputPreview";
 import { useFixturePlayback } from "../useFixturePlayback";
 
-export function SimulatorWorkspace() {
+export function SimulatorWorkspace({ apple }: { apple?: AppleDeviceState }) {
   const playback = useFixturePlayback();
   const [wireframe, setWireframe] = useState(false);
   const [dimensions, setDimensions] = useState(true);
   const [manualPosition, setManualPosition] = useState<number | null>(null);
   const [deviceRunMode, setDeviceRunMode] = useState<"LOGIC_RECORDING" | "PHYSICAL">("LOGIC_RECORDING");
+  const physical = deviceRunMode === "PHYSICAL";
+  const physicalAvailable = apple?.transport === "WIFI" && apple.status?.fixture.version === 1;
+  const running = apple?.status?.fixture.state === "RUNNING";
   const reducedMotion = useReducedMotion();
   const commandedPositionMm = manualPosition ?? playback.activeFrame.positionMm;
   const actuator = useActuatorSimulation(commandedPositionMm, {
@@ -38,21 +43,139 @@ export function SimulatorWorkspace() {
   const progress = playback.durationMs === 0 ? 0 : (playback.elapsedMs / playback.durationMs) * 100;
   function chooseScenario(id: string) {
     setManualPosition(null);
-    playback.selectScenario(id, true);
+    playback.selectScenario(id, !physical);
   }
 
   return (
     <section className="workspace workspace--simulator" aria-labelledby="simulator-title">
       <WorkspaceHeading
-        eyebrow="Offline engineering surface"
+        eyebrow="Browser simulation and device tests"
         title="Simulator"
         titleId="simulator-title"
-        description="Replay normalized fixtures against a recording-only motion adapter. This workspace cannot reach physical GPIO or issue a live-device command."
-      >
-        <span className="mode-pill mode-pill--safe">
-          <i /> Hardware disarmed
-        </span>
-      </WorkspaceHeading>
+        description="Run shared scenarios in the browser, or enable the Physical Apple to run one approved scenario through the device’s own C++ engine."
+      />
+      {/* The physical controls stay pinned under the heading so the switch
+          and its arm/run/stop actions are always in view, whatever the
+          scenario column is scrolled to. */}
+      <section className="device-bar" aria-label="Physical Apple">
+        <div className="device-bar__main">
+          <label className="device-run-mode">
+            <input
+              type="checkbox"
+              role="switch"
+              aria-label="Physical Apple"
+              aria-checked={physical}
+              checked={physical}
+              disabled={apple?.pending != null && (!physical || !apple.canStopTest || apple.pending === "stop")}
+              onChange={(event) => {
+                const enabled = event.target.checked;
+                setDeviceRunMode(enabled ? "PHYSICAL" : "LOGIC_RECORDING");
+                playback.reset();
+                setManualPosition(null);
+                playback.setSpeed(1);
+                if (!enabled) {
+                  apple?.disarmTest();
+                  if (apple?.canStopTest) void apple.stopFixture();
+                }
+              }}
+            />{" "}
+            Physical Apple
+          </label>
+          <span
+            className={
+              physical || running || apple?.canStopTest ? "mode-pill mode-pill--live" : "mode-pill mode-pill--safe"
+            }
+          >
+            <i />{" "}
+            {apple?.pending === "stop"
+              ? "Stopping physical test"
+              : !physical && (running || apple?.canStopTest)
+                ? "Check device test status"
+                : physical
+                  ? !apple || apple.connection === "DISCONNECTED"
+                    ? "Physical Apple · connect over Wi-Fi first"
+                    : apple.connection !== "CONNECTED"
+                      ? "Physical Apple · waiting for status"
+                      : apple.status && !apple.status.maintenance.supported
+                        ? "Physical Apple · firmware update needed"
+                        : running
+                          ? "Physical test running"
+                          : apple.queued
+                            ? "Tap the Apple's owner button to approve"
+                            : apple.canTest
+                              ? "Approved · starting"
+                              : "Physical Apple · ready"
+                  : "Simulation only"}
+          </span>
+          <div className="device-bar__actions">
+            <button
+              type="button"
+              className="device-run-button"
+              disabled={
+                !physical ||
+                !physicalAvailable ||
+                !apple ||
+                apple.connection !== "CONNECTED" ||
+                !apple.status?.settings.motor ||
+                (!apple.queued && (!apple.idle || apple.pending !== null))
+              }
+              onClick={() => {
+                if (apple?.queued) {
+                  apple.cancelQueued();
+                  return;
+                }
+                setManualPosition(null);
+                playback.reset();
+                playback.setSpeed(1);
+                playback.setPlaying(true);
+                void apple?.runFixture(playback.scenarioId);
+              }}
+            >
+              {apple?.queued
+                ? `Waiting for the button… ${Math.max(0, Math.ceil((apple.status?.maintenance.remainingMs ?? 0) / 1000))} s · cancel`
+                : "Run fixture on device"}
+            </button>
+            {apple?.canStopTest && (
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={apple.pending === "stop"}
+                onClick={() => void apple.stopFixture()}
+              >
+                Stop device fixture
+              </button>
+            )}
+          </div>
+        </div>
+        {physical && apple && <AppleTestSession apple={apple} />}
+        <p className="device-bar__note">
+          {physical
+            ? `Runs “${playback.scenario.title}” on the connected Apple at device timing. Preview speed, pause, and scrubbing never drive the motor; turning the switch off stops an active test.`
+            : running || apple?.canStopTest
+              ? "Simulation selected. Check the device test status to confirm it has stopped."
+              : "Browser simulation only. Physical outputs are not activated by the Simulator."}
+        </p>
+        {physical && !apple && (
+          <p className="device-bar__note">Connect to your Apple over Wi-Fi from the sidebar to run a scenario on it.</p>
+        )}
+        {physical && apple?.status?.settings.motor === false && (
+          <p className="device-bar__note">Enable the motor in Apple Manager before a physical run.</p>
+        )}
+        {!physical && apple?.error && (
+          <p className="device-bar__note" role="alert">
+            {apple.error}
+          </p>
+        )}
+        {physical && apple?.status && (
+          <p className="device-bar__note">
+            Reported motion: {apple.status.motionKnown ? apple.status.sequence : "UNKNOWN"} ·{" "}
+            {apple.status.positionMm === null ? "position unknown" : `${apple.status.positionMm} mm estimated`}
+            {apple.status.fixture.scenarioId
+              ? ` · device fixture ${apple.status.fixture.scenarioId} · ${apple.status.fixture.state}`
+              : ""}
+          </p>
+        )}
+      </section>
       <div className="simulator-grid">
         <aside className="manager-panel scenario-panel" aria-label="Synthetic scenarios">
           <div className="panel-title">
@@ -67,6 +190,7 @@ export function SimulatorWorkspace() {
               <button
                 type="button"
                 key={scenario.id}
+                disabled={physical && (running || apple?.pending != null)}
                 className={playback.scenarioId === scenario.id ? "scenario-button is-active" : "scenario-button"}
                 aria-pressed={playback.scenarioId === scenario.id}
                 onClick={() => chooseScenario(scenario.id)}
@@ -83,45 +207,10 @@ export function SimulatorWorkspace() {
             <span>Selected fixture</span>
             <strong>{playback.scenario.title}</strong>
             <p>{playback.scenario.description}</p>
-          </div>
-          <div className="device-fixture-card">
-            <div>
-              <span>Future fixture runner</span>
-              <strong>Not connected</strong>
-            </div>
-            <p>
-              {playback.scenario.deviceFixture.frames.length} normalized input
-              {playback.scenario.deviceFixture.frames.length === 1 ? "" : "s"} ·{" "}
-              {playback.scenario.deviceFixture.expectedMotionSequences === 0
-                ? "no motion expected"
-                : `${playback.scenario.deviceFixture.expectedMotionSequences} raise / lower sequence expected`}
+            <p className="selected-fixture__inputs">
+              {playback.scenario.deviceFixture.frames.length} normalized inputs ·{" "}
+              {playback.scenario.deviceFixture.expectedMotionSequences} raise / lower sequence expected
             </p>
-            <fieldset className="device-run-mode">
-              <legend className="visually-hidden">Device fixture run mode</legend>
-              <button
-                type="button"
-                className={deviceRunMode === "LOGIC_RECORDING" ? "is-active" : ""}
-                aria-pressed={deviceRunMode === "LOGIC_RECORDING"}
-                onClick={() => setDeviceRunMode("LOGIC_RECORDING")}
-              >
-                Logic recording
-              </button>
-              <button
-                type="button"
-                className={deviceRunMode === "PHYSICAL" ? "is-active" : ""}
-                aria-pressed={deviceRunMode === "PHYSICAL"}
-                onClick={() => setDeviceRunMode("PHYSICAL")}
-              >
-                Physical cycle
-              </button>
-            </fieldset>
-            <button type="button" className="device-run-button" disabled aria-describedby="device-run-unavailable">
-              Run fixture on device
-            </button>
-            <small id="device-run-unavailable">
-              Separate from the working USB Hardware Tests. A future authenticated fixture transport would also
-              require home position, suspended live automation, and an expiring maintenance lease for physical mode.
-            </small>
           </div>
         </aside>
         <section className="manager-panel simulator-stage-panel" aria-label="3D motion preview">
@@ -183,6 +272,7 @@ export function SimulatorWorkspace() {
               <input
                 id="manual-position"
                 type="range"
+                disabled={physical}
                 min="0"
                 max={MAX_STROKE_MM}
                 value={commandedPositionMm}
@@ -284,14 +374,20 @@ export function SimulatorWorkspace() {
       </div>
       <section className="manager-panel transport-panel" aria-label="Fixture transport and trace">
         <div className="transport-controls">
-          <button type="button" className="primary-button" onClick={() => playback.setPlaying(!playback.playing)}>
+          <button
+            type="button"
+            className="primary-button"
+            disabled={physical}
+            onClick={() => playback.setPlaying(!playback.playing)}
+          >
             {playback.playing ? "Pause" : "Play"}
           </button>
-          <button type="button" onClick={playback.step}>
+          <button type="button" disabled={physical} onClick={playback.step}>
             Step frame
           </button>
           <button
             type="button"
+            disabled={physical}
             onClick={() => {
               setManualPosition(null);
               playback.reset();
@@ -301,7 +397,11 @@ export function SimulatorWorkspace() {
           </button>
           <label>
             Speed
-            <select value={playback.speed} onChange={(event) => playback.setSpeed(Number(event.target.value))}>
+            <select
+              disabled={physical}
+              value={playback.speed}
+              onChange={(event) => playback.setSpeed(Number(event.target.value))}
+            >
               <option value="0.5">0.5×</option>
               <option value="1">1×</option>
               <option value="2">2×</option>
@@ -311,6 +411,7 @@ export function SimulatorWorkspace() {
             Timeline
             <input
               type="range"
+              disabled={physical}
               min="0"
               max={Math.max(playback.durationMs, 1)}
               value={playback.elapsedMs}

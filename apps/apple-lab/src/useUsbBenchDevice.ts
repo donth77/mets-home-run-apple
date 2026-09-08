@@ -1,3 +1,4 @@
+import { parseAppleStatus, type AppleStatus } from "./appleDevice";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   parseUsbBenchLine,
@@ -65,6 +66,13 @@ function errorMessage(error: unknown): string {
 export function useUsbBenchDevice() {
   const supported = serialApi() !== undefined;
   const [connection, setConnection] = useState<UsbBenchConnectionState>(supported ? "DISCONNECTED" : "UNSUPPORTED");
+  const [production, setProduction] = useState(false);
+  const [liveStatus, setLiveStatus] = useState<AppleStatus | null>(null);
+  const [liveLastSeenAt, setLiveLastSeenAt] = useState<string | null>(null);
+  const [liveFresh, setLiveFresh] = useState(false);
+  const lastLiveAt = useRef(-Infinity);
+  const productionRef = useRef(false);
+  const queryAt = useRef(-Infinity);
   const [hello, setHello] = useState<UsbBenchHelloMessage>();
   const [driverState, setDriverState] = useState<UsbBenchStateMessage>();
   const [testReceipt, setTestReceipt] = useState<(UsbBenchTestMessage & { logId: number }) | undefined>();
@@ -89,6 +97,13 @@ export function useUsbBenchDevice() {
   const nextLogIdRef = useRef(1);
 
   const clearDeviceState = useCallback(() => {
+    productionRef.current = false;
+    setProduction(false);
+    setLiveStatus(null);
+    setLiveLastSeenAt(null);
+    setLiveFresh(false);
+    lastLiveAt.current = -Infinity;
+    queryAt.current = -Infinity;
     setHello(undefined);
     setDriverState(undefined);
     setTestReceipt(undefined);
@@ -112,10 +127,29 @@ export function useUsbBenchDevice() {
     const entry: UsbBenchLogLine = {
       id: nextLogIdRef.current++,
       receivedAt: new Date().toISOString(),
-      text: line,
+      text: line.replace(/("(?:setupKey|token|password)"\s*:\s*)"[^"\r\n]*"/g, '$1"[redacted]"'),
     };
     setLog((current) => [...current.slice(-(MAX_LOG_LINES - 1)), entry]);
 
+    if (line.startsWith("APPLE_LIVE:")) {
+      try {
+        const frame = JSON.parse(line.slice("APPLE_LIVE:".length));
+        if (frame.type === "hello" || frame.type === "status") {
+          productionRef.current = true;
+          setProduction(true);
+        }
+        if (frame.type === "status") {
+          const status = parseAppleStatus(frame);
+          setLiveStatus(status);
+          setLiveLastSeenAt(new Date().toISOString());
+          lastLiveAt.current = performance.now();
+          setLiveFresh(true);
+        }
+      } catch {
+        setLiveFresh(false);
+      }
+      return;
+    }
     const message = parseUsbBenchLine(line);
     if (!message) return;
     switch (message.type) {
@@ -212,6 +246,8 @@ export function useUsbBenchDevice() {
   );
 
   const writeCommands = useCallback(async (commands: readonly UsbCommand[]) => {
+    if (productionRef.current && commands.some((command) => command !== "?"))
+      throw new Error("Production USB is read-only; use the Wi-Fi maintenance session for hardware tests.");
     const port = portRef.current;
     if (!port?.writable) throw new Error("The Nano is not connected to a writable USB serial stream.");
     const writer = port.writable.getWriter();
@@ -281,6 +317,17 @@ export function useUsbBenchDevice() {
   }, [clearDeviceState, readPort, writeCommands]);
 
   useEffect(() => {
+    if (connection !== "CONNECTED" || !production) return;
+    const timer = window.setInterval(() => {
+      if (performance.now() - lastLiveAt.current >= 3000) setLiveFresh(false);
+      if (document.visibilityState === "hidden" || performance.now() - queryAt.current < 2000) return;
+      queryAt.current = performance.now();
+      void writeCommands(["?"]).catch(() => setLiveFresh(false));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [connection, production, writeCommands]);
+
+  useEffect(() => {
     return () => {
       if (portRef.current) void disconnect();
     };
@@ -314,6 +361,10 @@ export function useUsbBenchDevice() {
   return useMemo(
     () => ({
       supported,
+      production,
+      liveStatus,
+      liveFresh,
+      liveLastSeenAt,
       connection,
       profile,
       hello,
@@ -351,6 +402,10 @@ export function useUsbBenchDevice() {
       clearLog,
     }),
     [
+      production,
+      liveStatus,
+      liveFresh,
+      liveLastSeenAt,
       audioCard,
       audioChecksum,
       audioHello,

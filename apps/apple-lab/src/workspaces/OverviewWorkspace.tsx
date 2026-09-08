@@ -1,9 +1,10 @@
+import { AppleTestSession } from "../AppleTestSession";
 import { MAX_STROKE_MM } from "@apple/protocol";
 import { Scoreboard } from "@apple/scoreboard-ui";
 import { describeNextGame, describeRssi, describeSequence, sequenceTone } from "../appleDevice";
 import { fakeManagedDevice, type DeviceTimelineEvent } from "../fakeDevice";
 import { HealthItem, Timeline, WorkspaceHeading } from "../managerComponents";
-import type { AppleDeviceState } from "../useAppleDevice";
+import { type AppleDeviceState, liveApple } from "../useAppleDevice";
 
 export function OverviewWorkspace({
   events,
@@ -14,15 +15,28 @@ export function OverviewWorkspace({
   onOpenLive: () => void;
   apple?: AppleDeviceState;
 }) {
-  const live = apple !== undefined && apple.device !== null && apple.status !== null && apple.connection !== "DISCONNECTED";
-  const device = live ? apple.device! : fakeManagedDevice;
-  const status = live ? apple.status! : null;
-  const stale = apple?.connection === "STALE";
-  const tone = status ? sequenceTone(status.sequence, status.fault) : "safe";
-  const motionLabel = status ? describeSequence(status.sequence, status.fault) : "Home";
-  const canTest = live && apple.idle && apple.pending === null && !stale;
+  const live = liveApple(apple);
+  const status = live?.status ?? null;
+  const device = live?.device ?? fakeManagedDevice;
+  const stale = live?.connection === "STALE";
+  const tone = status ? (status.motionKnown ? sequenceTone(status.sequence, status.fault) : "warning") : "safe";
+  const motionLabel = status
+    ? status.motionKnown
+      ? describeSequence(status.sequence, status.fault)
+      : "Unknown"
+    : "Home";
+  // One click arms and runs: the button asks the Apple for a session, waits
+  // for the owner's tap, then fires. Clicking again while waiting cancels.
+  const canAsk = live !== null && !stale && live.status.motionKnown && !live.status.fault && live.status.settings.motor;
+  const canClick = canAsk && live !== null && (live.queued !== null || (live.idle && live.pending === null));
+  const waitSeconds = Math.max(0, Math.ceil((status?.maintenance.remainingMs ?? 0) / 1000));
   const healthy = status
-    ? [status.wifi.state === "CONNECTED" && status.wifi.rssi >= -80, status.audio.card, status.clock, !status.fault]
+    ? [
+        status.wifi.state === "CONNECTED" && status.wifi.rssi >= -80,
+        status.audio.card,
+        status.clock,
+        status.fault === false && status.motionKnown,
+      ]
     : [true, true, true, true];
   const healthScore = healthy.filter(Boolean).length;
 
@@ -34,7 +48,7 @@ export function OverviewWorkspace({
         titleId="overview-title"
         description={
           live
-            ? "Live status from the Apple over Wi-Fi. Test celebrations run the Apple's own recorded game through its real engine; the Apple owns every safety decision."
+            ? `Live status from the Apple over ${live?.transport === "USB" ? "USB" : "Wi-Fi"}. Test celebrations run the Apple's own recorded game through its real engine; the Apple owns every safety decision.`
             : "Use fixtures, live feeds, historical games, and the USB bench workspace without putting this browser in the autonomous game loop. Connect your Apple from the sidebar to see it here."
         }
       >
@@ -53,7 +67,7 @@ export function OverviewWorkspace({
           <header className="panel-title">
             <div>
               <span>{live ? "On the Apple's screen" : "Reference device preview"}</span>
-              <h2>{live ? (device.snapshot ? "Live game" : describeMode(status!.mode)) : "Example game state"}</h2>
+              <h2>{status ? (device.snapshot ? "Live game" : describeMode(status.mode)) : "Example game state"}</h2>
             </div>
             <span className="read-only-badge">Read only</span>
           </header>
@@ -72,7 +86,11 @@ export function OverviewWorkspace({
               <div className="current-play apple-upcoming">
                 <span>{status?.mode === "REPLAY" ? "Recorded game" : "Next game"}</span>
                 <strong>{status ? describeNextGame(status.game, status.mode) : device.nextGame}</strong>
-                <p>{status?.lastCelebration ? `Last celebration: ${status.lastCelebration.kind} · ${status.lastCelebration.subject}` : "No celebration yet."}</p>
+                <p>
+                  {status?.lastCelebration
+                    ? `Last celebration: ${status.lastCelebration.kind} · ${status.lastCelebration.subject}`
+                    : "No celebration yet."}
+                </p>
                 <small>{device.feedFreshness}</small>
               </div>
             )}
@@ -102,20 +120,28 @@ export function OverviewWorkspace({
               <span>{live ? "Live from the Apple" : "Simulated state"}</span>
               <h2>{live ? "Apple position" : "Apple position preview"}</h2>
             </div>
-            <span className={`state-badge ${tone === "safe" ? "state-badge--safe" : tone === "live" ? "state-badge--live" : ""}`}>
+            <span
+              className={`state-badge ${tone === "safe" ? "state-badge--safe" : tone === "live" ? "state-badge--live" : ""}`}
+            >
               {motionLabel}
             </span>
           </header>
           <div
             className="position-visual"
             role="img"
-            aria-label={`Apple at ${device.positionMm} millimeters, ${motionLabel.toLowerCase()}`}
+            aria-label={
+              device.positionMm === null
+                ? "Apple position unknown"
+                : `Apple at ${device.positionMm} millimeters, ${motionLabel.toLowerCase()}`
+            }
           >
             <div className="position-track">
-              <span style={{ height: `${Math.min(100, Math.max(0, (device.positionMm / MAX_STROKE_MM) * 100))}%` }} />
+              <span
+                style={{ height: `${Math.min(100, Math.max(0, ((device.positionMm ?? 0) / MAX_STROKE_MM) * 100))}%` }}
+              />
             </div>
             <div>
-              <strong>{device.positionMm.toFixed(1)}</strong>
+              <strong>{device.positionMm?.toFixed(1) ?? "Unknown"}</strong>
               <span>mm</span>
             </div>
           </div>
@@ -134,40 +160,48 @@ export function OverviewWorkspace({
             </div>
           </dl>
           {live ? (
-            <div className="apple-test" aria-label="Test celebrations">
+            <section className="apple-test" aria-label="Test celebrations">
+              <AppleTestSession apple={live} />
               <div className="apple-test__buttons">
                 <button
                   type="button"
                   className="primary-button"
-                  disabled={!canTest}
-                  onClick={() => void apple.testCelebration("hr")}
+                  disabled={!canClick || (live.queued !== null && live.queued !== "hr")}
+                  onClick={() => void live.testCelebration("hr")}
                 >
-                  {apple.pending === "hr" ? "Asking…" : "Test home run"}
+                  {live.queued === "hr"
+                    ? `Waiting for the button… ${waitSeconds} s · cancel`
+                    : live.pending === "hr"
+                      ? "Starting…"
+                      : "Test home run"}
                 </button>
                 <button
                   type="button"
                   className="secondary-button"
-                  disabled={!canTest}
-                  onClick={() => void apple.testCelebration("win")}
+                  disabled={!canClick || (live.queued !== null && live.queued !== "win")}
+                  onClick={() => void live.testCelebration("win")}
                 >
-                  {apple.pending === "win" ? "Asking…" : "Test Mets win"}
+                  {live.queued === "win"
+                    ? `Waiting for the button… ${waitSeconds} s · cancel`
+                    : live.pending === "win"
+                      ? "Starting…"
+                      : "Test Mets win"}
                 </button>
               </div>
               <p className="apple-test__note" aria-live="polite">
-                {status!.fault
-                  ? "The Apple has a fault set and will not move until it is cleared on the device."
-                  : !apple.idle
-                    ? `Running: ${motionLabel}${status!.audio.playing ? ` · ${status!.audio.playing.replace(/^\//, "")}` : ""}`
-                    : status!.settings.motor
-                      ? "Replays the Apple's recorded game: display, audio, lights, and the full lift. Keep the travel path clear."
-                      : "Motor is disabled in the Manager; a test will play the screen and audio only."}
+                {!live.status.motionKnown
+                  ? "Motion status is incomplete; tests are disabled."
+                  : live.status.fault
+                    ? "The Apple has a fault set and will not move until it is cleared on the device."
+                    : !live.idle
+                      ? `Running: ${motionLabel}${live.status.audio.playing ? ` · ${live.status.audio.playing.replace(/^\//, "")}` : ""}`
+                      : live.queued
+                        ? "Walk to the Apple and tap its owner button once — don't hold it. The test starts by itself."
+                        : live.status.settings.motor
+                          ? "Replays the Apple's recorded game: display, audio, lights, and the full lift. You'll be asked to tap the Apple's button to approve it."
+                          : "Motor is disabled in the Manager; a test will play the screen and audio only."}
               </p>
-              {apple.error ? (
-                <p className="apple-test__error" role="alert">
-                  {apple.error}
-                </p>
-              ) : null}
-            </div>
+            </section>
           ) : null}
         </article>
         <article className="manager-panel device-health">
@@ -213,7 +247,12 @@ export function OverviewWorkspace({
             ) : (
               <>
                 <HealthItem label="Game feed" value={device.feedStatus} detail={device.feedFreshness} tone="good" />
-                <HealthItem label="Wi-Fi" value={`${device.wifiSignalDbm} dBm`} detail={device.wifiNetwork} tone="good" />
+                <HealthItem
+                  label="Wi-Fi"
+                  value={`${device.wifiSignalDbm} dBm`}
+                  detail={device.wifiNetwork}
+                  tone="good"
+                />
                 <HealthItem label="Power" value={device.power} detail="Stable external input" tone="good" />
                 <HealthItem label="Firmware" value={`v${device.firmwareVersion}`} detail={`Uptime ${device.uptime}`} />
               </>

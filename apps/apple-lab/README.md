@@ -23,9 +23,9 @@ Open <http://localhost:4173>.
 | Workspace | Use it for |
 | --- | --- |
 | Overview | Quick device, game, and safety previews |
-| Live Game | An opt-in MLB recording and a demo device timeline |
+| Simulator | Browser scenarios and approved physical fixture runs over Wi-Fi |
+| Live Game | Connected device scoreboard and events, or an opt-in MLB recording |
 | Historical Replay | Completed MLB games with play, pause, seek, and speed controls |
-| Simulator | Fast, repeatable game scenarios |
 | Hardware Tests | Guarded USB commissioning and receipts from the Nano |
 | Diagnostics | A preview of autonomous-device telemetry and event history |
 
@@ -41,7 +41,8 @@ export show the decisions and commands for the full filtered result, not just
 the visible page.
 
 Simulator scenarios use the same decision code and 320 × 240 display renderer
-as the Nano. The browser records motion commands; it cannot drive an actuator.
+as the Nano. Browser previews record motion commands. The Physical Apple toggle
+opts into a separate, approved run on the device.
 
 ## USB hardware tests
 
@@ -69,29 +70,65 @@ setup code is the one on the Apple's info screen (short press of the owner
 button). Both are remembered in this browser, and the Lab reconnects on the
 next visit.
 
-While connected, Overview shows what the Apple is showing — the live
-scoreboard during a game, the next game otherwise — plus its position, motion
-state, Wi-Fi signal, card and track counts, and firmware slot. **Test home run**
-and **Test Mets win** ask the Apple to replay its own recorded game through the
-real engine: display, audio, lights, and the full lift. They are enabled only
-while the Apple is idle, and the Apple still owns every timeout, stop, and
-fault. Diagnostics shows the Apple's telemetry and the events the Lab observed
-since it connected.
+While connected, Overview, Live Game, and Diagnostics use the Apple's reported
+status. Missing safety fields are shown as unknown; stale status disables new
+tests. Failed connections retry automatically. Disconnect stops retries.
 
-The browser never talks to the Apple directly. The Lab's dev server relays
-`/device/*` to the Apple (see `vite-apple-relay.ts`), so this works from
-`pnpm dev:lab` and `vite preview`; a copy of the Lab hosted elsewhere cannot
-reach a LAN device. Set `APPLE_HOST` to change the default address.
+### Physical Apple in Simulator
 
-Turn on **Require code** in the Apple Manager: without it, anyone on the same
-Wi-Fi can trigger motion or upload firmware, code or no code.
+1. Install firmware containing the Simulator fixture API, then connect over
+   Wi-Fi with this Apple's setup code.
+2. Open Simulator and turn on **Physical Apple**. Connection alone does not arm
+   hardware. The toggle controls Simulator tests; autonomous game following is
+   still controlled by Apple Manager.
+3. Select a scenario and choose **Request hardware test**.
+4. Press and release the physical owner button once within 30 seconds. Do not
+   hold it: holds retain their restart/reset meanings.
+5. Choose **Run fixture on device** within 60 seconds. Approval permits one
+   attempt. A new test requires a new session and button press.
 
-## What is still a preview
+The motor must be enabled in Apple Manager. The device runs the selected shared
+fixture through the canonical projector and C++ engine, using its own actuator
+adapter. Scenarios use a 30-second raised dwell, with a 180-second total limit.
+Review and no-motion scenarios still pass through the same decision rules.
+Preview speed, pause, and timeline scrubbing never change physical motor timing.
 
-Without a connected Apple, Overview and Diagnostics fall back to
-representative device data and say so. The disabled **Run fixture on device**
-button in the Simulator waits on a firmware endpoint that accepts external
-fixtures, which does not exist yet.
+Turning the toggle off or selecting **Stop device fixture** requests cancellation.
+Stopping away from home latches a disabled fault for attended recovery. If the
+connection is lost, Stop may not arrive; the device independently completes its
+bounded sequence or disables motion on fault. Reconnecting never repeats a run.
+
+**Test home run** and **Test Mets win** in Overview also require the same
+physical approval. All hardware-test sessions require the setup code even when
+Apple Manager's general **Require code** setting is off. Session tokens stay in
+memory and are neither stored in browser settings nor published in status.
+
+The browser uses the Lab dev server's `/device/*` relay (see
+`vite-apple-relay.ts`), available from `pnpm dev:lab` and `vite preview`. A copy
+hosted elsewhere cannot reach a LAN device. Set `APPLE_HOST` to change the
+default address. General settings and firmware updates retain Apple Manager's
+existing owner-lock behavior.
+
+### Production USB
+
+Hardware Tests also recognizes `APPLE_LIVE` production firmware. USB provides
+read-only status, scoreboard, and diagnostics; it polls only `?` and hides
+commissioning controls. Wi-Fi is the transport for approved production tests.
+If both are attached, Wi-Fi is the selected device source. Commissioning builds
+retain their existing, separate USB test workflows.
+
+### Offline validation
+
+`pnpm fixtures:generate` regenerates device inputs from `@apple/test-fixtures`.
+`pnpm check:fixtures` detects drift and runs as part of `pnpm test`. Native tests
+run all 14 fixtures with a recording actuator and compare a golden motion trace.
+The native status JSON golden is also read by the Lab's parser and offline UI
+tests. No validation fixture contacts MLB or drives hardware.
+
+Without a connected Apple, Overview, Live Game, and Diagnostics show labeled
+reference data. Older firmware supports telemetry but needs an update for the
+full scoreboard and guarded Simulator API. These code and build checks do not
+replace a disarmed embedded test before the first loaded hardware run.
 
 ## Apple Lab and Apple Manager
 

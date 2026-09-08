@@ -25,6 +25,10 @@ export const APPLE_ERROR_TEXT: Record<string, string> = {
   BUSY: "The Apple is busy or still starting up. Try again in a moment.",
   NO_REPLAY: "This firmware has no test celebration.",
   RELAY: "The Apple is not reachable at that address.",
+  MAINTENANCE_REQUIRED: "Request a hardware test session and press the Apple's owner button once.",
+  NO_MAINTENANCE: "Update the Apple firmware to enable guarded hardware tests.",
+  BAD_FIXTURE: "This firmware does not support that Simulator fixture. Update the Apple firmware.",
+  MOTOR_DISABLED: "Enable the motor in Apple Manager before a physical run.",
   BAD_HOST: "That address is not valid.",
 };
 
@@ -39,6 +43,8 @@ export interface AppleClientOptions {
   code?: string;
   fetchImpl?: typeof fetch;
   base?: string;
+  signal?: AbortSignal;
+  maintenanceToken?: string;
 }
 
 async function readError(response: Response): Promise<AppleRequestError> {
@@ -60,7 +66,13 @@ function request(options: AppleClientOptions, path: string, init: RequestInit = 
   headers.set("X-Apple-Host", options.host);
   if (options.code) headers.set("X-Apple-Code", options.code);
   headers.set("Accept", "application/json");
-  return fetchImpl(`${options.base ?? "/device"}${path}`, { ...init, headers, cache: "no-store" });
+  if (options.maintenanceToken) headers.set("X-Apple-Maintenance", options.maintenanceToken);
+  return fetchImpl(`${options.base ?? "/device"}${path}`, {
+    ...init,
+    headers,
+    cache: "no-store",
+    signal: options.signal,
+  });
 }
 
 export async function fetchAppleStatus(options: AppleClientOptions): Promise<AppleStatus> {
@@ -71,5 +83,32 @@ export async function fetchAppleStatus(options: AppleClientOptions): Promise<App
 
 export async function requestAppleCelebration(options: AppleClientOptions, kind: CelebrationKind): Promise<void> {
   const response = await request(options, `/api/replay?kind=${kind}`, { method: "POST" });
+  if (!response.ok) throw await readError(response);
+}
+
+export async function requestMaintenance(options: AppleClientOptions): Promise<string> {
+  const response = await request(options, "/api/maintenance", { method: "POST" });
+  if (!response.ok) throw await readError(response);
+  const body: unknown = await response.json();
+  if (
+    body === null ||
+    typeof body !== "object" ||
+    !("token" in body) ||
+    typeof body.token !== "string" ||
+    !/^[a-f0-9]{32}$/.test(body.token)
+  )
+    throw new Error("Invalid maintenance response");
+  return body.token;
+}
+
+export async function requestFixture(options: AppleClientOptions, scenarioId: string): Promise<void> {
+  const response = await request(options, `/api/fixture?scenario=${encodeURIComponent(scenarioId)}`, {
+    method: "POST",
+  });
+  if (!response.ok) throw await readError(response);
+}
+
+export async function stopFixture(options: AppleClientOptions): Promise<void> {
+  const response = await request(options, "/api/fixture/stop", { method: "POST" });
   if (!response.ok) throw await readError(response);
 }

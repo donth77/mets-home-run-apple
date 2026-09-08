@@ -1,3 +1,4 @@
+import { useUsbAppleDevice } from "./useUsbAppleDevice";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppleConnectionPanel } from "./AppleConnection";
 import { describeSequence } from "./appleDevice";
@@ -20,11 +21,11 @@ const workspaces: readonly {
   description: string;
 }[] = [
   { id: "overview", index: "01", label: "Overview", description: "Lab and device preview" },
-  { id: "live", index: "02", label: "Live game", description: "Demo device or MLB recording" },
-  { id: "replay", index: "03", label: "Historical replay", description: "Archived MLB game playback" },
-  { id: "simulator", index: "04", label: "Simulator", description: "Offline fixture replay" },
+  { id: "simulator", index: "02", label: "Simulator", description: "Scenarios in the browser or on the Apple" },
+  { id: "live", index: "03", label: "Live game", description: "Demo device or MLB recording" },
+  { id: "replay", index: "04", label: "Historical replay", description: "Archived MLB game playback" },
   { id: "tests", index: "05", label: "Hardware tests", description: "Gated service controls" },
-  { id: "diagnostics", index: "06", label: "Diagnostics", description: "Demo telemetry model" },
+  { id: "diagnostics", index: "06", label: "Diagnostics", description: "Device telemetry and events" },
 ];
 
 export function App() {
@@ -33,7 +34,9 @@ export function App() {
   const [recordedEvents, setRecordedEvents] = useState<DeviceTimelineEvent[]>([]);
   const usbBench = useUsbBenchDevice();
   const benchConnected = usbBench.connection === "CONNECTED";
-  const apple = useAppleDevice();
+  const wifiApple = useAppleDevice();
+  const usbApple = useUsbAppleDevice(usbBench);
+  const apple = wifiApple.connection !== "DISCONNECTED" ? wifiApple : usbApple;
   const appleLinked = apple.connection === "CONNECTED" || apple.connection === "STALE";
   // With the Apple connected the timeline is what the Lab actually observed;
   // the reference timeline is only for the Lab running on its own.
@@ -73,7 +76,7 @@ export function App() {
             <small>Local engineering tool</small>
           </div>
         </div>
-        <AppleConnectionPanel apple={apple} benchConnected={benchConnected} />
+        <AppleConnectionPanel apple={wifiApple} benchConnected={benchConnected} />
         <nav className="workspace-nav" aria-label="Apple Lab workspaces">
           {workspaces.map((item) => (
             <button
@@ -117,29 +120,45 @@ export function App() {
             <span>
               <i
                 className={`status-light ${
-                  appleLinked ? (apple.idle ? "status-light--safe" : "status-light--good") : benchConnected ? "status-light--safe" : ""
+                  appleLinked
+                    ? apple.idle
+                      ? "status-light--safe"
+                      : "status-light--good"
+                    : benchConnected
+                      ? "status-light--safe"
+                      : ""
                 }`}
               />{" "}
               {appleLinked && apple.status
                 ? apple.connection === "STALE"
                   ? "Apple not answering"
-                  : `Apple ${describeSequence(apple.status.sequence, apple.status.fault).toLowerCase()}`
-                : benchConnected
-                  ? usbBench.driverState?.state === "STOP"
-                    ? "Outputs low"
-                    : "Bench active"
-                  : "Hardware disconnected"}
+                  : `Apple ${apple.status.motionKnown ? describeSequence(apple.status.sequence, apple.status.fault).toLowerCase() : "motion unknown"}`
+                : apple.connection === "CONNECTING"
+                  ? `Connecting to ${apple.host}…`
+                  : benchConnected
+                    ? usbBench.driverState?.state === "STOP"
+                      ? "Outputs low"
+                      : "Bench active"
+                    : "Hardware disconnected"}
             </span>
-            <span className="transport-pill">{appleLinked ? "Wi-Fi" : benchConnected ? "USB serial" : "No device"}</span>
+            <span className="transport-pill">
+              {appleLinked
+                ? apple.transport === "USB"
+                  ? "USB serial"
+                  : "Wi-Fi"
+                : benchConnected
+                  ? "USB serial"
+                  : "No device"}
+            </span>
           </div>
         </header>
         <div id="workspace-content" className="manager-content" tabIndex={-1}>
           {workspace === "overview" && (
             <OverviewWorkspace events={allEvents} onOpenLive={() => setWorkspace("live")} apple={apple} />
           )}
-          {workspace === "live" && <LiveWorkspace events={allEvents} />}
+          {workspace === "live" && <LiveWorkspace events={allEvents} apple={apple} />}
           {workspace === "replay" && <HistoricalReplayWorkspace />}
-          {workspace === "simulator" && <SimulatorWorkspace />}
+          {workspace === "simulator" && <SimulatorWorkspace apple={apple} />}
           {workspace === "tests" && (
             <HardwareTestsWorkspace
               armed={serviceArmed}

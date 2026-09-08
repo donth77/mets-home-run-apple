@@ -152,19 +152,19 @@ a.btn{display:inline-block;font-size:15px;font-weight:600;padding:11px 16px;bord
 .tabs{display:flex;gap:4px;margin:-4px 0 14px;padding:6px 0;position:sticky;top:0;z-index:5;background:var(--blue-deep)}
 .tabs button{flex:1 1 0;justify-content:center;text-align:center;background:var(--blue-card);border:1px solid var(--blue-line);border-radius:10px;color:var(--muted);font-size:14px;font-weight:600;padding:10px 6px;position:relative;margin:0}
 .tabs button.on{background:var(--orange);border-color:var(--orange);color:#fff}
-.tabs button i{position:absolute;top:7px;right:9px;width:8px;height:8px;border-radius:50%;background:var(--good);box-shadow:0 0 6px var(--good)}
+.tabs button .dot{position:absolute;top:7px;right:9px;width:8px;height:8px;border-radius:50%;background:var(--good);box-shadow:0 0 6px var(--good)}
 @media (max-width:380px){.tabs button{font-size:13px;padding:9px 4px}}
 </style>
 </head>
 <body>
 <header><div class="bar"><img src="/logo.png" alt=""><div><h1>Home Run Apple Manager</h1><span id="mode"><span class="spin"></span>Connecting</span></div></div></header>
 <main>
-<nav id="tabs" class="tabs" role="tablist" aria-label="Manager sections" hidden>
+<div id="tabs" class="tabs" role="tablist" aria-label="Manager sections" hidden>
 <button type="button" role="tab" data-tab="status" aria-controls="status" aria-selected="true" class="on">Apple</button>
 <button type="button" role="tab" data-tab="settings" aria-controls="settings" aria-selected="false">Settings</button>
 <button type="button" role="tab" data-tab="audio" aria-controls="audio" aria-selected="false">Audio</button>
-<button type="button" role="tab" data-tab="update" aria-controls="update" aria-selected="false">Update<i id="tab-update-dot" hidden aria-label="update available"></i></button>
-</nav>
+<button type="button" role="tab" data-tab="update" aria-controls="update" aria-selected="false">Update<span id="tab-update-dot" class="dot" role="img" aria-label="update available" hidden></span></button>
+</div>
 <section id="setup" hidden>
 <div id="join-form">
 <h2>Connect to Wi-Fi</h2>
@@ -266,10 +266,11 @@ var joining=false,joinStarted=0,wantSetup=false,scanTimer=null,settingsDirty=fal
 // full-page state of its own, shown instead of the tabs while the Apple has
 // no network. The last tab is remembered and a #hash opens one directly.
 var TABS=["status","settings","audio","update"],setupOnlyNow=true;
-var tab=(function(){var h=location.hash.replace("#","");if(TABS.indexOf(h)>=0)return h;try{var s=localStorage.getItem("apple-tab");if(TABS.indexOf(s)>=0)return s}catch(e){}return "status"})();
-function applyTab(){TABS.forEach(function(t){var b=document.querySelector('#tabs [data-tab="'+t+'"]'),on=t===tab;if(b){b.className=on?"on":"";b.setAttribute("aria-selected",on?"true":"false");b.tabIndex=on?0:-1}$(t).hidden=setupOnlyNow||!on})}
-function showTab(id){if(TABS.indexOf(id)<0||id===tab)return;tab=id;applyTab();try{localStorage.setItem("apple-tab",id)}catch(e){}if(history.replaceState)history.replaceState(null,"","#"+id);window.scrollTo(0,0)}
-Array.prototype.forEach.call(document.querySelectorAll("#tabs [data-tab]"),function(b){b.addEventListener("click",function(){showTab(b.getAttribute("data-tab"))});b.addEventListener("keydown",function(ev){var i=TABS.indexOf(tab);if(ev.key==="ArrowRight"||ev.key==="ArrowLeft"){ev.preventDefault();var n=TABS[(i+(ev.key==="ArrowRight"?1:TABS.length-1))%TABS.length];showTab(n);document.querySelector('#tabs [data-tab="'+n+'"]').focus()}})});
+var tab=(function(){var h=location.hash.replace("#",""),s=null;if(TABS.indexOf(h)>=0)return h;try{s=localStorage.getItem("apple-tab")}catch(e){}return TABS.indexOf(s)>=0?s:"status"})();
+function tabButton(id){var list=document.querySelectorAll("#tabs [data-tab]"),i;for(i=0;i<list.length;i++)if(list[i].getAttribute("data-tab")===id)return list[i];return null}
+function applyTab(){TABS.forEach(function(t){var b=tabButton(t),on=t===tab;if(b){b.className=on?"on":"";b.setAttribute("aria-selected",on?"true":"false");b.tabIndex=on?0:-1}$(t).hidden=setupOnlyNow||!on})}
+function showTab(id){if(TABS.indexOf(id)<0||id===tab)return;tab=id;applyTab();try{localStorage.setItem("apple-tab",id)}catch(e){}if(history.replaceState)history.replaceState(null,"",["#",id].join(""));window.scrollTo(0,0)}
+Array.prototype.forEach.call(document.querySelectorAll("#tabs [data-tab]"),function(b){b.addEventListener("click",function(){showTab(b.getAttribute("data-tab"))});b.addEventListener("keydown",function(ev){var i=TABS.indexOf(tab),n;if(ev.key==="ArrowRight"||ev.key==="ArrowLeft"){ev.preventDefault();n=TABS[(i+(ev.key==="ArrowRight"?1:TABS.length-1))%TABS.length];showTab(n);tabButton(n).focus()}})});
 window.addEventListener("hashchange",function(){var h=location.hash.replace("#","");if(TABS.indexOf(h)>=0)showTab(h)});
 function text(id,value,cls){var el=$(id);el.textContent=value;el.className=cls||""}
 var noticeTimer=null,unreachable=0;

@@ -1,7 +1,7 @@
 import { describeRssi } from "../appleDevice";
 import { fakeManagedDevice, type DeviceTimelineEvent } from "../fakeDevice";
 import { Timeline, WorkspaceHeading } from "../managerComponents";
-import type { AppleDeviceState } from "../useAppleDevice";
+import { type AppleDeviceState, liveApple } from "../useAppleDevice";
 
 function kilobytes(bytes: number): string {
   return `${Math.round(bytes / 1024)} KB`;
@@ -14,9 +14,9 @@ export function DiagnosticsWorkspace({
   events: readonly DeviceTimelineEvent[];
   apple?: AppleDeviceState;
 }) {
-  const live = apple !== undefined && apple.device !== null && apple.status !== null && apple.connection !== "DISCONNECTED";
-  const device = live ? apple.device! : fakeManagedDevice;
-  const status = live ? apple.status! : null;
+  const live = liveApple(apple);
+  const status = live?.status ?? null;
+  const device = live?.device ?? fakeManagedDevice;
   return (
     <section className="workspace" aria-labelledby="diagnostics-title">
       <WorkspaceHeading
@@ -25,7 +25,7 @@ export function DiagnosticsWorkspace({
         titleId="diagnostics-title"
         description={
           live
-            ? "What the Apple reports over Wi-Fi, and the events Apple Lab has observed since it connected. The Apple keeps its own ledger; this is a window, not a copy."
+            ? "What the Apple reports over the selected connection, and the events Apple Lab has observed since it connected. The Apple keeps its own ledger; this is a window, not a copy."
             : "Preview the transport, feed, safety, and event-ledger data the read-only Wi-Fi connection exposes once your Apple is connected."
         }
       />
@@ -36,8 +36,15 @@ export function DiagnosticsWorkspace({
               <span>Connection summary</span>
               <h2>{device.name}</h2>
             </div>
-            <span className={live ? (apple.connection === "STALE" ? "state-badge" : "state-badge state-badge--live") : "state-badge state-badge--safe"}>
-              {live ? (apple.connection === "STALE" ? "Not answering" : "Live") : "Demo data"}
+            <span
+              className={
+                live ? live.connection === "STALE"
+                    ? "state-badge"
+                    : "state-badge state-badge--live"
+                  : "state-badge state-badge--safe"
+              }
+            >
+              {live ? (live.connection === "STALE" ? "Not answering" : "Live") : "Demo data"}
             </span>
           </header>
           <dl className="detail-list detail-list--wide">
@@ -57,7 +64,9 @@ export function DiagnosticsWorkspace({
             </div>
             <div>
               <dt>Firmware</dt>
-              <dd>{status ? `v${status.firmwareVersion} · slot ${status.firmwareSlot}` : `v${device.firmwareVersion}`}</dd>
+              <dd>
+                {status ? `v${status.firmwareVersion} · slot ${status.firmwareSlot}` : `v${device.firmwareVersion}`}
+              </dd>
             </div>
             <div>
               <dt>Wi-Fi</dt>
@@ -127,9 +136,13 @@ export function DiagnosticsWorkspace({
           </header>
           {status ? (
             <ul className="check-list">
-              <li data-ok={!status.fault}>
+              <li data-ok={status.motionKnown && status.fault === false}>
                 <i />
-                {status.fault ? "The Apple has a fault set; motion is disabled on the device" : "No fault set; motion is available to the engine"}
+                {!status.motionKnown
+                  ? "Motion state unknown; hardware tests disabled"
+                  : status.fault
+                    ? "The Apple reports a fault"
+                    : "No fault reported by the Apple"}
               </li>
               <li data-ok={status.sequence === "IDLE"}>
                 <i />
@@ -137,17 +150,22 @@ export function DiagnosticsWorkspace({
               </li>
               <li data-ok={status.positionMm === 0}>
                 <i />
-                {status.positionMm === 0 ? "Apple is at the retracted home limit" : `Apple at ${status.positionMm} mm`}
+                {status.positionMm === 0
+                  ? "Estimated position is home"
+                  : status.positionMm === null
+                    ? "Position unknown"
+                    : `Estimated position ${status.positionMm} mm`}
               </li>
               <li data-ok={status.drive === "OFF" || status.sequence !== "IDLE"}>
                 <i />
-                Drive {status.drive} · {status.settings.motor ? "motor enabled in the Manager" : "motor disabled in the Manager"}
+                Drive {status.drive} ·{" "}
+                {status.settings.motor ? "motor enabled in the Manager" : "motor disabled in the Manager"}
               </li>
               <li data-ok={status.settings.requireCode}>
                 <i />
                 {status.settings.requireCode
                   ? "Setup code required for anything that acts"
-                  : "Setup code not required: anyone on this Wi-Fi can trigger motion or update firmware"}
+                  : "Owner settings lock is off; guarded hardware tests require their own maintenance session"}
               </li>
             </ul>
           ) : (

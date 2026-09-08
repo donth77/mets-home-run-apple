@@ -9,8 +9,7 @@
 // APPLE_MOTION_DRIVE the motion adapter only records: the model runs and
 // reports positions, but the L298N pins never leave LOW.
 //
-// Serial keys: `?` status, `x` stop motion and reset the sequence, `r` replay
-// the recorded Mets at Rays game from fixtures/mlb (no network needed),
+// Serial keys: `?` status, `x` stop motion (faults remain latched),
 // `s` refresh the schedule now, `p` poll the feed now, `w` forget the saved
 // Wi-Fi network and reopen the setup network.
 
@@ -20,6 +19,8 @@
 #include "apple/display/mets_win_loop.hpp"
 #include "apple/firmware/board_pins.hpp"
 #include "apple/firmware/manager.hpp"
+#include "apple/firmware/lab_fixtures.generated.hpp"
+#include "apple/firmware/status_snapshot.hpp"
 #include "apple/firmware/release_pick.hpp"
 #include <AudioFileSourceBuffer.h>
 #include <AudioFileSourceSD.h>
@@ -391,6 +392,8 @@ std::uint32_t button_down_since_ms = 0;
 bool button_was_down = false;
 std::int32_t reset_countdown_shown = -1;
 bool restart_prompt_shown = false;
+bool maintenance_prompt_shown = false;
+std::int32_t maintenance_prompt_seconds = -1;
 std::uint32_t info_screen_until_ms = 0;
 bool time_synced = false;
 std::uint32_t next_ntp_kick_ms = 0;   // re-issue NTP while the clock is unset
@@ -584,6 +587,12 @@ std::uint32_t celebration_last_key = 0xFFFFFFFFU;
 bool needs_redraw = true;
 std::uint8_t last_rain_frame = 0xFF;
 
+const apple::firmware::LabFixture* active_fixture = nullptr;
+std::uint32_t fixture_started_ms = 0;
+const char* fixture_state = "IDLE";
+String fixture_id;
+String start_lab_fixture(const String& id);
+String stop_lab_fixture();
 bool replay_active = false;
 std::size_t replay_step = 0;
 std::uint32_t next_replay_ms = 0;
@@ -746,6 +755,13 @@ void fill_status(JsonDocument& doc) {
   const bool connected = WiFi.status() == WL_CONNECTED;
   const std::uint64_t now = now_ms();
   doc["type"] = "status";
+  auto fixture = doc["fixture"].to<JsonObject>();
+  fixture["version"] = 1;
+  fixture["scenarioId"] = fixture_id;
+  fixture["state"] = fixture_state;
+  fixture["frame"] = active_fixture ? replay_step : 0;
+  fixture["totalFrames"] = active_fixture ? active_fixture->frames.size() : 0;
+  manager.fill_maintenance_status(doc["maintenance"].to<JsonObject>());
   doc["mode"] = device_mode();
   doc["firmwareVersion"] = kFirmwareVersion;
   doc["hostname"] = kHostname;
@@ -838,30 +854,8 @@ void fill_status(JsonDocument& doc) {
   if (projector.has_projection()) {
     const GameSnapshot& snapshot = projector.snapshot();
     JsonObject node = doc["snapshot"].to<JsonObject>();
-    node["phase"] = phase_name(snapshot.phase);
-    node["label"] = snapshot.label;
-    node["awayRuns"] = snapshot.away.runs;
-    node["homeRuns"] = snapshot.home.runs;
-    node["inning"] = snapshot.inning;
-    node["half"] = half_name(snapshot.half);
-    node["outs"] = snapshot.outs;
+    apple::firmware::write_status_snapshot(node, snapshot);
     node["cursor"] = tracker.cursor();
-    node["awayId"] = snapshot.away.id;
-    node["homeId"] = snapshot.home.id;
-    node["lastEvent"] = snapshot.last_event;
-    if (snapshot.at_bat) {
-      const auto& at_bat = *snapshot.at_bat;
-      JsonObject situation = node["atBat"].to<JsonObject>();
-      situation["balls"] = at_bat.balls;
-      situation["strikes"] = at_bat.strikes;
-      situation["first"] = at_bat.bases.first;
-      situation["second"] = at_bat.bases.second;
-      situation["third"] = at_bat.bases.third;
-      if (at_bat.batter) situation["batter"] = *at_bat.batter;
-      if (at_bat.batter_line) situation["batterLine"] = *at_bat.batter_line;
-      if (at_bat.pitcher) situation["pitcher"] = *at_bat.pitcher;
-      if (at_bat.pitch_count) situation["pitchCount"] = *at_bat.pitch_count;
-    }
   } else {
     doc["snapshot"] = nullptr;
   }
@@ -1874,7 +1868,7 @@ void begin_celebration(const apple::core::CoreEvent& event) {
   celebration_active = true;
   celebration_started_ms = now32();
   audio_request_stream = false;
-  if (celebration_is_win && settings.win_full_track && audio_card_ready) {
+  if (celebration_is_win && settings.win_full_track && audio_card_ready && !active_fixture) {
     // The game is over, so stay up for the whole track: stream it off the
     // card and stretch the raised dwell to match, less the lift itself.
     const char* file = random_track(true);
@@ -2027,6 +2021,8 @@ bool motion_idle() {
 }
 
 void stop_motion(const char* reason) {
+  manager.clear_maintenance();
+  if (active_fixture) { stop_lab_fixture(); return; }
   const std::uint64_t now = now_ms();
   Command disable;
   disable.type = CommandType::MotionDisable;
@@ -2034,7 +2030,12 @@ void stop_motion(const char* reason) {
   actuator.tick(now);
   apply_drive(Drive::Off);
   end_celebration(reason);
-  make_engine(replay_active ? static_cast<EventLedger&>(replay_ledger) : static_cast<EventLedger&>(nvs_ledger));
+  // A stop away from home must not clear an existing fault or enable a new sequence.
+  if (engine && (engine->fault_latched() || engine->sequence_state() != SequenceState::Idle ||
+                 actuator.estimated_position_mm(now) != 0)) {
+    handle_output(engine->report_motion_fault(reason, now), now);
+    replay_active = false;
+  }
   tracker.reset();
   shown_sequence = SequenceState::Idle;
   publish_trace("STOPPED", reason);
@@ -2217,10 +2218,18 @@ void start_wifi() {
   manager.set_audio_hooks(change_audio, begin_audio_upload, write_audio_upload,
                           end_audio_upload);
   manager.set_audio_file_hook(open_audio_file);
-  // The same replay the serial 'r' key runs, reachable without a USB cable.
+  // Tests require an authenticated session confirmed by the physical button.
+  manager.set_maintenance_gate([]() -> String {
+    if (!engine || engine->fault_latched() || celebration_active || !motion_idle() ||
+        replay_active || actuator.busy() || actuator.estimated_position_mm(now_ms()) != 0 ||
+        manager.update_in_progress()) return "BUSY";
+    return String();
+  });
+  manager.set_fixture_hooks(start_lab_fixture, stop_lab_fixture);
   manager.set_replay_hook([](const String& kind) -> String {
     if (celebration_active) return "CELEBRATING";
-    if (!motion_idle()) return "BUSY";
+    if (!engine || engine->fault_latched() || manager.update_in_progress()) return "BUSY";
+    if (!motion_idle() || replay_active || actuator.busy() || actuator.estimated_position_mm(now_ms()) != 0) return "BUSY";
     start_replay(kind == "win");
     return String();
   });
@@ -2626,7 +2635,7 @@ void show_paused_screen() {
 
 void pause_following() {
   settings.follow = false;
-  if (!motion_idle()) stop_motion("PAUSED");
+  if (active_fixture || !motion_idle()) stop_motion("PAUSED");
   game.reset();
   tracker.reset();
   reset_final_tracking();
@@ -2654,9 +2663,11 @@ String on_settings(const apple::firmware::SettingsUpdate& update) {
   }
   if (update.raised_seconds >= 0) {
     settings.raised_seconds = static_cast<std::uint16_t>(update.raised_seconds);
-    if (engine) engine->set_raised_dwell_ms(static_cast<std::uint64_t>(settings.raised_seconds) * 1000);
+    if (engine) engine->set_raised_dwell_ms(active_fixture ? apple::core::kRaisedDwellMs : static_cast<std::uint64_t>(settings.raised_seconds) * 1000);
   }
   if (update.motor >= 0) {
+    if (active_fixture) stop_lab_fixture();
+    manager.clear_maintenance();
     settings.motor = update.motor == 1;
     apply_drive(settings.motor ? applied_drive : Drive::Off);
   }
@@ -3025,11 +3036,12 @@ void show_info_screen() {
 }
 
 void factory_reset() {
+  manager.clear_maintenance();
   publish_trace("RESET", "button held: clearing Wi-Fi and settings");
   settings_store.clear();
   settings = Settings{};
   save_settings();
-  if (engine) engine->set_raised_dwell_ms(static_cast<std::uint64_t>(settings.raised_seconds) * 1000);
+  if (engine) engine->set_raised_dwell_ms(active_fixture ? apple::core::kRaisedDwellMs : static_cast<std::uint64_t>(settings.raised_seconds) * 1000);
   apply_drive(Drive::Off);
   on_forget_request();
 }
@@ -3075,6 +3087,36 @@ void restore_default_screen() {
   }
 }
 
+// Apple Lab asked for a hardware test. Tell the person at the box what the
+// next button tap approves, count the presence window down, and take the
+// prompt away again if nobody answers, so the request cannot linger on
+// screen and a later tap never approves something nobody remembers asking for.
+void service_maintenance_prompt() {
+  const bool pending = manager.maintenance_pending() && !celebration_active && motion_idle();
+  if (pending) {
+    const auto seconds = static_cast<std::int32_t>((manager.maintenance_remaining_ms() + 999) / 1000);
+    if (!maintenance_prompt_shown || seconds != maintenance_prompt_seconds) {
+      maintenance_prompt_shown = true;
+      maintenance_prompt_seconds = seconds;
+      char note[sizeof(model.waiting_note)];
+      std::snprintf(note, sizeof(note), "APPLE WILL MOVE|CANCELS IN %u S",
+                    static_cast<unsigned>(std::min<std::int32_t>(seconds, 99)));
+      copy_text(model.waiting_title, sizeof(model.waiting_title), "APPLE LAB TEST");
+      copy_text(model.waiting_note, sizeof(model.waiting_note), note);
+      show_waiting("TAP BUTTON TO APPROVE", apple::firmware::kMetsOrange, apple::firmware::WaitingIcon::Alert);
+      info_screen_until_ms = 0;
+    }
+    return;
+  }
+  if (maintenance_prompt_shown) {
+    // Expired or cancelled without a tap; a confirmed tap clears the flag
+    // itself and leaves its own 5 s card up.
+    maintenance_prompt_shown = false;
+    maintenance_prompt_seconds = -1;
+    if (info_screen_until_ms == 0) restore_default_screen();
+  }
+}
+
 void service_reset_button() {
   const bool down = digitalRead(kResetButtonPin) == LOW;
   const std::uint32_t now = now32();
@@ -3112,7 +3154,16 @@ void service_reset_button() {
   } else if (button_was_down) {
     const std::uint32_t held = now - button_down_since_ms;
     if (held < kResetShortPressMaxMs) {
-      show_info_screen();
+      if (engine && !engine->fault_latched() && !celebration_active && motion_idle() &&
+          !replay_active && !manager.update_in_progress() && manager.confirm_maintenance()) {
+        maintenance_prompt_shown = false;
+        copy_text(model.waiting_title, sizeof(model.waiting_title), "APPLE LAB TEST");
+        copy_text(model.waiting_note, sizeof(model.waiting_note), "STARTING - STAND CLEAR");
+        show_waiting("APPROVED", apple::firmware::kMetsOrange, apple::firmware::WaitingIcon::Alert);
+        info_screen_until_ms = now + 5000;
+      } else {
+        show_info_screen();
+      }
     } else if (held < kRestartHoldMaxMs) {
       restart_from_button();
     } else {
@@ -3178,8 +3229,66 @@ void finish_replay(const char* status) {
   }
 }
 
+String start_lab_fixture(const String& id) {
+  if (!engine || engine->fault_latched() || replay_active || !motion_idle() || actuator.busy() ||
+      actuator.estimated_position_mm(now_ms()) != 0 || manager.update_in_progress()) return "BUSY";
+  const auto* selected = apple::firmware::find_lab_fixture(id.c_str());
+  if (!selected || selected->frames.empty()) return "BAD_FIXTURE";
+  if (!settings.motor) return "MOTOR_DISABLED";
+  replay_active = true;
+  active_fixture = selected;
+  fixture_id = id;
+  fixture_state = "RUNNING";
+  replay_step = 0;
+  fixture_started_ms = now32();
+  game.reset();
+  replay_ledger.clear();
+  make_engine(replay_ledger);
+  engine->set_raised_dwell_ms(apple::core::kRaisedDwellMs);
+  projector = apple::game_state::Projector{};
+  tracker.reset();
+  reset_final_tracking();
+  return String();
+}
+
+String stop_lab_fixture() {
+  if (!active_fixture) return String();
+  const auto now = now_ms();
+  const bool home = motion_idle() && !actuator.busy() && actuator.estimated_position_mm(now) == 0;
+  if (!home && engine) {
+    handle_output(engine->report_motion_fault("FIXTURE_CANCELLED", now), now);
+    actuator.tick(now);
+    apply_drive(Drive::Off);
+    end_celebration("FIXTURE_CANCELLED");
+  }
+  active_fixture = nullptr;
+  fixture_state = "CANCELLED";
+  if (home) finish_replay("CANCELLED");
+  else { replay_active = false; tracker.reset(); }
+  return String();
+}
+
 void service_replay() {
   if (!replay_active) return;
+  if (active_fixture) {
+    if (engine && engine->fault_latched()) {
+      active_fixture = nullptr; fixture_state = "FAILED"; replay_active = false; return;
+    }
+    const auto elapsed = now32() - fixture_started_ms;
+    if (elapsed > 180000) { stop_lab_fixture(); fixture_state = "FAILED"; return; }
+    while (replay_step < active_fixture->frames.size() && elapsed >= active_fixture->frames[replay_step].at_ms) {
+      const auto& frame = active_fixture->frames[replay_step++].frame;
+      if (!projector.replace(frame)) { stop_lab_fixture(); fixture_state = "FAILED"; return; }
+      note_batter(projector.snapshot());
+      const auto now = now_ms();
+      handle_output(engine->ingest(apple::core::to_input_envelope(projector.decision_evidence()), now), now);
+      show_snapshot(projector.snapshot());
+    }
+    if (replay_step == active_fixture->frames.size() && elapsed >= active_fixture->duration_ms && motion_idle()) {
+      active_fixture = nullptr; fixture_state = "COMPLETED"; finish_replay("COMPLETED");
+    }
+    return;
+  }
   if (replay_step >= replay_count) {
     if (motion_idle()) finish_replay("COMPLETED");
     return;
@@ -3238,7 +3347,7 @@ void handle_serial() {
         break;
       case 'r':
       case 'R':
-        start_replay(false);
+        publish_trace("MAINTENANCE_REQUIRED", "request a test in Apple Lab, then press the owner button");
         break;
       case 's':
       case 'S':
@@ -3353,7 +3462,7 @@ void setup() {
 
   credentials.begin();  // so the hello below reports the saved network truthfully
   publish_hello();
-  Serial.printf("APPLE_LIVE=READY COMMANDS=?:status x:stop r:replay s:schedule p:poll w:forget_wifi MOTOR=%s\n",
+  Serial.printf("APPLE_LIVE=READY COMMANDS=?:status x:stop s:schedule p:poll w:forget_wifi MOTOR=%s\n",
                 settings.motor ? "on" : "off");
   if (safe_mode) {
     publish_trace("SAFE_MODE", "repeated early crashes; network and Manager skipped, reflash with pio");
@@ -3401,6 +3510,7 @@ void loop() {
   service_backlight();
   service_setup_screen();
   service_reset_button();
+  service_maintenance_prompt();
   update_idle_note(false);
   if (due(next_status_ms)) {
     next_status_ms = now32() + kStatusPeriodMs;

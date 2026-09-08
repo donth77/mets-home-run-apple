@@ -88,6 +88,9 @@ void ManagerServer::begin(StatusFn status, JoinFn join, ForgetFn forget, Setting
   server_.on("/api/update/check", HTTP_POST, [this] { handle_release_action(release_check_); });
   server_.on("/api/update/install", HTTP_POST, [this] { handle_release_action(release_install_); });
   server_.on("/api/replay", HTTP_POST, [this] { handle_replay(); });
+  server_.on("/api/maintenance", HTTP_POST, [this] { handle_maintenance(); });
+  server_.on("/api/fixture", HTTP_POST, [this] { handle_fixture(); });
+  server_.on("/api/fixture/stop", HTTP_POST, [this] { handle_fixture_stop(); });
   // Captive-portal probes from phones and laptops.
   for (const char* probe : {"/generate_204", "/gen_204", "/hotspot-detect.html", "/library/test/success.html",
                             "/connecttest.txt", "/ncsi.txt", "/fwlink", "/success.txt", "/canonical.html"}) {
@@ -96,13 +99,14 @@ void ManagerServer::begin(StatusFn status, JoinFn join, ForgetFn forget, Setting
     });
   }
   server_.onNotFound([this] { handle_not_found(); });
-  const char* headers[] = {"X-Apple-Code"};
-  server_.collectHeaders(headers, 1);
+  const char* headers[] = {"X-Apple-Code", "X-Apple-Maintenance"};
+  server_.collectHeaders(headers, 2);
   server_.begin();
   server_started_ = true;
 }
 
 void ManagerServer::loop() {
+  maintenance_.expire(millis());
   if (ap_active_) dns_.processNextRequest();
   if (server_started_) server_.handleClient();
   if (forget_pending_ && static_cast<std::int32_t>(millis() - forget_at_ms_) >= 0) {
@@ -226,11 +230,12 @@ void ManagerServer::handle_networks() {
   server_.send(200, "application/json", body);
 }
 
-int ManagerServer::auth_status() {
-  if (!code_required_ || admin_code_.length() == 0) return 0;
+int ManagerServer::auth_status(bool require_code) {
+  if (!require_code && !code_required_) return 0;
+  if (admin_code_.length() == 0) return 401;
   // The setup network hands out 192.168.4.x; a client there proved presence.
   const IPAddress client = server_.client().remoteIP();
-  if (ap_active_ && client[0] == 192 && client[1] == 168 && client[2] == 4) return 0;
+  if (!require_code && ap_active_ && client[0] == 192 && client[1] == 168 && client[2] == 4) return 0;
   const std::uint32_t now = millis();
   if (lockout_until_ms_ != 0 && static_cast<std::int32_t>(now - lockout_until_ms_) < 0) return 429;
   String code = server_.header("X-Apple-Code");
@@ -499,14 +504,83 @@ void ManagerServer::handle_release_action(const ActionFn& action) {
   server_.send(200, "application/json", "{\"ok\":true}");
 }
 
+void ManagerServer::fill_maintenance_status(JsonObject out) const {
+  const auto now = static_cast<std::uint32_t>(millis());
+  out["supported"] = static_cast<bool>(maintenance_gate_);
+  out["pending"] = maintenance_.pending(now);
+  out["armed"] = maintenance_.armed(now);
+  out["remainingMs"] = maintenance_.remaining_ms(now);
+}
+
+void ManagerServer::handle_maintenance() {
+  const int auth = auth_status(true);  // Required even with the owner lock off.
+  if (auth != 0) {
+    server_.send(auth, "application/json", auth == 429 ?
+        "{\"ok\":false,\"error\":\"LOCKED\"}" : "{\"ok\":false,\"error\":\"CODE\"}");
+    return;
+  }
+  const String why = maintenance_gate_ ? maintenance_gate_() : String("NO_MAINTENANCE");
+  if (why.length()) {
+    server_.send(409, "application/json", String("{\"ok\":false,\"error\":\"") + why + "\"}");
+    return;
+  }
+  char token[33];
+  for (int i = 0; i < 4; ++i) std::snprintf(token + i * 8, 9, "%08lx", static_cast<unsigned long>(esp_random()));
+  maintenance_.request(true, token, millis());
+  server_.sendHeader("Cache-Control", "no-store");
+  server_.send(200, "application/json", String("{\"ok\":true,\"token\":\"") + token + "\",\"expiresInMs\":90000}");
+}
+
 void ManagerServer::handle_replay() {
-  if (!authorized()) return;
-  const String why = replay_ ? replay_(server_.arg("kind")) : String("NO_REPLAY");
+  const String kind = server_.arg("kind");
+  if (kind != "hr" && kind != "win") {
+    server_.send(400, "application/json", "{\"ok\":false,\"error\":\"BAD_KIND\"}");
+    return;
+  }
+  if (!maintenance_.consume(server_.header("X-Apple-Maintenance").c_str(), millis())) {
+    server_.send(403, "application/json", "{\"ok\":false,\"error\":\"MAINTENANCE_REQUIRED\"}");
+    return;
+  }
+  const String why = replay_ ? replay_(kind) : String("NO_REPLAY");
   if (why.length() > 0) {
     server_.send(why == "NO_REPLAY" ? 404 : 409, "application/json",
                  String("{\"ok\":false,\"error\":\"") + why + "\"}");
     return;
   }
+  server_.send(200, "application/json", "{\"ok\":true}");
+}
+
+void ManagerServer::handle_fixture() {
+  const String token = server_.header("X-Apple-Maintenance");
+  if (!maintenance_.consume(token.c_str(), millis())) {
+    server_.send(403, "application/json", "{\"ok\":false,\"error\":\"MAINTENANCE_REQUIRED\"}");
+    return;
+  }
+  const String why = fixture_run_ ? fixture_run_(server_.arg("scenario")) : String("BAD_FIXTURE");
+  if (why.length()) {
+    server_.send(409, "application/json", String("{\"ok\":false,\"error\":\"") + why + "\"}");
+    return;
+  }
+  fixture_stop_token_ = token;
+  server_.send(200, "application/json", "{\"ok\":true}");
+}
+
+void ManagerServer::handle_fixture_stop() {
+  const String token = server_.header("X-Apple-Maintenance");
+  // A Stop can overtake a delayed Start. Retire its approval in that case so
+  // the late Start cannot move hardware after the operator has switched off.
+  const bool cancelled_pending = maintenance_.cancel(token.c_str());
+  const bool owns_fixture = token.length() > 0 && token == fixture_stop_token_;
+  if (!cancelled_pending && !owns_fixture) {
+    server_.send(403, "application/json", "{\"ok\":false,\"error\":\"MAINTENANCE_REQUIRED\"}");
+    return;
+  }
+  if (owns_fixture) {
+    if (fixture_stop_) fixture_stop_();
+  }
+  // Keep cancellation idempotent if its response was lost. A later Start
+  // replaces this token before exposing a new test.
+  fixture_stop_token_ = token;
   server_.send(200, "application/json", "{\"ok\":true}");
 }
 
