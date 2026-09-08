@@ -49,7 +49,7 @@ export function OverviewWorkspace({
         description={
           live
             ? `Live status from the Apple over ${live?.transport === "USB" ? "USB" : "Wi-Fi"}. Test celebrations run the Apple's own recorded game through its real engine; the Apple owns every safety decision.`
-            : "Use fixtures, live feeds, historical games, and the USB bench workspace without putting this browser in the autonomous game loop. Connect your Apple from the sidebar to see it here."
+            : "Use scenarios, live feeds, historical games, and the USB bench workspace without putting this browser in the autonomous game loop. Connect your Apple from the sidebar to see it here."
         }
       >
         {live ? (

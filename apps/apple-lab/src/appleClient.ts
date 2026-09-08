@@ -27,7 +27,7 @@ export const APPLE_ERROR_TEXT: Record<string, string> = {
   RELAY: "The Apple is not reachable at that address.",
   MAINTENANCE_REQUIRED: "Request a hardware test session and press the Apple's owner button once.",
   NO_MAINTENANCE: "Update the Apple firmware to enable guarded hardware tests.",
-  BAD_FIXTURE: "This firmware does not support that Simulator fixture. Update the Apple firmware.",
+  BAD_FIXTURE: "This firmware does not know that Simulator scenario. Update the Apple firmware.",
   MOTOR_DISABLED: "Enable the motor in Apple Manager before a physical run.",
   BAD_HOST: "That address is not valid.",
 };

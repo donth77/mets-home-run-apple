@@ -90,11 +90,11 @@ tests. Failed connections retry automatically. Disconnect stops retries.
 2. Open Simulator and turn on **Physical Apple**. Connection alone does not arm
    hardware. The toggle controls Simulator tests; autonomous game following is
    still controlled by Apple Manager.
-3. Select a scenario and choose **Request hardware test**.
+3. Select a scenario and choose **Run on the Apple**.
 4. Press and release the physical owner button once within 30 seconds. Do not
    hold it: holds retain their restart/reset meanings.
-5. Choose **Run fixture on device** within 60 seconds. Approval permits one
-   attempt. A new test requires a new session and button press.
+5. The scenario starts by itself as soon as the tap lands. Approval permits one
+   run; the next one asks for another tap.
 
 The motor must be enabled in Apple Manager. The device runs the selected shared
 fixture through the canonical projector and C++ engine, using its own actuator
@@ -102,7 +102,7 @@ adapter. Scenarios use a 30-second raised dwell, with a 180-second total limit.
 Review and no-motion scenarios still pass through the same decision rules.
 Preview speed, pause, and timeline scrubbing never change physical motor timing.
 
-Turning the toggle off or selecting **Stop device fixture** requests cancellation.
+Turning the toggle off or selecting **Stop the Apple** requests cancellation.
 Stopping away from home latches a disabled fault for attended recovery. If the
 connection is lost, Stop may not arrive; the device independently completes its
 bounded sequence or disables motion on fault. Reconnecting never repeats a run.

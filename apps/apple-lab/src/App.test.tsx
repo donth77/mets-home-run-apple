@@ -304,7 +304,7 @@ describe("Apple Lab manager", () => {
     fireEvent.click(screen.getByRole("button", { name: /Home run/ }));
 
     expect(screen.getByText(/1 raise \/ lower sequence expected/)).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Run fixture on device" }).hasAttribute("disabled")).toBe(true);
+    expect(screen.getByRole("button", { name: "Run on the Apple" }).hasAttribute("disabled")).toBe(true);
     fireEvent.click(screen.getByRole("switch", { name: "Physical Apple" }));
     expect((screen.getByRole("switch", { name: "Physical Apple" }) as HTMLInputElement).checked).toBe(true);
   });

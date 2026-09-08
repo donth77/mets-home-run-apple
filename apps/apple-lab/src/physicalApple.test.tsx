@@ -61,7 +61,7 @@ describe("Simulator physical Apple controls", () => {
     const apple = device();
     const view = render(<SimulatorWorkspace apple={apple} />);
     const toggle = screen.getByRole("switch", { name: "Physical Apple" });
-    const run = screen.getByRole("button", { name: "Run fixture on device" });
+    const run = screen.getByRole("button", { name: "Run on the Apple" });
     expect(run.hasAttribute("disabled")).toBe(true);
     fireEvent.click(toggle);
     expect(apple.runFixture).not.toHaveBeenCalled();
@@ -90,7 +90,7 @@ describe("Simulator physical Apple controls", () => {
     const apple = device({ canTest: true, transport: "USB" });
     render(<SimulatorWorkspace apple={apple} />);
     fireEvent.click(screen.getByRole("switch", { name: "Physical Apple" }));
-    expect(screen.getByRole("button", { name: "Run fixture on device" }).hasAttribute("disabled")).toBe(true);
+    expect(screen.getByRole("button", { name: "Run on the Apple" }).hasAttribute("disabled")).toBe(true);
     expect(apple.runFixture).not.toHaveBeenCalled();
   });
 

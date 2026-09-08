@@ -27,7 +27,7 @@ export function AppleTestSession({ apple }: { apple: AppleDeviceState }) {
         {apple.queued
           ? "Walk to the Apple and tap its owner button once — don't hold it. The test starts by itself; the Apple's screen counts the window down."
           : running
-            ? "Let it finish and come home before asking for another."
+            ? "Let it finish and come home before starting another."
             : "Click a test. The Apple will ask for one tap of its owner button, then run it. Keep the lift's travel path clear."}
       </p>
       {apple.error && <p role="alert">{apple.error}</p>}

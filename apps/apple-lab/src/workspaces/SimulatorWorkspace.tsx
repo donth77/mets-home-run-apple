@@ -162,7 +162,7 @@ export function SimulatorWorkspace({ apple }: { apple?: AppleDeviceState }) {
             >
               {apple?.queued
                 ? `Waiting for the button… ${Math.max(0, Math.ceil((apple.status?.maintenance.remainingMs ?? 0) / 1000))} s · cancel`
-                : "Run fixture on device"}
+                : "Run on the Apple"}
             </button>
             {apple?.canStopTest && (
               <button
@@ -171,7 +171,7 @@ export function SimulatorWorkspace({ apple }: { apple?: AppleDeviceState }) {
                 disabled={apple.pending === "stop"}
                 onClick={() => void apple.stopFixture()}
               >
-                Stop device fixture
+                Stop the Apple
               </button>
             )}
           </div>
@@ -189,7 +189,7 @@ export function SimulatorWorkspace({ apple }: { apple?: AppleDeviceState }) {
         )}
         {physical && editingCustom && (
           <p className="device-bar__note">
-            The custom scenario previews in the browser only. The Apple runs its built-in fixtures; pick one of those to run it
+            The custom scenario previews in the browser only. The Apple runs its built-in scenarios; pick one of those to run it
             on the device.
           </p>
         )}
@@ -206,7 +206,7 @@ export function SimulatorWorkspace({ apple }: { apple?: AppleDeviceState }) {
             Reported motion: {apple.status.motionKnown ? apple.status.sequence : "UNKNOWN"} ·{" "}
             {apple.status.positionMm === null ? "position unknown" : `${apple.status.positionMm} mm estimated`}
             {apple.status.fixture.scenarioId
-              ? ` · device fixture ${apple.status.fixture.scenarioId} · ${apple.status.fixture.state}`
+              ? ` · the Apple is running ${apple.status.fixture.scenarioId} · ${apple.status.fixture.state.toLowerCase()}`
               : ""}
           </p>
         )}
@@ -216,7 +216,7 @@ export function SimulatorWorkspace({ apple }: { apple?: AppleDeviceState }) {
           <div className="panel-title">
             <div>
               <span>Test scenarios</span>
-              <h2>{fixtureScenarios.length} fixtures + custom</h2>
+              <h2>{fixtureScenarios.length} scenarios + custom</h2>
             </div>
           </div>
           <p className="panel-intro">Replay deterministic game states without waiting for a live Mets game.</p>
@@ -240,7 +240,7 @@ export function SimulatorWorkspace({ apple }: { apple?: AppleDeviceState }) {
             ))}
           </div>
           <div className="selected-fixture">
-            <span>Selected fixture</span>
+            <span>Selected scenario</span>
             <strong>{playback.scenario.title}</strong>
             <p>{playback.scenario.description}</p>
             <p className="selected-fixture__inputs">
@@ -253,7 +253,7 @@ export function SimulatorWorkspace({ apple }: { apple?: AppleDeviceState }) {
           <div className="stage-toolbar">
             <div>
               <span>Assembly preview</span>
-              <strong>{manualPosition === null ? "FIXTURE COMMAND" : "MANUAL OVERRIDE"}</strong>
+              <strong>{manualPosition === null ? "SCENARIO COMMAND" : "MANUAL OVERRIDE"}</strong>
             </div>
             <div className="view-toggles">
               <label>
@@ -408,7 +408,7 @@ export function SimulatorWorkspace({ apple }: { apple?: AppleDeviceState }) {
           </div>
         </aside>
       </div>
-      <section className="manager-panel transport-panel" aria-label="Fixture transport and trace">
+      <section className="manager-panel transport-panel" aria-label="Scenario transport and trace">
         <div className="transport-controls">
           <button
             type="button"
