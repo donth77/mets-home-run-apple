@@ -189,7 +189,20 @@ export function useAppleDevice(): AppleDeviceState {
         clearTimeout(deadline);
         if (pollController.current === controller) pollController.current = null;
         if (active.current && epoch === generation.current && isVisible()) {
-          const delay = failures.current ? Math.min(15000, 1000 * 2 ** Math.min(failures.current - 1, 4)) : 1000;
+          // The Apple's display loop and its web server share a core, and each
+          // status reply costs the animation a few milliseconds. While a
+          // celebration or fixture is running, poll at the slowest rate that
+          // still beats the 3 s freshness rule instead of once a second.
+          const busy =
+            current.current !== null &&
+            (current.current.sequence !== "IDLE" ||
+              current.current.mode === "REPLAY" ||
+              current.current.fixture.state === "RUNNING");
+          const delay = failures.current
+            ? Math.min(15000, 1000 * 2 ** Math.min(failures.current - 1, 4))
+            : busy
+              ? STATUS_FRESH_MS - 500
+              : 1000;
           timer.current = setTimeout(() => void pollStatus(epoch), delay);
         }
       }
