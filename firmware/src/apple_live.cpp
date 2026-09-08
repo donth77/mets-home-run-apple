@@ -157,12 +157,17 @@ constexpr char kAudioManifestPath[] = "/audio.json";
 constexpr std::uint32_t kResidentTrackBytes = 50UL * 22050 * 2 + 64;
 constexpr std::uint32_t kResetHoldMs = 10'000;
 constexpr std::uint32_t kResetShortPressMaxMs = 1'000;
+// Between a short press and the factory-reset countdown sits the restart
+// window: release there and the Apple reboots like the RESET pin, keeping
+// Wi-Fi and every setting.
+constexpr std::uint32_t kRestartHoldMaxMs = 3'000;
 constexpr std::uint32_t kInfoScreenMs = 20'000;  // one short press shows the address and code
 constexpr std::uint32_t kSerialWaitTimeoutMs = 3'000;
 constexpr std::uint32_t kLoopPeriodMs = 10;
 constexpr std::uint32_t kWatchdogSeconds = 90;
 constexpr std::uint32_t kHttpTimeoutMs = 20'000;
 constexpr std::uint32_t kWifiRetryMs = 15'000;
+constexpr std::uint32_t kNtpRekickMs = 25'000;  // re-issue NTP while the clock is still unset
 // Credentials that do not connect within this window reopen the setup network
 // so the owner can fix a changed password without touching the board.
 constexpr std::uint32_t kJoinTimeoutMs = 45'000;
@@ -385,8 +390,10 @@ std::uint32_t next_setup_flip_ms = 0;
 std::uint32_t button_down_since_ms = 0;
 bool button_was_down = false;
 std::int32_t reset_countdown_shown = -1;
+bool restart_prompt_shown = false;
 std::uint32_t info_screen_until_ms = 0;
 bool time_synced = false;
+std::uint32_t next_ntp_kick_ms = 0;   // re-issue NTP while the clock is unset
 
 std::vector<ScheduleGame> schedule;
 std::optional<ScheduleGame> game;
@@ -1444,11 +1451,25 @@ void scan_tracks() {
 }
 
 void mount_audio_card() {
+  // A card that is still settling can fail SD.begin() or answer an empty root
+  // on the first try, which would leave the Manager showing no tracks until a
+  // manual rescan. Retry a few times so a slightly slow card mounts on its own.
+  for (std::uint8_t attempt = 0; attempt < 3; ++attempt) {
+    audio_card_ready = SD.begin(kSdChipSelectPin, sd_spi, kSdClockHz);
+    if (audio_card_ready) {
+      scan_tracks();
+      if (track_count > 0) return;
+    }
+    SD.end();
+    delay(150);
+  }
   audio_card_ready = SD.begin(kSdChipSelectPin, sd_spi, kSdClockHz);
   if (!audio_card_ready) {
     publish_trace("AUDIO", "no card; celebrations are silent");
     return;
   }
+  // Card is present but its root has no playable tracks; scan_tracks() has
+  // already logged the zero count.
   scan_tracks();
 }
 
@@ -2234,6 +2255,7 @@ void service_wifi() {
     // waits out a retry before moving on. The Apple has no battery-backed
     // clock, so this wait is the whole of the SYNCING CLOCK screen.
     configTzTime(settings.posix_tz, "time.google.com", "time.cloudflare.com", "pool.ntp.org");
+    next_ntp_kick_ms = now32() + kNtpRekickMs;
     secure_client.setCACert(apple::firmware::kMlbRootCaPem);
     secure_client.setHandshakeTimeout(kHttpTimeoutMs / 1000);
     secure_client.setTimeout(kHttpTimeoutMs / 1000);
@@ -2305,6 +2327,14 @@ void service_wifi() {
     localtime_r(&at, &local);
     strftime(detail, sizeof(detail), "%Y-%m-%d %H:%M:%S %Z", &local);
     publish_trace("CLOCK", detail);
+  }
+  // On a weak link the first NTP burst can be lost. Re-issue it periodically
+  // until the clock is valid so a marginal signal still recovers instead of
+  // sitting on SYNCING CLOCK indefinitely.
+  if (connected && !clock_valid() && due(next_ntp_kick_ms)) {
+    next_ntp_kick_ms = now32() + kNtpRekickMs;
+    configTzTime(settings.posix_tz, "time.google.com", "time.cloudflare.com", "pool.ntp.org");
+    publish_trace("CLOCK", "still syncing; retrying ntp");
   }
 }
 
@@ -3004,16 +3034,65 @@ void factory_reset() {
   on_forget_request();
 }
 
+// The middle hold, released inside the restart window: reboot exactly like
+// the RESET pin. Wi-Fi credentials and settings live in NVS, so the Apple
+// comes back on the same network.
+void restart_from_button() {
+  if (celebration_active || !motion_idle()) {
+    // Same rule as the Manager page's restart: never reboot mid-celebration.
+    copy_text(model.waiting_title, sizeof(model.waiting_title), "CELEBRATING");
+    copy_text(model.waiting_note, sizeof(model.waiting_note), "TRY AFTER THE PLAY");
+    show_waiting("NOT NOW", apple::firmware::kDelayYellow, apple::firmware::WaitingIcon::Alert);
+    info_screen_until_ms = now32() + 2500;
+    return;
+  }
+  publish_trace("RESET", "button held: restarting, wi-fi kept");
+  copy_text(model.waiting_title, sizeof(model.waiting_title), "BACK IN A MOMENT");
+  copy_text(model.waiting_note, sizeof(model.waiting_note), "WI-FI SETTINGS KEPT");
+  show_waiting("RESTARTING");
+  restart_at_ms = now32() + 700;
+}
+
+// Draw whatever screen the live state calls for. A temporary overlay — the
+// info screen, or a cancelled reset countdown — ends by calling this, so the
+// panel is never stranded on the overlay. Mirrors the main-loop precedence so
+// every state (including "no game yet, still syncing") lands somewhere valid.
+void restore_default_screen() {
+  if (projector.has_projection()) { show_snapshot(projector.snapshot()); return; }
+  if (!settings.follow) { show_paused_screen(); return; }
+  if (game.has_value()) { show_upcoming(*game); return; }
+  if (manager.setup_network_active()) { show_setup_screen(); return; }
+  copy_text(model.waiting_title, sizeof(model.waiting_title), "HOME RUN APPLE");
+  if (WiFi.status() != WL_CONNECTED) {
+    copy_text(model.waiting_note, sizeof(model.waiting_note), "RETRYING");
+    show_waiting("WI-FI LOST", apple::firmware::kDelayYellow, apple::firmware::WaitingIcon::WifiLost);
+  } else if (!clock_valid()) {
+    model.waiting_note[0] = '\0';
+    show_waiting("SYNCING CLOCK", apple::firmware::kMetsOrange, apple::firmware::WaitingIcon::Clock);
+  } else {
+    model.waiting_note[0] = '\0';
+    show_waiting("WAITING FOR LIVE DATA");
+  }
+}
+
 void service_reset_button() {
   const bool down = digitalRead(kResetButtonPin) == LOW;
   const std::uint32_t now = now32();
   if (down && !button_was_down) {
     button_down_since_ms = now;
     reset_countdown_shown = -1;
+    restart_prompt_shown = false;
   }
   if (down) {
     const std::uint32_t held = now - button_down_since_ms;
-    if (held >= kResetShortPressMaxMs) {
+    if (held >= kResetShortPressMaxMs && held < kRestartHoldMaxMs) {
+      if (!restart_prompt_shown) {
+        restart_prompt_shown = true;
+        copy_text(model.waiting_title, sizeof(model.waiting_title), "RELEASE TO RESTART");
+        copy_text(model.waiting_note, sizeof(model.waiting_note), "KEEPS WI-FI|KEEP HOLDING TO RESET WI-FI");
+        show_waiting("RESTART");
+      }
+    } else if (held >= kRestartHoldMaxMs) {
       const std::int32_t remaining = static_cast<std::int32_t>((kResetHoldMs - std::min(held, kResetHoldMs) + 999) / 1000);
       if (remaining != reset_countdown_shown) {
         reset_countdown_shown = remaining;
@@ -3034,20 +3113,18 @@ void service_reset_button() {
     const std::uint32_t held = now - button_down_since_ms;
     if (held < kResetShortPressMaxMs) {
       show_info_screen();
+    } else if (held < kRestartHoldMaxMs) {
+      restart_from_button();
     } else {
-      // Released early: put the previous screen back.
+      // Released during the countdown: cancel and put the current screen back.
       info_screen_until_ms = 0;
-      if (projector.has_projection()) show_snapshot(projector.snapshot());
-      else if (game) show_upcoming(*game);
-      else request_redraw();
+      restore_default_screen();
     }
   }
   button_was_down = down;
   if (info_screen_until_ms != 0 && due(info_screen_until_ms)) {
     info_screen_until_ms = 0;
-    if (projector.has_projection()) show_snapshot(projector.snapshot());
-    else if (game) show_upcoming(*game);
-    else if (manager.setup_network_active()) show_setup_screen();
+    restore_default_screen();
   }
 }
 

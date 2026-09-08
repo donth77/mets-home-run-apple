@@ -149,11 +149,22 @@ input[type=file]::file-selector-button{font:inherit;font-weight:600;padding:7px 
 #joined h2{display:flex;align-items:center;gap:9px;font-size:18px}
 .check{display:inline-flex;width:24px;height:24px;border-radius:50%;background:var(--good);color:#06301a;font-size:14px;font-weight:800;align-items:center;justify-content:center;flex:none}
 a.btn{display:inline-block;font-size:15px;font-weight:600;padding:11px 16px;border-radius:9px;background:var(--orange);color:#fff;text-decoration:none;margin:4px 0 10px}
+.tabs{display:flex;gap:4px;margin:-4px 0 14px;padding:6px 0;position:sticky;top:0;z-index:5;background:var(--blue-deep)}
+.tabs button{flex:1 1 0;justify-content:center;text-align:center;background:var(--blue-card);border:1px solid var(--blue-line);border-radius:10px;color:var(--muted);font-size:14px;font-weight:600;padding:10px 6px;position:relative;margin:0}
+.tabs button.on{background:var(--orange);border-color:var(--orange);color:#fff}
+.tabs button i{position:absolute;top:7px;right:9px;width:8px;height:8px;border-radius:50%;background:var(--good);box-shadow:0 0 6px var(--good)}
+@media (max-width:380px){.tabs button{font-size:13px;padding:9px 4px}}
 </style>
 </head>
 <body>
 <header><div class="bar"><img src="/logo.png" alt=""><div><h1>Home Run Apple Manager</h1><span id="mode"><span class="spin"></span>Connecting</span></div></div></header>
 <main>
+<nav id="tabs" class="tabs" role="tablist" aria-label="Manager sections" hidden>
+<button type="button" role="tab" data-tab="status" aria-controls="status" aria-selected="true" class="on">Apple</button>
+<button type="button" role="tab" data-tab="settings" aria-controls="settings" aria-selected="false">Settings</button>
+<button type="button" role="tab" data-tab="audio" aria-controls="audio" aria-selected="false">Audio</button>
+<button type="button" role="tab" data-tab="update" aria-controls="update" aria-selected="false">Update<i id="tab-update-dot" hidden aria-label="update available"></i></button>
+</nav>
 <section id="setup" hidden>
 <div id="join-form">
 <h2>Connect to Wi-Fi</h2>
@@ -251,6 +262,15 @@ a.btn{display:inline-block;font-size:15px;font-weight:600;padding:11px 16px;bord
 (function(){
 var $=function(id){return document.getElementById(id)};
 var joining=false,joinStarted=0,wantSetup=false,scanTimer=null,settingsDirty=false,lastSettings=null;
+// Tabs: Apple, Settings, Audio, Update. The Wi-Fi setup flow stays a
+// full-page state of its own, shown instead of the tabs while the Apple has
+// no network. The last tab is remembered and a #hash opens one directly.
+var TABS=["status","settings","audio","update"],setupOnlyNow=true;
+var tab=(function(){var h=location.hash.replace("#","");if(TABS.indexOf(h)>=0)return h;try{var s=localStorage.getItem("apple-tab");if(TABS.indexOf(s)>=0)return s}catch(e){}return "status"})();
+function applyTab(){TABS.forEach(function(t){var b=document.querySelector('#tabs [data-tab="'+t+'"]'),on=t===tab;if(b){b.className=on?"on":"";b.setAttribute("aria-selected",on?"true":"false");b.tabIndex=on?0:-1}$(t).hidden=setupOnlyNow||!on})}
+function showTab(id){if(TABS.indexOf(id)<0||id===tab)return;tab=id;applyTab();try{localStorage.setItem("apple-tab",id)}catch(e){}if(history.replaceState)history.replaceState(null,"","#"+id);window.scrollTo(0,0)}
+Array.prototype.forEach.call(document.querySelectorAll("#tabs [data-tab]"),function(b){b.addEventListener("click",function(){showTab(b.getAttribute("data-tab"))});b.addEventListener("keydown",function(ev){var i=TABS.indexOf(tab);if(ev.key==="ArrowRight"||ev.key==="ArrowLeft"){ev.preventDefault();var n=TABS[(i+(ev.key==="ArrowRight"?1:TABS.length-1))%TABS.length];showTab(n);document.querySelector('#tabs [data-tab="'+n+'"]').focus()}})});
+window.addEventListener("hashchange",function(){var h=location.hash.replace("#","");if(TABS.indexOf(h)>=0)showTab(h)});
 function text(id,value,cls){var el=$(id);el.textContent=value;el.className=cls||""}
 var noticeTimer=null,unreachable=0;
 function dismissToast(el){if(typeof el==="string")el=$("toasts").querySelector('[data-id="'+el+'"]');if(!el||!el.parentNode)return;clearTimeout(el._t);el.classList.add("out");setTimeout(function(){if(el.parentNode)el.parentNode.removeChild(el)},200)}
@@ -300,7 +320,7 @@ function render(s){
   var setupOnly=!connected&&(!w.configured||w.setupNetwork);
   var showSetup=setupOnly||wantSetup||w.setupNetwork;
   $("setup").hidden=!showSetup;$("change").hidden=showSetup;$("forget").hidden=!w.configured;
-  $("status").hidden=setupOnly;$("settings").hidden=setupOnly;$("update").hidden=setupOnly;$("audio").hidden=setupOnly;if(!setupOnly)renderAudio(s);
+  setupOnlyNow=setupOnly;$("tabs").hidden=setupOnly;applyTab();if(!setupOnly)renderAudio(s);
   if(joining){
     b=$("join");
     if(w.state==="CONNECTED"){joining=false;b.disabled=false;b.textContent="Join";notice("");host=(s.hostname||"home-run-apple")+".local";text("joined-ssid",w.ssid||"your Wi-Fi");$("joined-link").href="http://"+w.ip+"/";text("joined-ip","http://"+w.ip);text("joined-host","http://"+host);$("join-form").hidden=true;$("joined").hidden=false}
@@ -399,7 +419,7 @@ function renderUpdate(s){lastStatus=s;var u=s.update||{},st=u.state||"IDLE",box=
   else if(st==="FAILED")msg=updateError(u.error)+(u.checkedAt?" Last good check "+when(u.checkedAt)+".":"");
   else msg="Not checked yet.";
   box.innerHTML="";box.appendChild(document.createTextNode("Installed "));var b=document.createElement("strong");b.id="fw-installed";b.textContent=v;box.appendChild(b);box.appendChild(document.createTextNode(". "+msg));
-  $("install-latest").hidden=st!=="AVAILABLE";
+  $("install-latest").hidden=st!=="AVAILABLE";$("tab-update-dot").hidden=st!=="AVAILABLE";
   $("check-updates").disabled=st==="CHECKING"||st==="DOWNLOADING";
   if(st==="DOWNLOADING"&&!downloadWatch){downloadWatch=true;waitForRestart(v,300000)}
 }
@@ -532,7 +552,7 @@ function trackRow(t,a){
 }
 function renderAudio(s){
   lastStatus=s;var a=s.audio||{},sig=JSON.stringify([a.card,a.tracks,a.players,a.playing,previewing,rosterLoaded,trackSort,trackPage,trackQuery]);
-  $("audio").hidden=false;
+  $("audio").hidden=setupOnlyNow||tab!=="audio";
   $("audio-note").textContent=a.card?"Add your own tracks. Choose which play for a home run and which play when the Mets win, and give any player tracks of his own.":"No memory card. Put one in and restart the Apple to add tracks.";
   if(sig===trackSig)return;
   trackSig=sig;
