@@ -100,10 +100,12 @@ void test_name_normalization_and_fit() {
   loop.begin(Headline::HomeRun, "José Iglesias", 1);     // non-ASCII dropped, still two lines
   expect_lines(loop.name(), "JOS", "IGLESIAS", nullptr);
 
-  // Two lines stay when a third would not make the block bigger.
+  // Two lines stay when a third would not make the block bigger. The public
+  // font's wider glyphs cannot fit BICHETTE at x3, so it settles one step
+  // narrower there; the line split is the same under both fonts.
   loop.begin(Headline::HomeRun, "Bo Bichette", 1);
   expect_lines(loop.name(), "BO", "BICHETTE", nullptr);
-  EXPECT_EQ(loop.name().scale_x, 3);
+  EXPECT_EQ(loop.name().scale_x, std::strcmp(apple::display::font_name(), "Match 7") == 0 ? 3 : 2);
   EXPECT_EQ(loop.name().scale_y, 3);
 
   // A hyphenated surname breaks after the hyphen when that lets the block go up a size.
