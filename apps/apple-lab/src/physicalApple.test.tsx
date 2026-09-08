@@ -94,7 +94,7 @@ describe("Simulator physical Apple controls", () => {
     expect(apple.runFixture).not.toHaveBeenCalled();
   });
 
-  it("uses the firmware snapshot and observed events in Live Game", () => {
+  it("uses the firmware snapshot and observed events in Apple now", () => {
     const { container } = render(<LiveWorkspace apple={device()} events={[]} />);
     expect(screen.getByRole("heading", { name: "On the Apple's screen" })).toBeTruthy();
     expect(container.querySelector(".apple-scorebug")).not.toBeNull();

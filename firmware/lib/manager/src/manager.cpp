@@ -99,8 +99,8 @@ void ManagerServer::begin(StatusFn status, JoinFn join, ForgetFn forget, Setting
     });
   }
   server_.onNotFound([this] { handle_not_found(); });
-  const char* headers[] = {"X-Apple-Code", "X-Apple-Maintenance"};
-  server_.collectHeaders(headers, 2);
+  const char* headers[] = {"X-Apple-Code", "X-Apple-Maintenance", "Range"};
+  server_.collectHeaders(headers, 3);
   server_.begin();
   server_started_ = true;
 }
@@ -428,8 +428,49 @@ void ManagerServer::handle_audio_file() {
                  String("{\"ok\":false,\"error\":\"") + failed + "\"}");
     return;
   }
+  // Serve byte ranges. Phones ask for the head of a track first and play it
+  // while the rest arrives; without ranges Safari waits for the whole file,
+  // which over this Wi-Fi and the card's read speed is many seconds.
+  const std::size_t total = file.size();
+  std::size_t start = 0;
+  std::size_t end = total == 0 ? 0 : total - 1;
+  bool partial = false;
+  const String range = server_.header("Range");
+  if (range.startsWith("bytes=") && total > 0) {
+    const int dash = range.indexOf('-', 6);
+    if (dash > 6) {
+      start = static_cast<std::size_t>(range.substring(6, dash).toInt());
+      const String tail = range.substring(dash + 1);
+      if (tail.length() > 0) end = static_cast<std::size_t>(tail.toInt());
+      if (end >= total) end = total - 1;
+      if (start > end) {
+        server_.sendHeader("Content-Range", String("bytes */") + total);
+        server_.send(416, "text/plain", "");
+        file.close();
+        return;
+      }
+      partial = true;
+    }
+  }
+  server_.sendHeader("Accept-Ranges", "bytes");
   server_.sendHeader("Cache-Control", "max-age=3600");
-  server_.streamFile(file, "audio/wav");
+  if (partial) server_.sendHeader("Content-Range", String("bytes ") + start + "-" + end + "/" + total);
+  const std::size_t length = total == 0 ? 0 : end - start + 1;
+  server_.setContentLength(length);
+  server_.send(partial ? 206 : 200, "audio/wav", "");
+  if (length > 0 && file.seek(start)) {
+    WiFiClient client = server_.client();
+    std::uint8_t chunk[1024];
+    std::size_t left = length;
+    while (left > 0 && client.connected()) {
+      const std::size_t want = left < sizeof(chunk) ? left : sizeof(chunk);
+      const std::size_t got = file.read(chunk, want);
+      if (got == 0) break;
+      const std::size_t sent = client.write(chunk, got);
+      if (sent != got) break;
+      left -= got;
+    }
+  }
   file.close();
 }
 

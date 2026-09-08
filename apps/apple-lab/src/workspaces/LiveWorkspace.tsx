@@ -15,10 +15,10 @@ export function LiveWorkspace({ events, apple }: { events: readonly DeviceTimeli
   return (
     <section className="workspace" aria-labelledby="live-title">
       <WorkspaceHeading
-        eyebrow="Read-only game workspace"
-        title="Live game"
+        eyebrow="Read-only view of the Apple"
+        title="Apple now"
         titleId="live-title"
-        description="View the connected Apple or inspect a separate MLB recording. This page reads device status and does not drive motion."
+        description="What the connected Apple is showing and doing right now, or a separate MLB recording. This page reads device status and does not drive motion."
       >
         <span className={source === "device" ? "mode-pill mode-pill--read" : "mode-pill mode-pill--safe"}>
           <i />{" "}
@@ -32,7 +32,7 @@ export function LiveWorkspace({ events, apple }: { events: readonly DeviceTimeli
         </span>
       </WorkspaceHeading>
       <fieldset className="live-source-switch">
-        <legend className="visually-hidden">Live game data source</legend>
+        <legend className="visually-hidden">Apple now data source</legend>
         <button
           type="button"
           className={source === "device" ? "is-active" : ""}

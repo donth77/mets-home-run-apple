@@ -110,7 +110,7 @@ export function OverviewWorkspace({
               )}
             </span>
             <button type="button" className="text-button" onClick={onOpenLive}>
-              Open live game →
+              Open Apple now →
             </button>
           </footer>
         </article>

@@ -24,14 +24,14 @@ Open <http://localhost:4173>.
 | --- | --- |
 | Overview | Quick device, game, and safety previews |
 | Simulator | Browser scenarios and approved physical fixture runs over Wi-Fi |
-| Live Game | Connected device scoreboard and events, or an opt-in MLB recording |
+| Apple now | What the connected Apple is showing and doing, or an opt-in MLB recording |
 | Historical Replay | Completed MLB games with play, pause, seek, and speed controls |
 | Hardware Tests | Guarded USB commissioning and receipts from the Nano |
 | Diagnostics | A preview of autonomous-device telemetry and event history |
 
 ## No hardware required
 
-Live Game does not contact MLB until you start a recording. Historical Replay
+Apple now does not contact MLB until you start a recording. Historical Replay
 waits until you choose a date and game. Both use the shared C++ game-state and
 decision code.
 
@@ -77,8 +77,8 @@ setup code is the one on the Apple's info screen (short press of the owner
 button). Both are remembered in this browser, and the Lab reconnects on the
 next visit.
 
-While connected, Overview, Live Game, and Diagnostics use the Apple's reported
-status. Live Game paints what the Apple's panel is showing — the game or
+While connected, Overview, Apple now, and Diagnostics use the Apple's reported
+status. Apple now paints what the Apple's panel is showing — the game or
 upcoming screen, its card screens such as the test-approval prompt, and a
 celebration in progress — with the same renderer the firmware uses. Missing safety fields are shown as unknown; stale status disables new
 tests. Failed connections retry automatically. Disconnect stops retries.
@@ -134,7 +134,7 @@ run all 14 fixtures with a recording actuator and compare a golden motion trace.
 The native status JSON golden is also read by the Lab's parser and offline UI
 tests. No validation fixture contacts MLB or drives hardware.
 
-Without a connected Apple, Overview, Live Game, and Diagnostics show labeled
+Without a connected Apple, Overview, Apple now, and Diagnostics show labeled
 reference data. Older firmware supports telemetry but needs an update for the
 full scoreboard and guarded Simulator API. These code and build checks do not
 replace a disarmed embedded test before the first loaded hardware run.

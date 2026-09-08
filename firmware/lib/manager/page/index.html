@@ -199,13 +199,13 @@ a.btn{display:inline-block;font-size:15px;font-weight:600;padding:11px 16px;bord
 <h2>Apple</h2>
 <div class="tiles">
 <div class="tile"><span>Wi-Fi</span><strong id="wifi">…</strong><small id="wifi-2"></small><small id="wifi-3"></small></div>
-<div class="tile"><span>Game</span><strong id="game">…</strong><small id="game-2"></small></div>
+<div class="tile"><span id="game-label">Game</span><strong id="game">…</strong><small id="game-2"></small></div>
 <div class="tile"><span>Game feed</span><strong id="feed">…</strong><small id="feed-2"></small></div>
 <div class="tile"><span>Lift</span><strong id="lift">…</strong><small id="lift-2"></small></div>
 <div class="tile"><span>Last celebration</span><strong id="last">…</strong><small id="last-2"></small></div>
 <div class="tile"><span>Firmware</span><strong id="fw">…</strong><small id="fw-2"></small></div>
 </div>
-<div class="row"><button id="change" class="quiet" type="button">Change Wi-Fi</button><button id="forget" class="quiet" type="button">Forget Wi-Fi</button></div>
+<div class="row"><button id="change" class="quiet" type="button">Change Wi-Fi</button><button id="forget" class="quiet" type="button">Forget Wi-Fi</button><button id="restart" type="button" class="quiet">Restart the Apple</button></div>
 </section>
 <section id="settings" hidden>
 <h2>Settings</h2>
@@ -251,6 +251,7 @@ a.btn{display:inline-block;font-size:15px;font-weight:600;padding:11px 16px;bord
 <h3 class="sub">Player tracks</h3>
 <p class="note">Give a player tracks of his own. When he hits a home run, one of his tracks plays instead of the general home run tracks. Players without their own tracks use the general ones.</p>
 <div id="player-list"></div>
+<nav class="pager" id="player-pager" hidden aria-label="Player pages"></nav>
 <div class="player-add">
   <select id="player-pick" aria-label="Player"><option value="">Loading the roster…</option></select>
   <select id="player-track" aria-label="Track"></select>
@@ -265,7 +266,6 @@ a.btn{display:inline-block;font-size:15px;font-weight:600;padding:11px 16px;bord
 <input id="fw-file" type="file" accept=".bin" aria-label="Firmware file">
 <div class="progress" id="fw-bar" hidden><i id="fw-bar-fill"></i></div>
 <div class="row"><button id="install" type="button" disabled>Install</button><span id="fw-note" class="note"></span></div>
-<div class="row"><button id="restart" type="button" class="quiet">Restart the Apple</button></div>
 </section>
 </main>
 <div id="toasts" aria-live="polite"></div>
@@ -315,9 +315,23 @@ function render(s){
   else if(w.state==="FAILED"){text("wifi","Could not join "+(w.ssid||""),"bad");text("wifi-2","Check the password");text("wifi-3","")}
   else if(w.state==="LOST"){text("wifi","Lost "+(w.ssid||""),"bad");text("wifi-2","Trying again");text("wifi-3","")}
   else{text("wifi","Not set up");text("wifi-2",w.setupNetwork?"Setup network open":"");text("wifi-3","")}
-  var g=s.game,snap=s.snapshot;
-  text("game",g?(g.away+" at "+g.home):(w.state==="CONNECTED"?"No Mets game this week":"Set up Wi-Fi first"));
-  text("game-2",g?(when(g.scheduled)+(g.gameNumber===2?" · Game 2":"")):(w.state==="CONNECTED"?"Checks the schedule every 10 minutes":""));
+  var g=s.game,snap=s.snapshot,live=snap&&(snap.phase==="LIVE"||snap.phase==="REVIEW"||snap.phase==="DELAYED"),finalNow=snap&&snap.phase==="FINAL",offseason=s.mode==="OFFSEASON";
+  // The tile is named for what it shows: the game in progress, the next one,
+  // tonight's final, or the offseason.
+  text("game-label",live?"Live game":finalNow?"Final":offseason?"Offseason":g?"Next game":"Game");
+  if(snap&&(live||finalNow)){
+    var awayName=(snap.away&&snap.away.abbreviation)||(g&&g.away)||"AWAY",homeName=(snap.home&&snap.home.abbreviation)||(g&&g.home)||"HOME";
+    var awayRuns=snap.away&&typeof snap.away.runs==="number"?snap.away.runs:(snap.awayRuns||0),homeRuns=snap.home&&typeof snap.home.runs==="number"?snap.home.runs:(snap.homeRuns||0);
+    var scoreLine=awayName+" "+awayRuns+" · "+homeName+" "+homeRuns;
+    text("game",scoreLine,finalNow?"":"ok");
+    var halfName={TOP:"Top",BOTTOM:"Bottom",MIDDLE:"Middle",END:"End"}[snap.half]||"",inningLine=snap.inning?(halfName+" "+snap.inning+(typeof snap.outs==="number"?" · "+snap.outs+(snap.outs===1?" out":" outs"):"")):(snap.label||"In progress");
+    text("game-2",(finalNow?"Final":inningLine)+(g&&g.gameNumber===2?" · Game 2":""));
+  }
+  else if(offseason){text("game","Offseason");text("game-2",g?"Opening day "+when(g.scheduled):"Checks the schedule once a day")}
+  else{
+    text("game",g?(g.away+" at "+g.home):(w.state==="CONNECTED"?"No Mets game this week":"Set up Wi-Fi first"));
+    text("game-2",g?(when(g.scheduled)+(g.gameNumber===2?" · Game 2":"")):(w.state==="CONNECTED"?"Checks the schedule every 10 minutes":""));
+  }
   var p=s.poll||{},nextS=Math.max(0,Math.round(p.nextInMs/1000));
   if(p.lastError){text("feed","Problem","bad");text("feed-2",p.lastError)}
   else if(p.ok){text("feed",snap?mode(snap.phase):(g&&g.state?g.state:"Following the game"),"ok");text("feed-2","Updated "+p.ok+" times, next check in "+nextS+" s")}
@@ -454,11 +468,11 @@ $("install").addEventListener("click",function(){var f=$("fw-file").files[0];if(
    to spare during a celebration. */
 var APPLE_RATE=22050,HIGHPASS_HZ=180,HEADROOM=0.89,MAX_SECONDS=90,MAX_SOURCE_BYTES=30*1024*1024;
 var AUDIO_EXT=/\.(mp3|m4a|aac|wav|ogg|oga|flac|aiff?|wma|opus|webm)$/i;
-var PAGE_SIZE=10,trackSort="name",trackPage=1,trackQuery="",trackFilter="all";try{trackSort=localStorage.getItem("apple-track-sort")||"name";trackFilter=localStorage.getItem("apple-track-filter")||"all"}catch(e){}
+var PAGE_SIZE=10,PLAYER_PAGE_SIZE=8,trackSort="name",trackPage=1,playerPage=1,trackQuery="",trackFilter="all";try{trackSort=localStorage.getItem("apple-track-sort")||"name";trackFilter=localStorage.getItem("apple-track-filter")||"all"}catch(e){}
 var FILTERS={all:function(){return true},hr:function(t){return !!t.hr},win:function(t){return !!t.win},players:function(t,a){return usedBy(t.file,a.players||[]).length>0},unused:function(t,a){return !t.hr&&!t.win&&!usedBy(t.file,a.players||[]).length}};
 if(!FILTERS[trackFilter])trackFilter="all";
 function applyFilterChips(){var list=document.querySelectorAll("#track-filters [data-filter]"),i,on;for(i=0;i<list.length;i++){on=list[i].getAttribute("data-filter")===trackFilter;list[i].className=on?"on":"";list[i].setAttribute("aria-selected",on?"true":"false")}}
-var trackSig="",roster=[],rosterLoaded=false,audioBusy=false,previewing="",lastAudio=null;
+var trackSig="",roster=[],rosterLoaded=false,audioBusy=false,appleBusy=false,previewing="",lastAudio=null;
 function encodeWav(samples,scale){
   var bytes=new ArrayBuffer(44+samples.length*2),view=new DataView(bytes),i;
   function tag(at,value){for(var j=0;j<value.length;j++)view.setUint8(at+j,value.charCodeAt(j))}
@@ -540,7 +554,8 @@ function trackRow(t,a){
     stopPreview();previewing=t.file;trackSig="";renderAudio(lastStatus);
   });
   var onApple=el("button","act",a.playing===t.file?"■ Stop the Apple":"Play on the Apple");onApple.type="button";onApple.title="Play it through the Apple's own speaker";
-  onApple.addEventListener("click",function(){busy(onApple);audioSet(a.playing===t.file?{action:"stop"}:{action:"test",file:t.file}).then(function(){unbusy(onApple)})});
+  onApple.disabled=appleBusy;
+  onApple.addEventListener("click",function(){if(appleBusy)return;appleBusy=true;busy(onApple);audioSet(a.playing===t.file?{action:"stop"}:{action:"test",file:t.file}).then(function(){appleBusy=false;unbusy(onApple);trackSig="";renderAudio(lastStatus)})});
   var links=el("div","links");
   var rename=el("button","link","Rename");rename.type="button";
   rename.addEventListener("click",function(){
@@ -562,12 +577,24 @@ function trackRow(t,a){
     audio.src="/api/audio/file?file="+encodeURIComponent(t.file);
     audio.addEventListener("error",function(){toast(lastStatus&&lastStatus.mode==="LIVE"?"Preview waits until the game is over. Play on the Apple works now.":"The Apple could not send that track right now.","bad",{id:"audio"});stopPreview();trackSig="";renderAudio(lastStatus)});
     audio.addEventListener("ended",function(){stopPreview();trackSig="";renderAudio(lastStatus)});
-    box.appendChild(audio);row.appendChild(box);lastAudio=audio;
+    var hint=el("div","tiny","Loading from the Apple over Wi-Fi\u2026");
+    audio.addEventListener("waiting",function(){hint.textContent="Buffering from the Apple\u2026";hint.hidden=false});
+    audio.addEventListener("playing",function(){hint.hidden=true});
+    box.appendChild(audio);box.appendChild(hint);row.appendChild(box);lastAudio=audio;
   }
   return row;
 }
+// One pager for both lists: ‹ 1 2 3 › and "a–b of n".
+function fillPager(pager,page,pages,size,total,pick){
+  pager.textContent="";pager.hidden=pages<2;if(pages<2)return;
+  var prev=el("button",null,"‹"),next=el("button",null,"›"),i;
+  prev.type="button";prev.disabled=page===1;prev.setAttribute("aria-label","Previous page");prev.addEventListener("click",function(){pick(page-1)});pager.appendChild(prev);
+  for(i=1;i<=pages;i++)(function(n){var b=el("button",n===page?"on":"",String(n));b.type="button";if(n===page)b.setAttribute("aria-current","page");b.addEventListener("click",function(){pick(n)});pager.appendChild(b)})(i);
+  next.type="button";next.disabled=page===pages;next.setAttribute("aria-label","Next page");next.addEventListener("click",function(){pick(page+1)});pager.appendChild(next);
+  pager.appendChild(el("span","count",(page-1)*size+1+"–"+Math.min(page*size,total)+" of "+total));
+}
 function renderAudio(s){
-  lastStatus=s;var a=s.audio||{},sig=JSON.stringify([a.card,a.tracks,a.players,a.playing,previewing,rosterLoaded,trackSort,trackPage,trackQuery,trackFilter]);
+  lastStatus=s;var a=s.audio||{},sig=JSON.stringify([a.card,a.tracks,a.players,a.playing,previewing,rosterLoaded,trackSort,trackPage,playerPage,trackQuery,trackFilter]);
   $("audio").hidden=setupOnlyNow||tab!=="audio";
   $("audio-note").textContent=a.card?"Add your own tracks. Choose which play for a home run and which play when the Mets win, and give any player tracks of his own.":"No memory card. Put one in and restart the Apple to add tracks.";
   if(sig===trackSig)return;
@@ -589,22 +616,18 @@ function renderAudio(s){
   var hr=all.filter(function(t){return t.hr}).length,win=all.filter(function(t){return t.win}).length;
   if(all.length){
     var sum=el("div","group");
-    sum.appendChild(el("h4",null,(q||filtering?tracks.length+" of "+all.length:all.length)+(all.length===1?" track":" tracks")+" · "+hr+" for home runs · "+win+" for wins"));
-    if(!hr)sum.appendChild(el("div","empty","Nothing plays for a home run yet. Turn on Home runs for a track below."));
-    if(!win)sum.appendChild(el("div","empty","Nothing plays for a win yet. Turn on Mets win for a track below."));
+    // The chips carry the per-use counts, so the heading says what is listed.
+    var n=tracks.length,plural=n===1?" track":" tracks",what={all:"",hr:n===1?" plays for a home run":" play for a home run",win:n===1?" plays for a win":" play for a win",players:n===1?" belongs to a player":" belong to players",unused:n===1?" isn't used yet":" aren't used yet"}[trackFilter];
+    sum.appendChild(el("h4",null,(q?n+" of "+all.length+(all.length===1?" track":" tracks")+(n===1?" matches “":" match “")+trackQuery.trim()+"”":n+plural+what)));
+    if(!hr&&(trackFilter==="all"||trackFilter==="hr"))sum.appendChild(el("div","empty","Nothing plays for a home run yet. Turn on Home runs for a track below."));
+    if(!win&&(trackFilter==="all"||trackFilter==="win"))sum.appendChild(el("div","empty","Nothing plays for a win yet. Turn on Mets win for a track below."));
     if(q&&!tracks.length)sum.appendChild(el("div","empty","No tracks match “"+trackQuery.trim()+"”."));
-    else if(filtering&&!tracks.length)sum.appendChild(el("div","empty",{hr:"No track plays for a home run yet.",win:"No track plays for a win yet.",players:"No player has a track of his own yet.",unused:"Every track is in use."}[trackFilter]));
+    else if(filtering&&!tracks.length&&trackFilter!=="hr"&&trackFilter!=="win")sum.appendChild(el("div","empty",{players:"No player has a track of his own yet.",unused:"Every track is in use."}[trackFilter]));
     shown.forEach(function(t){sum.appendChild(trackRow(t,a))});
     groups.appendChild(sum);
   }
   if(!all.length&&a.card){groups.appendChild(el("p","note","No tracks on the card yet."))}
-  var pager=$("track-pager");pager.textContent="";pager.hidden=pages<2;
-  if(pages>1){
-    var prev=el("button",null,"‹");prev.type="button";prev.disabled=trackPage===1;prev.setAttribute("aria-label","Previous page");prev.addEventListener("click",function(){trackPage--;trackSig="";renderAudio(lastStatus)});pager.appendChild(prev);
-    for(var i=1;i<=pages;i++){(function(n){var b=el("button",n===trackPage?"on":"",String(n));b.type="button";if(n===trackPage)b.setAttribute("aria-current","page");b.addEventListener("click",function(){trackPage=n;trackSig="";renderAudio(lastStatus)});pager.appendChild(b)})(i)}
-    var next=el("button",null,"›");next.type="button";next.disabled=trackPage===pages;next.setAttribute("aria-label","Next page");next.addEventListener("click",function(){trackPage++;trackSig="";renderAudio(lastStatus)});pager.appendChild(next);
-    pager.appendChild(el("span","count",(trackPage-1)*PAGE_SIZE+1+"–"+Math.min(trackPage*PAGE_SIZE,tracks.length)+" of "+tracks.length));
-  }
+  fillPager($("track-pager"),trackPage,pages,PAGE_SIZE,tracks.length,function(n){trackPage=n;trackSig="";renderAudio(lastStatus)});
   var chooser=$("player-track");chooser.textContent="";
   all.forEach(function(t){var o=el("option",null,trackTitle(t));o.value=t.file;chooser.appendChild(o)});
   renderPlayers(a,all);refreshAssignButton();
@@ -613,8 +636,11 @@ function renderPlayers(a,tracks){
   var list=$("player-list");list.textContent="";
   var byName={},order=[];
   (a.players||[]).forEach(function(p){if(!byName[p.name]){byName[p.name]={id:p.id,name:p.name,files:[]};order.push(p.name)}byName[p.name].files.push(p.file)});
-  if(!order.length){list.appendChild(el("p","note","No player tracks yet."));return}
-  order.forEach(function(name){
+  var pagerEl=$("player-pager");
+  if(!order.length){list.appendChild(el("p","note","No player tracks yet."));pagerEl.hidden=true;return}
+  var pages=Math.max(1,Math.ceil(order.length/PLAYER_PAGE_SIZE));if(playerPage>pages)playerPage=pages;
+  fillPager(pagerEl,playerPage,pages,PLAYER_PAGE_SIZE,order.length,function(n){playerPage=n;trackSig="";renderAudio(lastStatus)});
+  order.slice((playerPage-1)*PLAYER_PAGE_SIZE,playerPage*PLAYER_PAGE_SIZE).forEach(function(name){
     var p=byName[name],row=el("div","player"),who=el("div","player-who");
     var b=el("b",null,p.name);
     if(rosterLoaded&&!roster.some(function(r){return r.name===p.name})){var tag=el("span","tag","not on the roster");b.appendChild(tag)}

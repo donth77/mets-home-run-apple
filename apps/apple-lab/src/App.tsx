@@ -22,7 +22,7 @@ const workspaces: readonly {
 }[] = [
   { id: "overview", index: "01", label: "Overview", description: "Lab and device preview" },
   { id: "simulator", index: "02", label: "Simulator", description: "Scenarios in the browser or on the Apple" },
-  { id: "live", index: "03", label: "Live game", description: "Demo device or MLB recording" },
+  { id: "live", index: "03", label: "Apple now", description: "What the Apple is showing right now" },
   { id: "replay", index: "04", label: "Historical replay", description: "Archived MLB game playback" },
   { id: "tests", index: "05", label: "Hardware tests", description: "Gated service controls" },
   { id: "diagnostics", index: "06", label: "Diagnostics", description: "Device telemetry and events" },

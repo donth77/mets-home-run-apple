@@ -344,7 +344,7 @@ export function UsbBenchPanel({
           {bench.liveStatus?.firmwareVersion ?? "Identifying firmware"}
         </p>
         <p>
-          Overview, Live Game, and Diagnostics can show this USB telemetry. When Wi-Fi is connected, those pages use
+          Overview, Apple now, and Diagnostics can show this USB telemetry. When Wi-Fi is connected, those pages use
           Wi-Fi. Physical Simulator runs require a Wi-Fi maintenance session.
         </p>
         <button type="button" onClick={() => void bench.queryStatus()}>

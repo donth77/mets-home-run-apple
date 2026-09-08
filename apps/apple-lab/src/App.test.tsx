@@ -39,9 +39,9 @@ describe("Apple Lab manager", () => {
     render(<App />);
     expect(screen.getByRole("heading", { name: "Apple Lab is ready" })).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: /Live game/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^03 Apple now/ }));
 
-    expect(screen.getByRole("heading", { name: "Live game" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Apple now" })).toBeTruthy();
     expect(screen.getByText("Juan Soto · Home run")).toBeTruthy();
     expect(screen.getByText("Mets win")).toBeTruthy();
     expect(screen.queryByText(/Pitch 4/)).toBeNull();
@@ -49,7 +49,7 @@ describe("Apple Lab manager", () => {
 
   it("paginates history and exports every matching row rather than only the current page", () => {
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: /Live game/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^03 Apple now/ }));
 
     expect(screen.getByText("1–5 of 6")).toBeTruthy();
     const exportButton = screen.getByRole("button", { name: "Export CSV" });
@@ -331,7 +331,7 @@ describe("Apple Lab manager", () => {
 
   it("identifies the C++ game-state boundary on the direct MLB source", () => {
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: /Live game/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^03 Apple now/ }));
     fireEvent.click(screen.getByRole("button", { name: /MLB direct/ }));
 
     expect(screen.getByText(/C\+\+ game-state projector before its smaller evidence envelope/)).toBeTruthy();
