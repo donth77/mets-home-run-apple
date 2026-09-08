@@ -44,6 +44,13 @@ Simulator scenarios use the same decision code and 320 × 240 display renderer
 as the Nano. Browser previews record motion commands. The Physical Apple toggle
 opts into a separate, approved run on the device.
 
+The **Custom** scenario at the top of the list is yours to edit: opponent,
+score, inning and half, outs, count, runners, batter and pitcher, the last
+play, and an optional home run, grand slam, or Mets win with the name shown on
+screen. It previews through the real display renderer (a long surname shows
+exactly how the Apple would fit it) and is remembered in this browser. It runs
+in the browser only; the Apple runs its built-in fixtures.
+
 ## USB hardware tests
 
 Hardware Tests uses Web Serial and works from localhost in Chrome, Edge, or
@@ -71,7 +78,9 @@ button). Both are remembered in this browser, and the Lab reconnects on the
 next visit.
 
 While connected, Overview, Live Game, and Diagnostics use the Apple's reported
-status. Missing safety fields are shown as unknown; stale status disables new
+status. Live Game paints what the Apple's panel is showing — the game or
+upcoming screen, its card screens such as the test-approval prompt, and a
+celebration in progress — with the same renderer the firmware uses. Missing safety fields are shown as unknown; stale status disables new
 tests. Failed connections retry automatically. Disconnect stops retries.
 
 ### Physical Apple in Simulator

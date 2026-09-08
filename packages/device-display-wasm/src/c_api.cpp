@@ -241,6 +241,33 @@ APPLE_EXPORT int apple_display_set_screen(
   return 1;
 }
 
+// A card screen: the waiting layout (setup, syncing, prompts) or the info
+// screen. Apple Lab mirrors the physical panel with this, so the text and
+// colours come straight from the Apple's status.
+APPLE_EXPORT int apple_display_set_card(void *raw, unsigned screen_state,
+                                        const char *title, const char *status,
+                                        const char *note, unsigned accent,
+                                        unsigned status_color, unsigned icon) {
+  auto *handle = as_handle(raw);
+  if (handle == nullptr) return 0;
+  const auto state = static_cast<apple::firmware::ScreenState>(screen_state);
+  if (state != apple::firmware::ScreenState::Waiting &&
+      state != apple::firmware::ScreenState::Info) {
+    return 0;
+  }
+  auto &model = handle->screen_model;
+  model = apple::firmware::ScreenModel{};
+  model.state = state;
+  copy_ascii(model.waiting_title, sizeof(model.waiting_title), title);
+  copy_ascii(model.status_message, sizeof(model.status_message), status);
+  copy_ascii(model.waiting_note, sizeof(model.waiting_note), note);
+  model.waiting_accent = static_cast<std::uint16_t>(accent);
+  model.status_color = static_cast<std::uint16_t>(status_color);
+  model.waiting_icon = static_cast<apple::firmware::WaitingIcon>(
+      icon > static_cast<unsigned>(apple::firmware::WaitingIcon::Clock) ? 0 : icon);
+  return 1;
+}
+
 APPLE_EXPORT const std::uint16_t *apple_display_render_screen(
     void *raw, unsigned rain_frame) {
   auto *handle = as_handle(raw);

@@ -1,6 +1,7 @@
 import {
   DEVICE_DISPLAY_HEIGHT,
   DEVICE_DISPLAY_WIDTH,
+  type DeviceCardScreen,
   DeviceDisplayRenderer,
   rgb565ToRgba,
 } from "@apple/device-display-wasm";
@@ -19,6 +20,8 @@ interface PhysicalOutputPreviewProps {
   celebrationElapsedMs: number;
   elapsedMs: number;
   motionState: string;
+  /** A card screen (setup, syncing, approval prompt) takes precedence over the game screen. */
+  card?: DeviceCardScreen | null;
 }
 
 function underlyingSnapshot(snapshot: PresentationSnapshot, celebration?: AppleCoreEvent): GameSnapshot {
@@ -35,6 +38,7 @@ export function PhysicalOutputPreview({
   celebrationElapsedMs,
   elapsedMs,
   motionState,
+  card = null,
 }: PhysicalOutputPreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<DeviceDisplayRenderer | undefined>(undefined);
@@ -102,12 +106,14 @@ export function PhysicalOutputPreview({
     let frame: Uint16Array;
     if (celebration && renderer && activeCelebrationKey.current === celebration.eventKey) {
       frame = renderer.renderRgb565(celebrationElapsedMs);
+    } else if (card) {
+      frame = renderer.renderCardRgb565(card);
     } else {
       frame = renderer.renderScreenRgb565(displayState, elapsedMs);
     }
     const rgba = rgb565ToRgba(frame);
     context.putImageData(new ImageData(new Uint8ClampedArray(rgba), DEVICE_DISPLAY_WIDTH, DEVICE_DISPLAY_HEIGHT), 0, 0);
-  }, [celebration, celebrationElapsedMs, displayState, elapsedMs, rendererReady]);
+  }, [card, celebration, celebrationElapsedMs, displayState, elapsedMs, rendererReady]);
 
   const audioLabel = !celebration
     ? "Silent"
@@ -117,7 +123,9 @@ export function PhysicalOutputPreview({
   const lightLabel = celebration ? "Celebration pattern" : "Off";
   const displayLabel = celebration
     ? `${celebration.celebration.replaceAll("_", " ")} animation · C++ renderer`
-    : `${displayState.kind.replaceAll("_", " ")} screen`;
+    : card
+      ? `${card.kind === "INFO" ? "Info" : "Card"} · ${card.status}`
+      : `${displayState.kind.replaceAll("_", " ")} screen`;
 
   return (
     <section className="physical-output-preview" aria-labelledby="physical-output-title">
@@ -144,7 +152,9 @@ export function PhysicalOutputPreview({
             aria-label={
               celebration
                 ? `${celebration.celebration} display animation for ${celebration.subject}`
-                : describeDeviceDisplay(displayState)
+                : card
+                  ? `${card.title}: ${card.status}${card.note ? ` — ${card.note.replace("|", " · ")}` : ""}`
+                  : describeDeviceDisplay(displayState)
             }
           />
           <span>320 × 240 · Waveshare 2-inch IPS</span>

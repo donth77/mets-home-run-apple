@@ -23,6 +23,30 @@ const screenStateCode: Readonly<Record<DeviceDisplayKind, number>> = {
 const halfCode = { TOP: 0, BOTTOM: 1, MIDDLE: 2, END: 3 } as const;
 const finalResultCode = { METS_WIN: 1, METS_LOSS: 2, TIE: 3 } as const;
 
+// A card screen as the firmware reports it in status.screen: the waiting
+// layout (setup, syncing, prompts) or the owner's info screen.
+export type DeviceCardKind = "WAITING" | "INFO";
+export type DeviceCardIcon = "NONE" | "ALERT" | "UPDATE" | "WIFI" | "WIFI_LOST" | "CLOCK";
+export interface DeviceCardScreen {
+  kind: DeviceCardKind;
+  title: string;
+  status: string;
+  note: string;
+  /** RGB565, as the firmware stores it. */
+  accent: number;
+  statusColor: number;
+  icon: DeviceCardIcon;
+}
+const cardStateCode: Readonly<Record<DeviceCardKind, number>> = { WAITING: 0, INFO: 12 };
+const cardIconCode: Readonly<Record<DeviceCardIcon, number>> = {
+  NONE: 0,
+  ALERT: 1,
+  UPDATE: 2,
+  WIFI: 3,
+  WIFI_LOST: 4,
+  CLOCK: 5,
+};
+
 export interface DeviceScreenRenderOptions {
   /** Firmware defaults to Eastern Time until the owner selects another zone. */
   timeZone?: string;
@@ -218,6 +242,32 @@ export class DeviceDisplayRenderer {
     const rainFrame = state.kind === "RAIN_DELAY" ? Math.floor(Math.max(0, elapsedMs) / 150) % 6 : 0;
     const pointer = this.#module._apple_display_render_screen(this.#handle, rainFrame);
     if (pointer === 0) throw new Error("Physical-display renderer did not return a screen framebuffer");
+    const first = pointer >>> 1;
+    return this.#module.HEAPU16.slice(first, first + PIXEL_COUNT);
+  }
+
+  /** Paint a card screen exactly as the Apple does, from its status.screen. */
+  renderCardRgb565(card: DeviceCardScreen): Uint16Array {
+    this.#assertAlive();
+    const signature = JSON.stringify(["card", card]);
+    if (signature !== this.#screenSignature) {
+      this.#withStrings([card.title, card.status, card.note], ([titlePointer, statusPointer, notePointer]) => {
+        const accepted = this.#module._apple_display_set_card(
+          this.#handle,
+          cardStateCode[card.kind],
+          titlePointer,
+          statusPointer,
+          notePointer,
+          card.accent & 0xffff,
+          card.statusColor & 0xffff,
+          cardIconCode[card.icon],
+        );
+        if (accepted !== 1) throw new Error(`Physical-display renderer rejected card ${card.kind}`);
+      });
+      this.#screenSignature = signature;
+    }
+    const pointer = this.#module._apple_display_render_screen(this.#handle, 0);
+    if (pointer === 0) throw new Error("Physical-display renderer did not return a card framebuffer");
     const first = pointer >>> 1;
     return this.#module.HEAPU16.slice(first, first + PIXEL_COUNT);
   }

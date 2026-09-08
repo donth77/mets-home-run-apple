@@ -1,12 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
+import type { FixtureScenario } from "@apple/protocol";
 import { frameAt, getScenario, nextFrameAt, scenarioDuration } from "@apple/test-fixtures";
 
-export function useFixturePlayback(initialScenario = "home-run") {
+export function useFixturePlayback(initialScenario = "home-run", extraScenarios: readonly FixtureScenario[] = []) {
   const [scenarioId, setScenarioId] = useState(initialScenario);
   const [elapsedMs, setElapsedMs] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
-  const scenario = useMemo(() => getScenario(scenarioId), [scenarioId]);
+  // Scenarios the Lab builds at runtime (the owner's custom one) sit beside
+  // the compiled fixtures and are looked up first.
+  const scenario = useMemo(
+    () => extraScenarios.find((candidate) => candidate.id === scenarioId) ?? getScenario(scenarioId),
+    [extraScenarios, scenarioId],
+  );
   const durationMs = scenarioDuration(scenario);
   const activeFrame = frameAt(scenario, elapsedMs);
 

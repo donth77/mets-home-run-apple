@@ -10,19 +10,37 @@ import {
 import { MAX_STROKE_MM } from "@apple/protocol";
 import { Scoreboard } from "@apple/scoreboard-ui";
 import { fixtureScenarios } from "@apple/test-fixtures";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CsvExportButton, useReducedMotion, WorkspaceHeading } from "../managerComponents";
+import { CustomScenarioEditor } from "../CustomScenarioEditor";
+import {
+  buildCustomScenario,
+  CUSTOM_SCENARIO_ID,
+  type CustomScenarioForm,
+  loadCustomScenario,
+  saveCustomScenario,
+} from "../customScenario";
 import { PhysicalOutputPreview } from "../PhysicalOutputPreview";
 import { useFixturePlayback } from "../useFixturePlayback";
 
 export function SimulatorWorkspace({ apple }: { apple?: AppleDeviceState }) {
-  const playback = useFixturePlayback();
+  const [custom, setCustom] = useState<CustomScenarioForm>(loadCustomScenario);
+  const customScenario = useMemo(() => buildCustomScenario(custom), [custom]);
+  // The custom scenario leads the list so its editor never hides below the fixtures.
+  const scenarios = useMemo(() => [customScenario, ...fixtureScenarios], [customScenario]);
+  const playback = useFixturePlayback("home-run", scenarios);
+  const editingCustom = playback.scenarioId === CUSTOM_SCENARIO_ID;
+  function updateCustom(next: CustomScenarioForm) {
+    setCustom(next);
+    saveCustomScenario(next);
+  }
   const [wireframe, setWireframe] = useState(false);
   const [dimensions, setDimensions] = useState(true);
   const [manualPosition, setManualPosition] = useState<number | null>(null);
   const [deviceRunMode, setDeviceRunMode] = useState<"LOGIC_RECORDING" | "PHYSICAL">("LOGIC_RECORDING");
   const physical = deviceRunMode === "PHYSICAL";
-  const physicalAvailable = apple?.transport === "WIFI" && apple.status?.fixture.version === 1;
+  // Custom scenarios only exist in this browser; the Apple runs its compiled fixtures.
+  const physicalAvailable = apple?.transport === "WIFI" && apple.status?.fixture.version === 1 && !editingCustom;
   const running = apple?.status?.fixture.state === "RUNNING";
   const reducedMotion = useReducedMotion();
   const commandedPositionMm = manualPosition ?? playback.activeFrame.positionMm;
@@ -45,6 +63,18 @@ export function SimulatorWorkspace({ apple }: { apple?: AppleDeviceState }) {
     setManualPosition(null);
     playback.selectScenario(id, !physical);
   }
+  // With the Physical Apple on, the browser preview follows the device's own
+  // progress through the fixture instead of playing on its own clock, so the
+  // Lab never shows an animation the Apple is not yet showing.
+  const deviceFrame = physical && running && apple?.status ? apple.status.fixture.frame : null;
+  const deviceInputs = playback.scenario.deviceFixture.frames;
+  const { setPlaying: setPreviewPlaying, setElapsedMs: seekPreview } = playback;
+  useEffect(() => {
+    if (deviceFrame === null) return;
+    const at = deviceInputs[Math.min(deviceFrame, deviceInputs.length - 1)]?.atMs ?? 0;
+    setPreviewPlaying(false);
+    seekPreview(at);
+  }, [deviceFrame, deviceInputs, setPreviewPlaying, seekPreview]);
 
   return (
     <section className="workspace workspace--simulator" aria-labelledby="simulator-title">
@@ -127,7 +157,6 @@ export function SimulatorWorkspace({ apple }: { apple?: AppleDeviceState }) {
                 setManualPosition(null);
                 playback.reset();
                 playback.setSpeed(1);
-                playback.setPlaying(true);
                 void apple?.runFixture(playback.scenarioId);
               }}
             >
@@ -158,6 +187,12 @@ export function SimulatorWorkspace({ apple }: { apple?: AppleDeviceState }) {
         {physical && !apple && (
           <p className="device-bar__note">Connect to your Apple over Wi-Fi from the sidebar to run a scenario on it.</p>
         )}
+        {physical && editingCustom && (
+          <p className="device-bar__note">
+            The custom scenario previews in the browser only. The Apple runs its built-in fixtures; pick one of those to run it
+            on the device.
+          </p>
+        )}
         {physical && apple?.status?.settings.motor === false && (
           <p className="device-bar__note">Enable the motor in Apple Manager before a physical run.</p>
         )}
@@ -181,12 +216,13 @@ export function SimulatorWorkspace({ apple }: { apple?: AppleDeviceState }) {
           <div className="panel-title">
             <div>
               <span>Test scenarios</span>
-              <h2>{fixtureScenarios.length} fixtures</h2>
+              <h2>{fixtureScenarios.length} fixtures + custom</h2>
             </div>
           </div>
           <p className="panel-intro">Replay deterministic game states without waiting for a live Mets game.</p>
+          {editingCustom ? <CustomScenarioEditor form={custom} onChange={updateCustom} /> : null}
           <div className="scenario-list">
-            {fixtureScenarios.map((scenario) => (
+            {scenarios.map((scenario) => (
               <button
                 type="button"
                 key={scenario.id}

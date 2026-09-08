@@ -47,6 +47,7 @@ const exportedFunctions = [
   "_apple_display_loop_ms",
   "_apple_display_framebuffer",
   "_apple_display_set_screen",
+  "_apple_display_set_card",
   "_apple_display_render_screen",
 ];
 

@@ -38,6 +38,16 @@ interface DeviceDisplayEmscriptenModule {
     timezonePointer: number,
     seasonPointer: number,
   ): number;
+  _apple_display_set_card(
+    handle: number,
+    screenState: number,
+    titlePointer: number,
+    statusPointer: number,
+    notePointer: number,
+    accent: number,
+    statusColor: number,
+    icon: number,
+  ): number;
   _apple_display_render_screen(handle: number, rainFrame: number): number;
 }
 

@@ -223,3 +223,36 @@ describe("physical display screen WASM", () => {
     expect(framebufferHash(frame)).toBe(0x1857fcf8);
   });
 });
+
+describe("physical display card WASM", () => {
+  it("paints the Apple's card screens from status.screen and tells them apart", async () => {
+    const instance = await renderer();
+    const prompt = instance.renderCardRgb565({
+      kind: "WAITING",
+      title: "APPLE LAB TEST",
+      status: "TAP BUTTON TO APPROVE",
+      note: "APPLE WILL MOVE|CANCELS IN 27 S",
+      accent: 0xfac2,
+      statusColor: 0xffff,
+      icon: "ALERT",
+    });
+    expect(prompt).toHaveLength(320 * 240);
+    // The orange accent rule is painted; white status text is present.
+    expect(prompt.includes(0xfac2)).toBe(true);
+    expect(prompt.includes(0xffff)).toBe(true);
+    const approved = instance.renderCardRgb565({
+      kind: "WAITING",
+      title: "APPLE LAB TEST",
+      status: "APPROVED",
+      note: "STARTING - STAND CLEAR",
+      accent: 0xfac2,
+      statusColor: 0xffff,
+      icon: "ALERT",
+    });
+    expect(framebufferHash(approved)).not.toBe(framebufferHash(prompt));
+    // A card and a game screen never collide in the renderer's signature cache.
+    const live = instance.renderScreenRgb565(screen("LIVE", "LIVE"));
+    expect(framebufferHash(live)).not.toBe(framebufferHash(approved));
+    expect(framebufferHash(instance.renderCardRgb565({ kind: "INFO", title: "OPEN IN BROWSER", status: "home-run-apple.local", note: "OR 192.168.1.139|PASSWORD 00000000", accent: 0xfac2, statusColor: 0xfac2, icon: "NONE" }))).not.toBe(framebufferHash(approved));
+  });
+});

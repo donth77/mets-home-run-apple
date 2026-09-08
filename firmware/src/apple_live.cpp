@@ -690,6 +690,28 @@ const char* net_state_name() {
   }
 }
 
+// What the panel is showing, for Apple Lab to mirror. Card screens carry
+// their text so the Lab can paint the same card with the shared renderer.
+const char* screen_state_name(ScreenState state) {
+  switch (state) {
+    case ScreenState::Waiting: return "WAITING";
+    case ScreenState::Game: return "GAME";
+    case ScreenState::Upcoming: return "UPCOMING";
+    case ScreenState::Offseason: return "OFFSEASON";
+    case ScreenState::GenericDelay: return "DELAY";
+    case ScreenState::RainDelay: return "RAIN_DELAY";
+    case ScreenState::Review: return "REVIEW";
+    case ScreenState::Suspended: return "SUSPENDED";
+    case ScreenState::Postponed: return "POSTPONED";
+    case ScreenState::Cancelled: return "CANCELLED";
+    case ScreenState::Final: return "FINAL";
+    case ScreenState::Setup: return "SETUP";
+    case ScreenState::Info: return "INFO";
+    case ScreenState::SetupQr: return "SETUP_QR";
+  }
+  return "WAITING";
+}
+
 const char* phase_name(Phase phase) {
   switch (phase) {
     case Phase::Live:
@@ -837,6 +859,16 @@ void fill_status(JsonDocument& doc) {
   wifi["scanning"] = manager.scanning();
   wifi["networksFound"] = manager.network_count();
   doc["clock"] = clock_valid();
+  {
+    JsonObject screen = doc["screen"].to<JsonObject>();
+    screen["state"] = celebration_active ? "CELEBRATION" : screen_state_name(model.state);
+    screen["title"] = model.waiting_title;
+    screen["status"] = model.status_message;
+    screen["note"] = model.waiting_note;
+    screen["accent"] = model.waiting_accent;
+    screen["statusColor"] = model.status_color;
+    screen["icon"] = static_cast<unsigned>(model.waiting_icon);
+  }
   doc["heapFree"] = ESP.getFreeHeap();
   doc["heapLargest"] = ESP.getMaxAllocHeap();
   doc["psramFree"] = ESP.getFreePsram();

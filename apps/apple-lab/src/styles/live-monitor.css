@@ -152,3 +152,15 @@
   line-height: 1.5;
   margin: 0;
 }
+
+/* The mirror of the Apple's panel sits in a narrower column than the
+   Simulator stage: stack the signal readouts under the screen. */
+.live-score-panel .physical-output-preview {
+  margin-top: 10px;
+}
+.live-score-panel .physical-output-body {
+  grid-template-columns: 1fr;
+}
+.live-score-panel .physical-output-signals {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}

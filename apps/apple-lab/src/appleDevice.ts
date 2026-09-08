@@ -1,4 +1,5 @@
 import { parseAppleSnapshot } from "./appleSnapshot";
+import type { DeviceCardIcon, DeviceCardScreen } from "@apple/device-display-wasm";
 import type { GameSnapshot } from "@apple/protocol";
 import type { DeviceTimelineEvent, ManagedDevice } from "./fakeDevice";
 
@@ -59,6 +60,52 @@ export interface AppleStatus {
   maintenance: { supported: boolean; pending: boolean; armed: boolean; remainingMs: number };
   drive: string;
   positionMm: number | null;
+  // What the panel is showing right now. Card screens carry their text so the
+  // Lab can paint the identical card; older firmware reports null.
+  screen: AppleScreen | null;
+}
+
+export type AppleScreenState =
+  | "WAITING"
+  | "GAME"
+  | "UPCOMING"
+  | "OFFSEASON"
+  | "DELAY"
+  | "RAIN_DELAY"
+  | "REVIEW"
+  | "SUSPENDED"
+  | "POSTPONED"
+  | "CANCELLED"
+  | "FINAL"
+  | "SETUP"
+  | "INFO"
+  | "SETUP_QR"
+  | "CELEBRATION";
+
+export interface AppleScreen {
+  state: AppleScreenState;
+  title: string;
+  status: string;
+  note: string;
+  accent: number;
+  statusColor: number;
+  icon: DeviceCardIcon;
+}
+
+const CARD_ICONS: readonly DeviceCardIcon[] = ["NONE", "ALERT", "UPDATE", "WIFI", "WIFI_LOST", "CLOCK"];
+
+/** The renderer's card model for a status screen that is a card, else null. */
+export function cardFor(screen: AppleScreen | null): DeviceCardScreen | null {
+  if (!screen || (screen.state !== "WAITING" && screen.state !== "INFO")) return null;
+  return {
+    kind: screen.state,
+    title: screen.title,
+    status: screen.status,
+    note: screen.note,
+    accent: screen.accent,
+    statusColor: screen.statusColor,
+    icon: screen.icon,
+  };
 }
 
 type Json = Record<string, unknown>;
@@ -89,6 +136,7 @@ export function parseAppleStatus(value: unknown): AppleStatus {
     root.lastCelebration === null || root.lastCelebration === undefined ? null : record(root.lastCelebration);
   const maintenance = record(root.maintenance);
   const fixture = record(root.fixture);
+  const screenBlock = root.screen === null || root.screen === undefined ? null : record(root.screen);
   const motionKnown =
     typeof root.sequence === "string" &&
     ["IDLE", "LEAD_IN", "REVIEW_HOLD", "EXTENDING", "RAISED", "RETRACTING", "FAULT"].includes(root.sequence) &&
@@ -181,6 +229,18 @@ export function parseAppleStatus(value: unknown): AppleStatus {
       armed: maintenance.armed === true,
       remainingMs: Math.max(0, Math.min(60000, number(maintenance.remainingMs))),
     },
+    screen:
+      screenBlock === null
+        ? null
+        : {
+            state: text(screenBlock.state, "WAITING") as AppleScreenState,
+            title: text(screenBlock.title),
+            status: text(screenBlock.status),
+            note: text(screenBlock.note),
+            accent: number(screenBlock.accent, 0xfac2) & 0xffff,
+            statusColor: number(screenBlock.statusColor, 0xffff) & 0xffff,
+            icon: CARD_ICONS[Math.min(CARD_ICONS.length - 1, Math.max(0, number(screenBlock.icon)))],
+          },
   };
 }
 

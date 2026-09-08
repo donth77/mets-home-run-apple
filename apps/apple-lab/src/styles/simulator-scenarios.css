@@ -265,3 +265,75 @@
     width: 100%;
   }
 }
+
+/* Custom scenario editor: the owner's own game state and celebration. */
+.custom-scenario {
+  background: #101c24;
+  border: 1px solid #344a58;
+  border-radius: 9px;
+  display: grid;
+  gap: 10px;
+  margin-top: 11px;
+  padding: 11px;
+}
+.custom-scenario fieldset {
+  border: 0;
+  display: grid;
+  gap: 8px 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+  min-width: 0;
+  padding: 0;
+}
+.custom-scenario legend {
+  color: #7d94a5;
+  font-size: 0.59rem;
+  font-weight: 900;
+  grid-column: 1 / -1;
+  letter-spacing: 0.09em;
+  margin-bottom: 4px;
+  padding: 0;
+  text-transform: uppercase;
+}
+.custom-scenario label {
+  color: #9bb0bf;
+  display: grid;
+  font-size: 0.62rem;
+  gap: 3px;
+  min-width: 0;
+}
+.custom-scenario input,
+.custom-scenario select {
+  background: #0a1620;
+  border: 1px solid #2c4a60;
+  border-radius: 6px;
+  color: #eef5fa;
+  font-size: 0.72rem;
+  min-width: 0;
+  padding: 6px 8px;
+}
+.custom-scenario input[type="checkbox"] {
+  width: auto;
+}
+.custom-scenario__wide {
+  grid-column: 1 / -1;
+}
+.custom-scenario__bases {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  grid-column: 1 / -1;
+}
+.custom-scenario__bases legend {
+  margin-bottom: 0;
+  width: 100%;
+}
+.custom-scenario__bases label {
+  align-items: center;
+  flex-direction: row;
+  display: flex;
+  gap: 5px;
+}
+.custom-scenario > .text-button {
+  justify-self: start;
+}
