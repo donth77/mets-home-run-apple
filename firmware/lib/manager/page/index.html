@@ -123,6 +123,11 @@ input[type=file]::file-selector-button{font:inherit;font-weight:600;padding:7px 
 .for-label{font-size:13px;color:var(--muted)}
 #track-for{font:inherit;font-size:14px;padding:9px 10px;border-radius:8px;border:1px solid var(--blue-line);background:var(--blue-deep);color:var(--text);max-width:360px}
 .list-tools{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:14px}
+.filters{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.filters button{margin:0;padding:6px 12px;border-radius:99px;border:1px solid var(--blue-line);background:transparent;color:var(--muted);font-size:13px;font-weight:600}
+.filters button.on{background:var(--blue-card);border-color:var(--orange);color:var(--text)}
+.filters button span{color:var(--muted);font-weight:500;margin-left:5px}
+.filters button.on span{color:var(--orange-soft)}
 .sort{display:flex;align-items:center;gap:6px;color:var(--muted)}
 .sort select,#track-search{font:inherit;font-size:14px;padding:8px 10px;border-radius:8px;border:1px solid var(--blue-line);background:var(--blue-deep);color:var(--text)}
 #track-search{flex:1;min-width:160px}
@@ -234,6 +239,13 @@ a.btn{display:inline-block;font-size:15px;font-weight:600;padding:11px 16px;bord
   <label class="sort" for="track-sort"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M7 4v16m0 0l-3-3m3 3l3-3M17 20V4m0 0l-3 3m3-3l3 3"/></svg><select id="track-sort" aria-label="Sort tracks"><option value="name">Name, A to Z</option><option value="name-desc">Name, Z to A</option><option value="newest">Newest first</option><option value="longest">Longest first</option><option value="inuse">In use first</option></select></label>
   <input id="track-search" type="search" placeholder="Search tracks" aria-label="Search tracks" autocomplete="off" hidden>
 </div>
+<div class="filters" id="track-filters" role="tablist" aria-label="Show tracks" hidden>
+<button type="button" role="tab" data-filter="all" class="on" aria-selected="true">All<span id="count-all"></span></button>
+<button type="button" role="tab" data-filter="hr" aria-selected="false">Home run<span id="count-hr"></span></button>
+<button type="button" role="tab" data-filter="win" aria-selected="false">Win<span id="count-win"></span></button>
+<button type="button" role="tab" data-filter="players" aria-selected="false">Players<span id="count-players"></span></button>
+<button type="button" role="tab" data-filter="unused" aria-selected="false">Unused<span id="count-unused"></span></button>
+</div>
 <div id="track-groups"></div>
 <nav class="pager" id="track-pager" hidden aria-label="Track pages"></nav>
 <h3 class="sub">Player tracks</h3>
@@ -242,7 +254,7 @@ a.btn{display:inline-block;font-size:15px;font-weight:600;padding:11px 16px;bord
 <div class="player-add">
   <select id="player-pick" aria-label="Player"><option value="">Loading the roster…</option></select>
   <select id="player-track" aria-label="Track"></select>
-  <button id="player-add" type="button" disabled>Give him this track</button>
+  <button id="player-add" type="button" disabled>Assign this track</button>
 </div>
 </section>
 <section id="update" hidden>
@@ -442,7 +454,10 @@ $("install").addEventListener("click",function(){var f=$("fw-file").files[0];if(
    to spare during a celebration. */
 var APPLE_RATE=22050,HIGHPASS_HZ=180,HEADROOM=0.89,MAX_SECONDS=90,MAX_SOURCE_BYTES=30*1024*1024;
 var AUDIO_EXT=/\.(mp3|m4a|aac|wav|ogg|oga|flac|aiff?|wma|opus|webm)$/i;
-var PAGE_SIZE=10,trackSort="name",trackPage=1,trackQuery="";try{trackSort=localStorage.getItem("apple-track-sort")||"name"}catch(e){}
+var PAGE_SIZE=10,trackSort="name",trackPage=1,trackQuery="",trackFilter="all";try{trackSort=localStorage.getItem("apple-track-sort")||"name";trackFilter=localStorage.getItem("apple-track-filter")||"all"}catch(e){}
+var FILTERS={all:function(){return true},hr:function(t){return !!t.hr},win:function(t){return !!t.win},players:function(t,a){return usedBy(t.file,a.players||[]).length>0},unused:function(t,a){return !t.hr&&!t.win&&!usedBy(t.file,a.players||[]).length}};
+if(!FILTERS[trackFilter])trackFilter="all";
+function applyFilterChips(){var list=document.querySelectorAll("#track-filters [data-filter]"),i,on;for(i=0;i<list.length;i++){on=list[i].getAttribute("data-filter")===trackFilter;list[i].className=on?"on":"";list[i].setAttribute("aria-selected",on?"true":"false")}}
 var trackSig="",roster=[],rosterLoaded=false,audioBusy=false,previewing="",lastAudio=null;
 function encodeWav(samples,scale){
   var bytes=new ArrayBuffer(44+samples.length*2),view=new DataView(bytes),i;
@@ -552,7 +567,7 @@ function trackRow(t,a){
   return row;
 }
 function renderAudio(s){
-  lastStatus=s;var a=s.audio||{},sig=JSON.stringify([a.card,a.tracks,a.players,a.playing,previewing,rosterLoaded,trackSort,trackPage,trackQuery]);
+  lastStatus=s;var a=s.audio||{},sig=JSON.stringify([a.card,a.tracks,a.players,a.playing,previewing,rosterLoaded,trackSort,trackPage,trackQuery,trackFilter]);
   $("audio").hidden=setupOnlyNow||tab!=="audio";
   $("audio-note").textContent=a.card?"Add your own tracks. Choose which play for a home run and which play when the Mets win, and give any player tracks of his own.":"No memory card. Put one in and restart the Apple to add tracks.";
   if(sig===trackSig)return;
@@ -563,18 +578,22 @@ function renderAudio(s){
   all.sort(sorters[trackSort]||byName);
   var manyPages=all.length>PAGE_SIZE;
   $("list-tools").hidden=all.length<2;$("track-search").hidden=!manyPages;$("track-sort").value=trackSort;
+  $("track-filters").hidden=all.length<2;applyFilterChips();
+  Object.keys(FILTERS).forEach(function(k){var n=all.filter(function(t){return FILTERS[k](t,a)}).length;text("count-"+k,n?String(n):"")});
   if(!manyPages&&trackQuery){trackQuery="";$("track-search").value=""}
   var q=trackQuery.trim().toLowerCase(),tracks=q?all.filter(function(t){return trackTitle(t).toLowerCase().indexOf(q)>=0}):all;
+  var filtering=trackFilter!=="all";if(filtering)tracks=tracks.filter(function(t){return FILTERS[trackFilter](t,a)});
   var pages=Math.max(1,Math.ceil(tracks.length/PAGE_SIZE));if(trackPage>pages)trackPage=pages;
   var shown=tracks.slice((trackPage-1)*PAGE_SIZE,trackPage*PAGE_SIZE);
   var groups=$("track-groups");groups.textContent="";
   var hr=all.filter(function(t){return t.hr}).length,win=all.filter(function(t){return t.win}).length;
   if(all.length){
     var sum=el("div","group");
-    sum.appendChild(el("h4",null,(q?tracks.length+" of "+all.length:all.length)+(all.length===1?" track":" tracks")+" · "+hr+" for home runs · "+win+" for wins"));
+    sum.appendChild(el("h4",null,(q||filtering?tracks.length+" of "+all.length:all.length)+(all.length===1?" track":" tracks")+" · "+hr+" for home runs · "+win+" for wins"));
     if(!hr)sum.appendChild(el("div","empty","Nothing plays for a home run yet. Turn on Home runs for a track below."));
     if(!win)sum.appendChild(el("div","empty","Nothing plays for a win yet. Turn on Mets win for a track below."));
     if(q&&!tracks.length)sum.appendChild(el("div","empty","No tracks match “"+trackQuery.trim()+"”."));
+    else if(filtering&&!tracks.length)sum.appendChild(el("div","empty",{hr:"No track plays for a home run yet.",win:"No track plays for a win yet.",players:"No player has a track of his own yet.",unused:"Every track is in use."}[trackFilter]));
     shown.forEach(function(t){sum.appendChild(trackRow(t,a))});
     groups.appendChild(sum);
   }
@@ -648,6 +667,7 @@ function loadRoster(){
 }
 $("track-sort").addEventListener("change",function(){trackSort=this.value;trackPage=1;try{localStorage.setItem("apple-track-sort",trackSort)}catch(e){}trackSig="";renderAudio(lastStatus)});
 $("track-search").addEventListener("input",function(){trackQuery=this.value;trackPage=1;trackSig="";renderAudio(lastStatus)});
+Array.prototype.forEach.call(document.querySelectorAll("#track-filters [data-filter]"),function(b){b.addEventListener("click",function(){trackFilter=b.getAttribute("data-filter");trackPage=1;try{localStorage.setItem("apple-track-filter",trackFilter)}catch(e){}trackSig="";renderAudio(lastStatus)})});
 $("player-pick").addEventListener("change",refreshAssignButton);
 $("player-track").addEventListener("change",refreshAssignButton);
 $("player-add").addEventListener("click",function(){
