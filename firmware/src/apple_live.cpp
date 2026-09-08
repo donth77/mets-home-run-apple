@@ -209,6 +209,11 @@ constexpr int kInstallWindowStartHour = 3;  // local time, inclusive
 constexpr int kInstallWindowEndHour = 6;    // exclusive
 constexpr char kReleasesUrl[] = "https://api.github.com/repos/donth77/mets-home-run-apple/releases?per_page=10";
 constexpr std::uint8_t kBacklightChannel = 4;  // LEDC channel for dimming the display
+// The panel is write-only, so if it resets or browns out on its side (a
+// marginal wire on RST, 3V3 or the clock) it goes dark while the Nano keeps
+// drawing into it. Re-asserting its setup this often makes such a panel
+// recover on its own; on a healthy panel the commands change nothing visible.
+constexpr std::uint32_t kPanelRefreshMs = 5 * 60 * 1000;
 constexpr std::uint8_t kBrightnessMin = 10;   // percent
 constexpr std::uint32_t kEarlyCrashLimit = 3;
 constexpr std::int64_t kReplayGamePk = 822929;
@@ -376,6 +381,7 @@ bool set_time_zone(const char* iana_id) {
 }
 Preferences settings_store;
 bool backlight_on = true;
+std::uint32_t next_panel_refresh_ms = 0;
 Preferences boot_guard;
 bool safe_mode = false;
 bool boot_settled = false;
@@ -2649,6 +2655,23 @@ void set_backlight(bool on) {
 // "Between games" means no game in progress: the next-game card, a no-game
 // week, or the offseason. Anything else (a live game, a celebration, setup,
 // the info screen, a replay, a warning card) keeps the screen on.
+// Re-send the same commands panel.init() used, then repaint. Skipped during
+// a celebration, which owns the panel in its scan-locked mode.
+void service_panel_refresh() {
+  if (celebration_active || !due(next_panel_refresh_ms)) return;
+  next_panel_refresh_ms = now32() + kPanelRefreshMs;
+  panel.enableSleep(false);  // SLPOUT
+  delay(5);                  // the controller wants 5 ms after SLPOUT
+  std::uint8_t colmod = 0x55;
+  panel.sendCommand(0x3A, &colmod, 1);  // 16-bit colour
+  panel.setRotation(1);                  // MADCTL for landscape
+  panel.invertDisplay(true);             // INVON, as init did
+  panel.sendCommand(0x13);               // NORON
+  panel.enableDisplay(true);             // DISPON
+  apply_backlight();
+  request_redraw();
+}
+
 void service_backlight() {
   const bool idle_card = model.state == ScreenState::Upcoming || model.state == ScreenState::Offseason ||
                          (model.state == ScreenState::Waiting &&
@@ -3540,6 +3563,7 @@ void loop() {
     render_if_needed();
   }
   service_backlight();
+  service_panel_refresh();
   service_setup_screen();
   service_reset_button();
   service_maintenance_prompt();
