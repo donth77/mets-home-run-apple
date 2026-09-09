@@ -8,6 +8,7 @@
 #include <Preferences.h>
 #include <WiFi.h>
 #include <esp_system.h>
+#include <esp_task_wdt.h>
 
 #include <algorithm>
 
@@ -88,6 +89,7 @@ void ManagerServer::begin(StatusFn status, JoinFn join, ForgetFn forget, Setting
   server_.on("/api/update/check", HTTP_POST, [this] { handle_release_action(release_check_); });
   server_.on("/api/update/install", HTTP_POST, [this] { handle_release_action(release_install_); });
   server_.on("/api/replay", HTTP_POST, [this] { handle_replay(); });
+  server_.on("/api/events", HTTP_GET, [this] { handle_events(); });
   server_.on("/api/maintenance", HTTP_POST, [this] { handle_maintenance(); });
   server_.on("/api/fixture", HTTP_POST, [this] { handle_fixture(); });
   server_.on("/api/fixture/stop", HTTP_POST, [this] { handle_fixture_stop(); });
@@ -211,6 +213,15 @@ void ManagerServer::handle_status() {
   server_.send(200, "application/json", body);
 }
 
+void ManagerServer::handle_events() {
+  JsonDocument doc;
+  if (events_) events_(doc);
+  String body;
+  serializeJson(doc, body);
+  server_.sendHeader("Cache-Control", "no-store");
+  server_.send(200, "application/json", body);
+}
+
 void ManagerServer::handle_networks() {
   // Scanning makes the access point stall for a few seconds, so only the
   // first request and an explicit "rescan" start one.
@@ -282,6 +293,9 @@ void ManagerServer::handle_update_upload() {
     }
     if (!updater_.begin()) update_error_ = updater_.error();
   } else if (up.status == UPLOAD_FILE_WRITE) {
+    // Bytes are arriving, so this is progress, however slow the link: a
+    // 2 MB upload on weak Wi-Fi can outlast the watchdog otherwise.
+    esp_task_wdt_reset();
     if (update_error_.length() == 0) updater_.write(up.buf, up.currentSize);
   } else if (up.status == UPLOAD_FILE_END) {
     if (update_error_.length() == 0) {

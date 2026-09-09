@@ -167,6 +167,9 @@ constexpr std::uint32_t kSerialWaitTimeoutMs = 3'000;
 constexpr std::uint32_t kLoopPeriodMs = 10;
 constexpr std::uint32_t kWatchdogSeconds = 90;
 constexpr std::uint32_t kHttpTimeoutMs = 20'000;
+// A response body that trickles in on weak Wi-Fi must not hold the main loop
+// (display, button, web server, watchdog) hostage: give up on it after this.
+constexpr std::uint32_t kHttpBodyMs = 30'000;
 constexpr std::uint32_t kWifiRetryMs = 15'000;
 constexpr std::uint32_t kNtpRekickMs = 25'000;  // re-issue NTP while the clock is still unset
 // Credentials that do not connect within this window reopen the setup network
@@ -182,6 +185,11 @@ constexpr std::uint32_t kScheduleRefreshMs = 10 * 60 * 1000;
 constexpr std::uint32_t kScheduleRetryMs = 60 * 1000;
 constexpr std::uint32_t kPollRetryMs = 30 * 1000;
 constexpr std::uint32_t kPollRetryMaxMs = 5 * 60 * 1000;
+// A failed fetch during live play is usually a truncated download on weak
+// Wi-Fi, and the next pitch may be a home run: try again almost at once and
+// never wait long. The slow backoff above is for games that are not on.
+constexpr std::uint32_t kLivePollRetryMs = 5 * 1000;
+constexpr std::uint32_t kLivePollRetryMaxMs = 30 * 1000;
 constexpr std::uint32_t kPregamePollMs = 60 * 1000;
 constexpr std::uint32_t kFinalPollMs = 60 * 1000;
 constexpr std::uint32_t kStandardFinalHoldMs = 20 * 60 * 1000;
@@ -408,7 +416,7 @@ std::vector<ScheduleGame> schedule;
 std::optional<ScheduleGame> game;
 std::uint32_t next_schedule_ms = 0;
 std::uint32_t next_poll_ms = 0;
-std::uint32_t poll_backoff_ms = kPollRetryMs;
+std::uint32_t poll_failure_streak = 0;  // consecutive failed live-feed fetches
 std::uint32_t polls_ok = 0;
 std::uint32_t polls_failed = 0;
 std::uint32_t last_poll_duration_ms = 0;
@@ -599,6 +607,7 @@ const char* fixture_state = "IDLE";
 String fixture_id;
 String start_lab_fixture(const String& id);
 String stop_lab_fixture();
+void wake_panel();
 bool replay_active = false;
 std::size_t replay_step = 0;
 std::uint32_t next_replay_ms = 0;
@@ -671,8 +680,61 @@ bool clock_valid() { return wall_epoch() > 1'700'000'000; }
 void start_replay(bool win = false);
 bool motion_idle();
 
+// The last traces, kept for the Lab and the Manager: what the Apple did while
+// nobody was watching, starting with why it booted. Entries logged before the
+// clock synced carry no epoch; readers place them from the uptime instead.
+struct TraceEntry {
+  std::uint32_t seq;
+  std::int64_t at_epoch;
+  std::uint32_t at_ms;
+  char code[20];
+  char detail[80];
+};
+constexpr std::size_t kTraceLogSize = 96;
+TraceEntry trace_log[kTraceLogSize];
+std::uint32_t trace_seq = 0;
+
 void publish_trace(const char* code, const char* detail) {
   Serial.printf("APPLE_LIVE:{\"type\":\"trace\",\"code\":\"%s\",\"detail\":\"%s\"}\n", code, detail);
+  TraceEntry& entry = trace_log[trace_seq % kTraceLogSize];
+  entry.seq = ++trace_seq;
+  entry.at_epoch = clock_valid() ? wall_epoch() : 0;
+  entry.at_ms = now32();
+  copy_text(entry.code, sizeof(entry.code), code);
+  copy_text(entry.detail, sizeof(entry.detail), detail);
+}
+
+const char* reset_reason_name() {
+  switch (esp_reset_reason()) {
+    case ESP_RST_POWERON: return "POWER_ON";
+    case ESP_RST_EXT: return "EXTERNAL";
+    case ESP_RST_SW: return "SOFTWARE";
+    case ESP_RST_PANIC: return "PANIC";
+    case ESP_RST_INT_WDT: return "INTERRUPT_WATCHDOG";
+    case ESP_RST_TASK_WDT: return "TASK_WATCHDOG";
+    case ESP_RST_WDT: return "WATCHDOG";
+    case ESP_RST_DEEPSLEEP: return "DEEP_SLEEP";
+    case ESP_RST_BROWNOUT: return "BROWNOUT";
+    case ESP_RST_SDIO: return "SDIO";
+    default: return "UNKNOWN";
+  }
+}
+
+void fill_events(JsonDocument& doc) {
+  doc["now"] = clock_valid() ? wall_epoch() : 0;
+  doc["uptimeMs"] = now32();
+  doc["resetReason"] = reset_reason_name();
+  JsonArray events = doc["events"].to<JsonArray>();
+  const std::uint32_t count = trace_seq < kTraceLogSize ? trace_seq : kTraceLogSize;
+  for (std::uint32_t i = 0; i < count; ++i) {
+    const TraceEntry& entry = trace_log[(trace_seq - count + i) % kTraceLogSize];
+    JsonObject item = events.add<JsonObject>();
+    item["seq"] = entry.seq;
+    item["at"] = entry.at_epoch;
+    item["ms"] = entry.at_ms;
+    item["code"] = entry.code;
+    item["detail"] = entry.detail;
+  }
 }
 
 void set_error(const char* code) {
@@ -795,6 +857,8 @@ void fill_status(JsonDocument& doc) {
   doc["hostname"] = kHostname;
   doc["motion"] = settings.motor ? "L298N" : "RECORDING";
   doc["firmwareSlot"] = apple::firmware::running_partition_label();
+  doc["uptimeMs"] = now32();
+  doc["resetReason"] = reset_reason_name();
   doc["updatePending"] = update_pending_boot;
   JsonObject owner = doc["settings"].to<JsonObject>();
   owner["raisedSeconds"] = settings.raised_seconds;
@@ -1878,9 +1942,14 @@ void end_celebration(const char* reason) {
   stop_audio();
   resident_refresh_wanted = true;
   scan_lock->leave();
+  wake_panel();
+  next_panel_refresh_ms = now32() + kPanelRefreshMs;
   mark_final_card_visible();
   request_redraw();
   Serial.printf("APPLE_LIVE:{\"type\":\"celebration\",\"status\":\"ENDED\",\"reason\":\"%s\"}\n", reason);
+  char detail[sizeof(TraceEntry::detail)];
+  std::snprintf(detail, sizeof(detail), "ended: %s", reason);
+  publish_trace("CELEBRATION", detail);
 }
 
 void begin_celebration(const apple::core::CoreEvent& event) {
@@ -1945,7 +2014,14 @@ void begin_celebration(const apple::core::CoreEvent& event) {
   // with their own track has it loaded. Fall back to the pool otherwise.
   start_celebration_audio(celebration_is_win);
   celebration_last_key = 0xFFFFFFFFU;
+  wake_panel();
   scan_lock->enter(1);
+  {
+    char detail[sizeof(TraceEntry::detail)];
+    std::snprintf(detail, sizeof(detail), "%s: %s%s", celebration_is_win ? "win" : "home run", event.subject.c_str(),
+                  audio_request_stream ? " (streaming the whole track)" : "");
+    publish_trace("CELEBRATION", detail);
+  }
   if (!replay_active && clock_valid()) {
     // Remember it for the Manager's status; replays are not history.
     copy_text(last_celebration.kind, sizeof(last_celebration.kind), celebration_is_win ? "WIN" : "HR");
@@ -2264,6 +2340,7 @@ void start_wifi() {
     return String();
   });
   manager.set_fixture_hooks(start_lab_fixture, stop_lab_fixture);
+  manager.set_events_hook(fill_events);
   manager.set_replay_hook([](const String& kind) -> String {
     if (celebration_active) return "CELEBRATING";
     if (!engine || engine->fault_latched() || manager.update_in_progress()) return "BUSY";
@@ -2391,6 +2468,34 @@ struct FetchStats {
   std::uint32_t elapsed_ms{0};
 };
 
+// The response body, watched: feeds the watchdog while bytes arrive and ends
+// the stream at a deadline, which the parser then reports as incomplete input
+// so the caller retries instead of the watchdog rebooting the Apple.
+class WatchedBody : public Stream {
+ public:
+  WatchedBody(Stream& inner, std::uint32_t deadline_ms) : inner_(inner), deadline_ms_(deadline_ms) {}
+  int available() override { return expired() ? 0 : inner_.available(); }
+  int read() override {
+    if (expired()) return -1;
+    const int c = inner_.read();
+    esp_task_wdt_reset();
+    return c;
+  }
+  int peek() override { return expired() ? -1 : inner_.peek(); }
+  size_t write(std::uint8_t) override { return 0; }
+  size_t readBytes(char* buffer, size_t length) override {
+    if (expired()) return 0;
+    const size_t n = inner_.readBytes(buffer, length);
+    esp_task_wdt_reset();
+    return n;
+  }
+
+ private:
+  bool expired() const { return static_cast<std::int32_t>(now32() - deadline_ms_) >= 0; }
+  Stream& inner_;
+  std::uint32_t deadline_ms_;
+};
+
 bool fetch_json(const String& url, JsonDocument& doc, const char* filter_json, FetchStats& stats) {
   JsonDocument filter;
   deserializeJson(filter, filter_json);
@@ -2423,8 +2528,9 @@ bool fetch_json(const String& url, JsonDocument& doc, const char* filter_json, F
   }
   stats.bytes = http.getSize() > 0 ? static_cast<std::uint32_t>(http.getSize()) : 0;
   esp_task_wdt_reset();
+  WatchedBody body(http.getStream(), now32() + kHttpBodyMs);
   const ArduinoJson::DeserializationError error = deserializeJson(
-      doc, http.getStream(), ArduinoJson::DeserializationOption::Filter(filter),
+      doc, body, ArduinoJson::DeserializationOption::Filter(filter),
       ArduinoJson::DeserializationOption::NestingLimit(apple::mlb_feed::kLiveFeedNestingLimit));
   http.end();
   stats.elapsed_ms = now32() - started;
@@ -2473,7 +2579,7 @@ void follow(const std::optional<ScheduleGame>& chosen) {
   game = chosen;
   tracker.reset();
   reset_final_tracking();
-  poll_backoff_ms = kPollRetryMs;
+  poll_failure_streak = 0;
   next_poll_ms = now32();
   if (!game) {
     // Nothing scheduled from October through February is the offseason (a
@@ -2571,14 +2677,25 @@ void poll_feed() {
                "/feed/live?fields=" + apple::mlb_feed::live_feed_fields();
   JsonDocument doc(&json_allocator);
   FetchStats stats;
+  const std::uint32_t poll_started = now32();
   if (!fetch_json(url, doc, apple::mlb_feed::live_feed_filter_json(), stats)) {
     ++polls_failed;
-    next_poll_ms = now32() + poll_backoff_ms;
-    poll_backoff_ms = poll_backoff_ms * 2 > kPollRetryMaxMs ? kPollRetryMaxMs : poll_backoff_ms * 2;
+    ++poll_failure_streak;
+    const bool live = game->live();
+    const std::uint32_t cap = live ? kLivePollRetryMaxMs : kPollRetryMaxMs;
+    std::uint32_t wait = live ? kLivePollRetryMs : kPollRetryMs;
+    for (std::uint32_t i = 1; i < poll_failure_streak && wait < cap; ++i) wait *= 2;
+    if (wait > cap) wait = cap;
+    char detail[sizeof(TraceEntry::detail)];
+    std::snprintf(detail, sizeof(detail), "live feed fetch failed after %lu ms (%lu in a row); retry in %lu s",
+                  static_cast<unsigned long>(now32() - poll_started), static_cast<unsigned long>(poll_failure_streak),
+                  static_cast<unsigned long>(wait / 1000));
+    publish_trace("FEED", detail);
+    next_poll_ms = now32() + wait;
     return;
   }
   ++polls_ok;
-  poll_backoff_ms = kPollRetryMs;
+  poll_failure_streak = 0;
   last_poll_duration_ms = stats.elapsed_ms;
   last_poll_bytes = stats.bytes;
   last_error[0] = '\0';
@@ -2650,28 +2767,37 @@ void set_backlight(bool on) {
   publish_trace("BACKLIGHT", on ? "on" : "off");
 }
 
+// Re-send the commands panel.init() used to wake the controller and turn the
+// picture on, leaving the pixel format and orientation to whoever owns the
+// panel next. A panel that reset or browned out on its side comes back; a
+// healthy one shows nothing.
+void wake_panel() {
+  panel.enableSleep(false);  // SLPOUT
+  delay(5);                  // the controller wants 5 ms after SLPOUT
+  panel.invertDisplay(true);             // INVON, as init did
+  panel.sendCommand(0x13);               // NORON
+  panel.enableDisplay(true);             // DISPON
+  apply_backlight();
+}
+
+// Every few minutes, wake the panel, put it back in the canvas's 16-bit
+// landscape mode and repaint. Skipped during a celebration, which wakes the
+// panel itself before taking it over.
+void service_panel_refresh() {
+  if (celebration_active || !due(next_panel_refresh_ms)) return;
+  next_panel_refresh_ms = now32() + kPanelRefreshMs;
+  wake_panel();
+  std::uint8_t colmod = 0x55;
+  panel.sendCommand(0x3A, &colmod, 1);  // 16-bit colour
+  panel.setRotation(1);                  // MADCTL for landscape
+  request_redraw();
+}
+
 // The screen sleeps only when there is nothing to show: no game to follow,
 // nothing being set up or replayed, and following switched on.
 // "Between games" means no game in progress: the next-game card, a no-game
 // week, or the offseason. Anything else (a live game, a celebration, setup,
 // the info screen, a replay, a warning card) keeps the screen on.
-// Re-send the same commands panel.init() used, then repaint. Skipped during
-// a celebration, which owns the panel in its scan-locked mode.
-void service_panel_refresh() {
-  if (celebration_active || !due(next_panel_refresh_ms)) return;
-  next_panel_refresh_ms = now32() + kPanelRefreshMs;
-  panel.enableSleep(false);  // SLPOUT
-  delay(5);                  // the controller wants 5 ms after SLPOUT
-  std::uint8_t colmod = 0x55;
-  panel.sendCommand(0x3A, &colmod, 1);  // 16-bit colour
-  panel.setRotation(1);                  // MADCTL for landscape
-  panel.invertDisplay(true);             // INVON, as init did
-  panel.sendCommand(0x13);               // NORON
-  panel.enableDisplay(true);             // DISPON
-  apply_backlight();
-  request_redraw();
-}
-
 void service_backlight() {
   const bool idle_card = model.state == ScreenState::Upcoming || model.state == ScreenState::Offseason ||
                          (model.state == ScreenState::Waiting &&
@@ -3444,6 +3570,12 @@ void setup() {
   const std::uint32_t serial_wait_started_ms = millis();
   while (!Serial && millis() - serial_wait_started_ms < kSerialWaitTimeoutMs) delay(10);
 
+  {
+    char detail[sizeof(TraceEntry::detail)];
+    std::snprintf(detail, sizeof(detail), "reset: %s; firmware %s on %s", reset_reason_name(), kFirmwareVersion,
+                  apple::firmware::running_partition_label());
+    publish_trace("BOOT", detail);
+  }
   scan_lock = make_in_psram<apple::firmware::ScanLockedPanel>(panel);
   home_run_loop = make_in_psram<apple::display::HomeRunLoop>();
   mets_win_loop = make_in_psram<apple::display::MetsWinLoop>();

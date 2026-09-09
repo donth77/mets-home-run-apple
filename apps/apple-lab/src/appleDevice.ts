@@ -52,7 +52,9 @@ export interface AppleStatus {
   psramFree: number;
   game: AppleGame | null;
   snapshot: GameSnapshot | null;
-  poll: { ok: number; failed: number; lastMs: number; nextInMs: number; lastError: string };
+  poll: { ok: number; failed: number; lastMs: number; lastBytes: number; nextInMs: number; lastError: string };
+  uptimeMs: number | null;
+  resetReason: string | null;
   sequence: string;
   fault: boolean | null;
   motionKnown: boolean;
@@ -205,9 +207,12 @@ export function parseAppleStatus(value: unknown): AppleStatus {
       ok: number(poll.ok),
       failed: number(poll.failed),
       lastMs: number(poll.lastMs),
+      lastBytes: number(poll.lastBytes),
       nextInMs: number(poll.nextInMs),
       lastError: text(poll.lastError),
     },
+    uptimeMs: typeof root.uptimeMs === "number" ? root.uptimeMs : null,
+    resetReason: typeof root.resetReason === "string" ? root.resetReason : null,
     sequence: text(root.sequence, "UNKNOWN"),
     fault: typeof root.fault === "boolean" ? root.fault : null,
     drive: text(root.drive, "UNKNOWN"),
@@ -388,5 +393,122 @@ export function deriveTransitionEvents(
       detail: `Reported state ${next.wifi.state}.`,
     });
   }
+  // Each successful MLB fetch bumps the Apple's counter; the log entry says how
+  // big and how slow it was, which is what explains a sluggish Apple during a
+  // game. Failures come from the Apple's own log, which also names the retry.
+  if (next.poll.ok > previous.poll.ok && next.game) {
+    events.push({
+      id: `apple-feed-ok-${next.poll.ok}`,
+      occurredAt,
+      category: "system",
+      kind: "connection",
+      title: "Live feed fetched",
+      detail: `${formatBytes(next.poll.lastBytes)} in ${(next.poll.lastMs / 1000).toFixed(1)} s · ${next.poll.ok} ok · ${next.poll.failed} failed since boot`,
+      gameContext: `${next.game.away} at ${next.game.home}`,
+      result: "connected",
+    });
+  }
+  if (next.uptimeMs !== null && previous.uptimeMs !== null && next.uptimeMs < previous.uptimeMs) {
+    events.push({
+      id: `apple-reboot-${occurredAt}`,
+      occurredAt,
+      category: "system",
+      kind: "diagnostic",
+      title: "Apple restarted",
+      detail: `Reset reason ${next.resetReason ?? "unknown"} · firmware ${next.firmwareVersion} on ${next.firmwareSlot}.`,
+      result: "safe-hold",
+    });
+  }
   return events;
+}
+
+function formatBytes(bytes: number): string {
+  return bytes >= 1024 ? `${Math.round(bytes / 1024)} KB` : `${bytes} B`;
+}
+
+/** One line of the Apple's own trace log, as served by /api/events. */
+export interface AppleTrace {
+  seq: number;
+  /** Unix seconds, or 0 when the Apple's clock had not synced yet. */
+  at: number;
+  /** Apple uptime when logged, for placing entries the clock missed. */
+  ms: number;
+  code: string;
+  detail: string;
+}
+export interface AppleEventLog {
+  now: number;
+  uptimeMs: number;
+  resetReason: string;
+  events: AppleTrace[];
+}
+
+export function parseAppleEventLog(value: unknown): AppleEventLog {
+  const root = record(value);
+  const list = Array.isArray(root.events) ? root.events : [];
+  return {
+    now: number(root.now),
+    uptimeMs: number(root.uptimeMs),
+    resetReason: text(root.resetReason),
+    events: list.map((item) => {
+      const entry = record(item);
+      return { seq: number(entry.seq), at: number(entry.at), ms: number(entry.ms), code: text(entry.code), detail: text(entry.detail) };
+    }),
+  };
+}
+
+const TRACE_TITLES: Record<string, string> = {
+  BOOT: "Apple booted",
+  WIFI: "Wi-Fi",
+  CLOCK: "Clock",
+  SCHEDULE: "Schedule",
+  FOLLOW: "Following a game",
+  FEED: "Live feed",
+  FEED_REGRESSED: "Live feed went backwards",
+  FEED_RESYNC: "Live feed resynced",
+  FINAL_HOLD_COMPLETE: "Final card released",
+  ERROR: "Apple reported an error",
+  AUDIO: "Audio",
+  BACKLIGHT: "Display",
+  SETTINGS: "Settings changed",
+  SETUP_NETWORK: "Setup network",
+  UPDATE: "Firmware update",
+  RELEASE: "Release check",
+  REPLAY: "Test celebration",
+  CELEBRATION: "Celebration",
+  RESET: "Reset button",
+  SAFE_MODE: "Safe mode",
+  STOPPED: "Stopped",
+  MAINTENANCE_REQUIRED: "Test refused",
+  COMMAND_REJECTED: "Command rejected",
+};
+const SAFE_HOLD_CODES = new Set(["ERROR", "SAFE_MODE", "STOPPED", "MAINTENANCE_REQUIRED", "COMMAND_REJECTED", "FEED_REGRESSED"]);
+
+/** The Apple's log as timeline entries. `receivedAt` is when the Lab fetched it. */
+export function traceEvents(log: AppleEventLog, receivedAt: string): DeviceTimelineEvent[] {
+  const receivedMs = Date.parse(receivedAt);
+  return log.events.map((entry) => {
+    // Entries from before the clock synced are placed by uptime, counting back
+    // from when this log was fetched.
+    const atMs = entry.at > 0 ? entry.at * 1000 : receivedMs - Math.max(0, log.uptimeMs - entry.ms);
+    const failure = SAFE_HOLD_CODES.has(entry.code) || (entry.code === "FEED" && /fail/i.test(entry.detail));
+    const celebration = entry.code === "CELEBRATION" || entry.code === "REPLAY";
+    return {
+      id: `apple-trace-${entry.seq}`,
+      occurredAt: new Date(atMs).toISOString(),
+      category: celebration ? "apple" : "system",
+      kind: celebration
+        ? entry.detail.startsWith("win")
+          ? "mets-win"
+          : entry.detail.startsWith("home run")
+            ? "home-run"
+            : "motion"
+        : entry.code === "WIFI" || entry.code === "FEED"
+          ? "connection"
+          : "diagnostic",
+      title: TRACE_TITLES[entry.code] ?? entry.code,
+      detail: entry.detail || entry.code,
+      ...(failure ? { result: "safe-hold" as const } : {}),
+    };
+  });
 }

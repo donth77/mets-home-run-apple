@@ -35,9 +35,16 @@ beforeEach(() => {
     clear: () => values.clear(),
   });
   Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
-  fetchMock = vi.fn<typeof fetch>().mockImplementation(async () => Response.json(home));
+  fetchMock = vi
+    .fn<typeof fetch>()
+    .mockImplementation(async (url) =>
+      String(url).endsWith("/api/events") ? new Response("{}", { status: 404 }) : Response.json(home),
+    );
   vi.stubGlobal("fetch", fetchMock);
 });
+// The hook also reads the Apple's event log; these tests reason about status polls.
+const statusCalls = () => fetchMock.mock.calls.filter(([url]) => String(url).endsWith("/api/status"));
+const statusCall = (index: number) => statusCalls()[index];
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
@@ -70,7 +77,7 @@ describe("Wi-Fi connection lifecycle", () => {
     expect(result.current.status?.hostname).toBe("fixture-apple");
     act(() => result.current.disconnect());
     await advance(30_000);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(statusCalls()).toHaveLength(2);
     expect(result.current.connection).toBe("DISCONNECTED");
     expect(result.current.status).toBeNull();
   });
@@ -80,15 +87,16 @@ describe("Wi-Fi connection lifecycle", () => {
     await act(async () => {
       await result.current.connect("fixture.invalid", "");
     });
+    await advance(0);
     fetchMock.mockRejectedValueOnce(new Error("offline")).mockRejectedValueOnce(new Error("offline"));
     await advance(1_000);
     expect(result.current.connection).toBe("STALE");
     expect(result.current.status?.sequence).toBe("IDLE");
     expect(result.current.idle).toBe(false);
     await advance(1_000);
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(statusCalls()).toHaveLength(3);
     await advance(1_999);
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(statusCalls()).toHaveLength(3);
     await advance(1);
     expect(result.current.connection).toBe("CONNECTED");
     expect(result.current.error).toBeNull();
@@ -100,17 +108,18 @@ describe("Wi-Fi connection lifecycle", () => {
     await act(async () => {
       await result.current.connect("fixture.invalid", "");
     });
+    await advance(0);
     fetchMock.mockReturnValueOnce(hanging.promise);
-    await advance(3_000);
+    await advance(6_000);
     expect(result.current.connection).toBe("STALE");
     expect(result.current.idle).toBe(false);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(statusCalls()).toHaveLength(2);
     await act(async () => {
       await result.current.requestTestSession();
     });
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    await advance(6_000);
-    expect(fetchMock.mock.calls[1][1]?.signal?.aborted).toBe(true);
+    expect(statusCalls()).toHaveLength(2);
+    await advance(3_000);
+    expect(statusCall(1)[1]?.signal?.aborted).toBe(true);
     await act(async () => {
       hanging.resolve(Response.json(home));
     });
@@ -126,15 +135,15 @@ describe("Wi-Fi connection lifecycle", () => {
     fetchMock.mockReturnValueOnce(old.promise);
     const { result, unmount } = renderHook(useAppleDevice, { wrapper: StrictMode });
     await act(async () => {});
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(fetchMock.mock.calls[0][1]?.signal?.aborted).toBe(true);
+    expect(statusCalls()).toHaveLength(2);
+    expect(statusCall(0)[1]?.signal?.aborted).toBe(true);
     expect(result.current.connection).toBe("CONNECTED");
     unmount();
     await act(async () => {
       old.resolve(Response.json(home));
     });
     await advance(30_000);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(statusCalls()).toHaveLength(2);
   });
 
   it("disarms when hidden and requires fresh status after returning", async () => {
@@ -146,7 +155,7 @@ describe("Wi-Fi connection lifecycle", () => {
     act(() => document.dispatchEvent(new Event("visibilitychange")));
     await advance(10_000);
     expect(result.current.connection).toBe("STALE");
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(statusCalls()).toHaveLength(1);
     Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
     await act(async () => document.dispatchEvent(new Event("visibilitychange")));
     expect(result.current.connection).toBe("CONNECTED");
@@ -262,6 +271,46 @@ describe("physical test authorization", () => {
     expect(result.current.queued).toBeNull();
     expect(result.current.error).toMatch(/wasn't tapped in time/);
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes("/api/replay"))).toBe(false);
+  });
+
+  it("keeps a queued run through a late status reply and still runs after the tap", async () => {
+    // During a live game the Apple is busy fetching the feed and answers some
+    // status requests late. The approval session lives on the Apple, so the
+    // Lab must not throw it away over one slow reply.
+    const asked = { ...home, maintenance: { supported: true, pending: true, armed: false, remainingMs: 30_000 } };
+    let deviceStatus = asked;
+    let hanging: ReturnType<typeof deferred<Response>> | null = null;
+    fetchMock.mockImplementation(async (url) => {
+      if (String(url).endsWith("/api/maintenance")) return Response.json({ token: testToken });
+      if (String(url).includes("/api/fixture?")) return Response.json({ ok: true });
+      if (String(url).endsWith("/api/events")) return new Response("{}", { status: 404 });
+      if (hanging) return hanging.promise;
+      return Response.json(deviceStatus);
+    });
+    const { result } = renderHook(useAppleDevice);
+    await act(async () => {
+      await result.current.connect("fixture.invalid", "fixture-code");
+      await result.current.runFixture("home-run");
+    });
+    expect(result.current.queued).toBe("home-run");
+    hanging = deferred<Response>();
+    await advance(6_500);
+    expect(result.current.connection).toBe("STALE");
+    expect(result.current.queued).toBe("home-run");
+    expect(result.current.error).toBeNull();
+    const late = hanging;
+    hanging = null;
+    await act(async () => {
+      late.resolve(Response.json(asked));
+    });
+    expect(result.current.connection).toBe("CONNECTED");
+    expect(result.current.queued).toBe("home-run");
+    deviceStatus = approved;
+    await advance(1_100);
+    const starts = fetchMock.mock.calls.filter(([url]) => String(url).includes("/api/fixture?"));
+    expect(starts).toHaveLength(1);
+    expect(new Headers(starts[0][1]?.headers).get("X-Apple-Maintenance")).toBe(testToken);
+    expect(result.current.queued).toBeNull();
   });
 
   it("refuses expired approval even between status polls", async () => {

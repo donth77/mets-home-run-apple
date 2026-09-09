@@ -127,6 +127,8 @@ class ManagerServer {
   using ReplayFn = std::function<String(const String& kind)>;
   void set_fixture_hooks(ReplayFn run, ActionFn stop) { fixture_run_ = std::move(run); fixture_stop_ = std::move(stop); }
   void set_replay_hook(ReplayFn replay) { replay_ = std::move(replay); }
+  /// Recent traces for the Lab: what the Apple did while nobody was watching.
+  void set_events_hook(StatusFn events) { events_ = std::move(events); }
   void set_maintenance_gate(ActionFn gate) { maintenance_gate_ = std::move(gate); }
   bool confirm_maintenance() { return maintenance_.confirm(millis()); }
   void clear_maintenance() { maintenance_.clear(); }
@@ -195,6 +197,7 @@ class ManagerServer {
   ActionFn release_check_;
   ActionFn release_install_;
   ReplayFn replay_;
+  StatusFn events_;
   ReplayFn fixture_run_;
   ActionFn fixture_stop_;
   String fixture_stop_token_;
@@ -204,6 +207,7 @@ class ManagerServer {
   MaintenanceSession maintenance_;
   void handle_maintenance();
   void handle_replay();
+  void handle_events();
   void handle_restart();
   void handle_release_action(const ActionFn& action);
   void handle_not_found();

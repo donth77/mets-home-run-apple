@@ -1,4 +1,4 @@
-import { type AppleStatus, parseAppleStatus } from "./appleDevice";
+import { type AppleEventLog, type AppleStatus, parseAppleEventLog, parseAppleStatus } from "./appleDevice";
 
 // Talks to the physical Apple through the Lab dev server's /device relay
 // (vite-apple-relay.ts). The host header picks which Apple; the code header
@@ -79,6 +79,13 @@ export async function fetchAppleStatus(options: AppleClientOptions): Promise<App
   const response = await request(options, "/api/status");
   if (!response.ok) throw await readError(response);
   return parseAppleStatus(await response.json());
+}
+
+/** The Apple's recent trace log. Older firmware has no such endpoint. */
+export async function fetchAppleEvents(options: AppleClientOptions): Promise<AppleEventLog> {
+  const response = await request(options, "/api/events");
+  if (!response.ok) throw await readError(response);
+  return parseAppleEventLog(await response.json());
 }
 
 export async function requestAppleCelebration(options: AppleClientOptions, kind: CelebrationKind): Promise<void> {

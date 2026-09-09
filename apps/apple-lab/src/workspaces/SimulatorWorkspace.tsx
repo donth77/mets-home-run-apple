@@ -124,14 +124,14 @@ export function SimulatorWorkspace({ apple }: { apple?: AppleDeviceState }) {
                 : physical
                   ? !apple || apple.connection === "DISCONNECTED"
                     ? "Physical Apple · connect over Wi-Fi first"
-                    : apple.connection !== "CONNECTED"
-                      ? "Physical Apple · waiting for status"
-                      : apple.status && !apple.status.maintenance.supported
-                        ? "Physical Apple · firmware update needed"
-                        : running
-                          ? "Physical test running"
-                          : apple.queued
-                            ? "Tap the Apple's owner button to approve"
+                    : apple.queued
+                      ? "Tap the Apple's owner button to approve"
+                      : apple.connection !== "CONNECTED"
+                        ? "Physical Apple · waiting for status"
+                        : apple.status && !apple.status.maintenance.supported
+                          ? "Physical Apple · firmware update needed"
+                          : running
+                            ? "Physical test running"
                             : apple.canTest
                               ? "Approved · starting"
                               : "Physical Apple · ready"
@@ -145,9 +145,9 @@ export function SimulatorWorkspace({ apple }: { apple?: AppleDeviceState }) {
                 !physical ||
                 !physicalAvailable ||
                 !apple ||
-                apple.connection !== "CONNECTED" ||
+                apple.connection === "DISCONNECTED" ||
                 !apple.status?.settings.motor ||
-                (!apple.queued && (!apple.idle || apple.pending !== null))
+                (!apple.queued && (apple.connection !== "CONNECTED" || !apple.idle || apple.pending !== null))
               }
               onClick={() => {
                 if (apple?.queued) {

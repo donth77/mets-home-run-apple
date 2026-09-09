@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  AppleRequestError,
   type CelebrationKind,
   DEFAULT_APPLE_HOST,
   describeAppleError,
+  fetchAppleEvents,
   fetchAppleStatus,
   requestAppleCelebration,
   requestMaintenance,
@@ -10,7 +12,7 @@ import {
   stopFixture,
   type AppleClientOptions,
 } from "./appleClient";
-import { type AppleStatus, appleIsIdle, deriveTransitionEvents, toManagedDevice } from "./appleDevice";
+import { type AppleStatus, appleIsIdle, deriveTransitionEvents, toManagedDevice, traceEvents } from "./appleDevice";
 import type { DeviceTimelineEvent, ManagedDevice } from "./fakeDevice";
 
 export type AppleConnection = "DISCONNECTED" | "CONNECTING" | "CONNECTED" | "STALE";
@@ -43,7 +45,19 @@ export interface AppleDeviceState {
 }
 
 const STORAGE_KEY = "apple-lab.apple-connection";
-export const STATUS_FRESH_MS = 3000;
+// How old a status may be before the link counts as stale and a click has to
+// wait. The Apple answers in well under a second, except while it downloads
+// the live game feed, which on weak Wi-Fi holds its web server for several
+// seconds; the window has to outlast that or every live game looks broken.
+// The Apple re-checks it is idle before anything moves, so this only decides
+// what the Lab shows and when it is willing to ask.
+export const STATUS_FRESH_MS = 6000;
+// Polling while the Apple is animating costs it frames; this is the slowest
+// rate that still keeps the mirror moving.
+const BUSY_POLL_MS = 2500;
+// The Apple's own log changes slowly; read it a few times a minute.
+const EVENTS_POLL_MS = 5000;
+const EVENTS_KEPT = 300;
 const isVisible = () => document.visibilityState !== "hidden";
 interface StoredConnection {
   host: string;
@@ -106,6 +120,13 @@ export function useAppleDevice(): AppleDeviceState {
   const token = useRef("");
   const stopToken = useRef("");
   const failures = useRef(0);
+  // The Apple's trace log: entries are numbered from boot, so a number that
+  // goes backwards means the Apple restarted and its entries start over.
+  const eventsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const eventsSupported = useRef(true);
+  const lastTraceSeq = useRef(0);
+  const traceBoot = useRef(0);
+  const linkStale = useRef(false);
   const queuedRef = useRef<{ name: string; operation: (options: AppleClientOptions) => Promise<void>; at: number } | null>(
     null,
   );
@@ -123,6 +144,11 @@ export function useAppleDevice(): AppleDeviceState {
     active.current = false;
     if (timer.current) clearTimeout(timer.current);
     if (freshness.current) clearTimeout(freshness.current);
+    if (eventsTimer.current) clearTimeout(eventsTimer.current);
+    eventsTimer.current = null;
+    eventsSupported.current = true;
+    lastTraceSeq.current = 0;
+    linkStale.current = false;
     pollController.current?.abort();
     pollController.current = null;
     actionController.current?.abort();
@@ -130,6 +156,37 @@ export function useAppleDevice(): AppleDeviceState {
     token.current = "";
     stopToken.current = "";
   }, []);
+
+  const pollEvents = useCallback(
+    async function readLog(epoch: number): Promise<void> {
+      eventsTimer.current = null;
+      if (!active.current || epoch !== generation.current || !eventsSupported.current || !isVisible()) return;
+      const controller = new AbortController();
+      const deadline = setTimeout(() => controller.abort(), 8000);
+      try {
+        const log = await fetchAppleEvents({ ...credentials.current, signal: controller.signal });
+        if (!active.current || epoch !== generation.current) return;
+        const newest = log.events.at(-1)?.seq ?? 0;
+        if (newest < lastTraceSeq.current) {
+          traceBoot.current += 1;
+          lastTraceSeq.current = 0;
+        }
+        const fresh = traceEvents(log, new Date().toISOString())
+          .filter((_, index) => log.events[index].seq > lastTraceSeq.current)
+          .map((event) => ({ ...event, id: `${event.id}-boot${traceBoot.current}` }));
+        lastTraceSeq.current = Math.max(lastTraceSeq.current, newest);
+        if (fresh.length) setEvents((previous) => [...fresh.reverse(), ...previous].slice(0, EVENTS_KEPT));
+      } catch (caught) {
+        // Older firmware has no log; anything else is a hiccup the status poll reports.
+        if (caught instanceof AppleRequestError && caught.status === 404) eventsSupported.current = false;
+      } finally {
+        clearTimeout(deadline);
+        if (active.current && epoch === generation.current && eventsSupported.current && !eventsTimer.current)
+          eventsTimer.current = setTimeout(() => void readLog(epoch), EVENTS_POLL_MS);
+      }
+    },
+    [],
+  );
 
   const poll = useCallback(
     async function pollStatus(epoch: number): Promise<void> {
@@ -145,9 +202,23 @@ export function useAppleDevice(): AppleDeviceState {
         if (!active.current || epoch !== generation.current || controller.signal.aborted || !isVisible()) return;
         const at = new Date().toISOString();
         const added = deriveTransitionEvents(current.current, next, at);
-        if (added.length) setEvents((previous) => [...added, ...previous].slice(0, 60));
+        if (linkStale.current) {
+          linkStale.current = false;
+          const gap = (performance.now() - lastSeen.current) / 1000;
+          added.push({
+            id: `lab-link-${at}`,
+            occurredAt: at,
+            category: "system",
+            kind: "connection",
+            title: "Apple answering again",
+            detail: `No status for ${gap.toFixed(1)} s. During a game the Apple pauses its web server while it downloads the feed.`,
+            result: "connected",
+          });
+        }
+        if (added.length) setEvents((previous) => [...added, ...previous].slice(0, EVENTS_KEPT));
         current.current = next;
         lastSeen.current = performance.now();
+        if (!eventsTimer.current && eventsSupported.current) eventsTimer.current = setTimeout(() => void pollEvents(epoch), 0);
         failures.current = 0;
         setStatus(next);
         setLastSeenAt(at);
@@ -156,13 +227,15 @@ export function useAppleDevice(): AppleDeviceState {
         if (!actionController.current) setError((previous) => (previous?.startsWith("Connection:") ? null : previous));
         // A queued test waits here for the owner's tap. Once the Apple reports
         // the session armed, run it without another click; if the presence
-        // window lapses, or the token was dropped by a stale link, let go.
+        // window lapses, let go. The Apple alone decides when the session is
+        // over, so a late reply or a failed poll in between leaves it alone —
+        // during a live game the Apple is busy downloading the feed and misses
+        // the odd status request.
         const waiting = queuedRef.current;
         if (waiting && !actionController.current) {
           const settled = performance.now() - waiting.at > 2000;
           if (!token.current) {
             clearQueued();
-            setError("The connection hiccupped while waiting for the button. Click the test again.");
           } else if (next.maintenance.armed) {
             clearQueued();
             void runQueued.current?.(waiting.name, waiting.operation);
@@ -175,15 +248,15 @@ export function useAppleDevice(): AppleDeviceState {
         if (freshness.current) clearTimeout(freshness.current);
         freshness.current = setTimeout(() => {
           if (active.current && epoch === generation.current) {
+            linkStale.current = true;
             setConnection("STALE");
-            clearToken();
           }
         }, STATUS_FRESH_MS);
       } catch (caught) {
         if (!active.current || epoch !== generation.current) return;
         failures.current += 1;
+        linkStale.current = true;
         setConnection("STALE");
-        clearToken();
         setError(`Connection: ${describeAppleError(caught)} Retrying automatically.`);
       } finally {
         clearTimeout(deadline);
@@ -191,8 +264,8 @@ export function useAppleDevice(): AppleDeviceState {
         if (active.current && epoch === generation.current && isVisible()) {
           // The Apple's display loop and its web server share a core, and each
           // status reply costs the animation a few milliseconds. While a
-          // celebration or fixture is running, poll at the slowest rate that
-          // still beats the 3 s freshness rule instead of once a second.
+          // celebration or fixture is running, poll slowly instead of once a
+          // second.
           const busy =
             current.current !== null &&
             (current.current.sequence !== "IDLE" ||
@@ -201,13 +274,13 @@ export function useAppleDevice(): AppleDeviceState {
           const delay = failures.current
             ? Math.min(15000, 1000 * 2 ** Math.min(failures.current - 1, 4))
             : busy
-              ? STATUS_FRESH_MS - 500
+              ? BUSY_POLL_MS
               : 1000;
           timer.current = setTimeout(() => void pollStatus(epoch), delay);
         }
       }
     },
-    [clearToken, clearQueued],
+    [clearToken, clearQueued, pollEvents],
   );
 
   const connect = useCallback(

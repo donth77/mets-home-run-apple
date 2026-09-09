@@ -6,8 +6,10 @@ import {
   describeNextGame,
   describeRssi,
   describeSequence,
+  parseAppleEventLog,
   parseAppleStatus,
   toManagedDevice,
+  traceEvents,
 } from "./appleDevice";
 import statusFixture from "./fixtures/apple-status.json";
 import snapshotGolden from "../../../firmware/test/native/fixtures/status-snapshot.json";
@@ -175,5 +177,56 @@ describe("deriveTransitionEvents", () => {
     expect(deriveTransitionEvents(raised, faultedHome, at).map((event) => event.title)).toEqual([
       "Apple reported a fault",
     ]);
+  });
+
+  it("logs each live feed fetch with its size and time, and a restart", () => {
+    const game = { gamePk: 1, gameNumber: 1, away: "NYM", home: "MIA", scheduled: "", state: "In Progress" };
+    const before: AppleStatus = { ...status, game, uptimeMs: 500_000, poll: { ...status.poll, ok: 6, failed: 3 } };
+    const after: AppleStatus = {
+      ...before,
+      poll: { ...before.poll, ok: 7, lastMs: 3807, lastBytes: 106_410 },
+    };
+    const fetched = deriveTransitionEvents(before, after, at);
+    expect(fetched).toHaveLength(1);
+    expect(fetched[0]).toMatchObject({
+      kind: "connection",
+      title: "Live feed fetched",
+      detail: "104 KB in 3.8 s · 7 ok · 3 failed since boot",
+      gameContext: "NYM at MIA",
+    });
+    expect(deriveTransitionEvents(after, after, at)).toEqual([]);
+    const rebooted: AppleStatus = { ...after, uptimeMs: 12_000, resetReason: "PANIC" };
+    const events = deriveTransitionEvents(after, rebooted, at);
+    expect(events.map((event) => event.title)).toEqual(["Apple restarted"]);
+    expect(events[0].detail).toContain("PANIC");
+  });
+});
+
+describe("the Apple's event log", () => {
+  it("places entries the clock missed by uptime and marks failures", () => {
+    const log = parseAppleEventLog({
+      now: 1_788_915_600,
+      uptimeMs: 60_000,
+      resetReason: "BROWNOUT",
+      events: [
+        { seq: 1, at: 0, ms: 1_000, code: "BOOT", detail: "reset: BROWNOUT; firmware 0.3.0 on app1" },
+        { seq: 2, at: 1_788_915_590, ms: 50_000, code: "FEED", detail: "live feed fetch failed after 20005 ms (2 in a row); retry in 10 s" },
+        { seq: 3, at: 1_788_915_595, ms: 55_000, code: "WIFI", detail: "retrying" },
+      ],
+    });
+    const received = "2026-09-08T00:00:00.000Z";
+    const events = traceEvents(log, received);
+    expect(events.map((event) => event.title)).toEqual(["Apple booted", "Live feed", "Wi-Fi"]);
+    // Logged 59 s before the log was read, on a clock that had not synced.
+    expect(Date.parse(events[0].occurredAt)).toBe(Date.parse(received) - 59_000);
+    expect(events[1].occurredAt).toBe(new Date(1_788_915_590_000).toISOString());
+    expect(events[1].result).toBe("safe-hold");
+    expect(events[2].result).toBeUndefined();
+    expect(events.map((event) => event.id)).toEqual(["apple-trace-1", "apple-trace-2", "apple-trace-3"]);
+  });
+
+  it("tolerates an empty or malformed log", () => {
+    expect(parseAppleEventLog({}).events).toEqual([]);
+    expect(traceEvents(parseAppleEventLog({ events: "no" }), "2026-09-08T00:00:00.000Z")).toEqual([]);
   });
 });

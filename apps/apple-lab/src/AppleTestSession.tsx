@@ -13,12 +13,14 @@ export function AppleTestSession({ apple }: { apple: AppleDeviceState }) {
   return (
     <div className="apple-test-session">
       <strong role="status">
-        {apple.connection !== "CONNECTED"
-          ? "Test controls paused · waiting for fresh status"
-          : running
-            ? "Test in progress on the Apple"
-            : apple.queued
-              ? `Waiting for the owner button · ${seconds} s`
+        {apple.queued
+          ? apple.connection === "CONNECTED"
+            ? `Waiting for the owner button · ${seconds} s`
+            : "Waiting for the owner button · reconnecting to the Apple"
+          : apple.connection !== "CONNECTED"
+            ? "Test controls paused · waiting for fresh status"
+            : running
+              ? "Test in progress on the Apple"
               : apple.canTest
                 ? "Approved · starting"
                 : "Ready"}
