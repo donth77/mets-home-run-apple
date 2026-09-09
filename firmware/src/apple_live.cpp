@@ -229,6 +229,10 @@ constexpr std::uint8_t kBacklightChannel = 4;  // LEDC channel for dimming the d
 // drawing into it. Re-asserting its setup this often makes such a panel
 // recover on its own; on a healthy panel the commands change nothing visible.
 constexpr std::uint32_t kPanelRefreshMs = 5 * 60 * 1000;
+// Right after power-on the panel's supply may still be settling while the
+// Nano has already sent its setup, so repeat it soon a few times (at about
+// 2, 10 and 30 s) before dropping to the slow cadence.
+constexpr std::uint32_t kPanelEarlyRefreshMs[] = {2000, 8000, 20000};
 constexpr std::uint8_t kBrightnessMin = 10;   // percent
 constexpr std::uint32_t kEarlyCrashLimit = 3;
 constexpr std::int64_t kReplayGamePk = 822929;
@@ -421,6 +425,7 @@ bool set_time_zone(const char* iana_id) {
 Preferences settings_store;
 bool backlight_on = true;
 std::uint32_t next_panel_refresh_ms = 0;
+std::uint8_t panel_refreshes = 0;
 Preferences boot_guard;
 bool safe_mode = false;
 bool boot_settled = false;
@@ -2934,7 +2939,9 @@ void wake_panel() {
 // panel itself before taking it over.
 void service_panel_refresh() {
   if (celebration_active || !due(next_panel_refresh_ms)) return;
-  next_panel_refresh_ms = now32() + kPanelRefreshMs;
+  constexpr std::uint8_t kEarly = sizeof(kPanelEarlyRefreshMs) / sizeof(kPanelEarlyRefreshMs[0]);
+  next_panel_refresh_ms = now32() + (panel_refreshes < kEarly ? kPanelEarlyRefreshMs[panel_refreshes] : kPanelRefreshMs);
+  if (panel_refreshes < kEarly) ++panel_refreshes;
   wake_panel();
   std::uint8_t colmod = 0x55;
   panel.sendCommand(0x3A, &colmod, 1);  // 16-bit colour
