@@ -1,7 +1,7 @@
 import { AppleTestSession } from "../AppleTestSession";
 import { MAX_STROKE_MM } from "@apple/protocol";
 import { Scoreboard } from "@apple/scoreboard-ui";
-import { describeNextGame, describeRssi, describeSequence, sequenceTone } from "../appleDevice";
+import { describeLastCelebration, describeNextGame, describeRssi, describeSequence, sequenceTone } from "../appleDevice";
 import { fakeManagedDevice, type DeviceTimelineEvent } from "../fakeDevice";
 import { HealthItem, Timeline, WorkspaceHeading } from "../managerComponents";
 import { type AppleDeviceState, liveApple } from "../useAppleDevice";
@@ -88,7 +88,7 @@ export function OverviewWorkspace({
                 <strong>{status ? describeNextGame(status.game, status.mode) : device.nextGame}</strong>
                 <p>
                   {status?.lastCelebration
-                    ? `Last celebration: ${status.lastCelebration.kind} · ${status.lastCelebration.subject}`
+                    ? `Last celebration: ${describeLastCelebration(status.lastCelebration)}`
                     : "No celebration yet."}
                 </p>
                 <small>{device.feedFreshness}</small>
@@ -216,10 +216,10 @@ export function OverviewWorkspace({
             {status ? (
               <>
                 <HealthItem
-                  label="Game feed"
+                  label={device.feedLabel}
                   value={device.feedStatus}
                   detail={device.feedFreshness}
-                  tone={status.poll.lastError ? "warning" : "good"}
+                  tone={device.feedHealthy ? "good" : "warning"}
                 />
                 <HealthItem
                   label="Wi-Fi"
@@ -246,7 +246,7 @@ export function OverviewWorkspace({
               </>
             ) : (
               <>
-                <HealthItem label="Game feed" value={device.feedStatus} detail={device.feedFreshness} tone="good" />
+                <HealthItem label={device.feedLabel} value={device.feedStatus} detail={device.feedFreshness} tone="good" />
                 <HealthItem
                   label="Wi-Fi"
                   value={`${device.wifiSignalDbm} dBm`}

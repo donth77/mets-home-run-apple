@@ -64,7 +64,7 @@ export function ConnectedLiveView({
         )}
       </article>
       <aside className="manager-panel feed-panel">
-        <h2>Device feed health</h2>
+        <h2>{apple.device?.feedLabel ?? "Game feed"}</h2>
         <p>
           {apple.device?.feedStatus} · {apple.device?.feedFreshness}
         </p>

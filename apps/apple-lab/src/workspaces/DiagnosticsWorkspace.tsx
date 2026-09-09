@@ -1,4 +1,4 @@
-import { describeRssi } from "../appleDevice";
+import { describeLastCelebration, describeRssi } from "../appleDevice";
 import { fakeManagedDevice, type DeviceTimelineEvent } from "../fakeDevice";
 import { Timeline, WorkspaceHeading } from "../managerComponents";
 import { type AppleDeviceState, liveApple } from "../useAppleDevice";
@@ -115,7 +115,7 @@ export function DiagnosticsWorkspace({
                   <dt>Last celebration</dt>
                   <dd>
                     {status.lastCelebration
-                      ? `${status.lastCelebration.kind} · ${status.lastCelebration.subject} · ${new Date(status.lastCelebration.at * 1000).toLocaleString()}`
+                      ? `${describeLastCelebration(status.lastCelebration)} · ${new Date(status.lastCelebration.at * 1000).toLocaleString()}`
                       : "None recorded"}
                   </dd>
                 </div>

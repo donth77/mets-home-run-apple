@@ -200,7 +200,7 @@ a.btn{display:inline-block;font-size:15px;font-weight:600;padding:11px 16px;bord
 <div class="tiles">
 <div class="tile"><span>Wi-Fi</span><strong id="wifi">…</strong><small id="wifi-2"></small><small id="wifi-3"></small></div>
 <div class="tile"><span id="game-label">Game</span><strong id="game">…</strong><small id="game-2"></small></div>
-<div class="tile"><span>Game feed</span><strong id="feed">…</strong><small id="feed-2"></small></div>
+<div class="tile"><span id="feed-label">Game feed</span><strong id="feed">…</strong><small id="feed-2"></small></div>
 <div class="tile"><span>Lift</span><strong id="lift">…</strong><small id="lift-2"></small></div>
 <div class="tile"><span>Last celebration</span><strong id="last">…</strong><small id="last-2"></small></div>
 <div class="tile"><span>Firmware</span><strong id="fw">…</strong><small id="fw-2"></small></div>
@@ -307,7 +307,7 @@ function showZoneList(){var box=$("tz-list"),q=$("tz").value;if(tzSelected&&zone
 function zoneHint(typing){var mine=zoneFor(browserZone),el=$("tz-hint");el.className="";el.innerHTML="";if(!zones.length)return;if(!tzSelected){if($("tz").value.trim()&&!typing){el.className="bad";el.textContent="Not a time zone we know. Pick one from the list."}return}if(!mine||mine.id===tzSelected)return;el.appendChild(document.createTextNode("This device is on "+mine.label+". "));var a=document.createElement("a");a.href="#";a.textContent="Use it";a.addEventListener("click",function(ev){ev.preventDefault();pickZone(mine)});el.appendChild(a)}
 function loadZones(){fetch("/api/timezones").then(function(r){return r.json()}).then(function(list){zones=list;if(lastSettings)fillSettings(lastSettings)}).catch(function(){})}
 function render(s){
-  var w=s.wifi||{},b,host;
+  var w=s.wifi||{},b,host,sc=s.schedule,everyMin=sc&&sc.refreshMs?Math.round(sc.refreshMs/60000):10,everyText=everyMin>=60?"every hour":"every "+everyMin+" minutes";
   text("mode",mode(s.mode));
   var sig=w.rssi>=-60?"Strong signal":w.rssi>=-70?"Good signal":w.rssi>=-80?"Fair signal":"Weak signal";
   if(w.state==="CONNECTING"){spin("wifi","Joining "+(w.ssid||""));text("wifi-2","");text("wifi-3","")}
@@ -327,19 +327,31 @@ function render(s){
     var halfName={TOP:"Top",BOTTOM:"Bottom",MIDDLE:"Middle",END:"End"}[snap.half]||"",inningLine=snap.inning?(halfName+" "+snap.inning+(typeof snap.outs==="number"?" · "+snap.outs+(snap.outs===1?" out":" outs"):"")):(snap.label||"In progress");
     text("game-2",(finalNow?"Final":inningLine)+(g&&g.gameNumber===2?" · Game 2":""));
   }
-  else if(offseason){text("game","Offseason");text("game-2",g?"Opening day "+when(g.scheduled):"Checks the schedule once a day")}
+  else if(offseason){text("game","Offseason");text("game-2",g?"Opening day "+when(g.scheduled):"Checks the schedule "+everyText)}
   else{
     text("game",g?(g.away+" at "+g.home):(w.state==="CONNECTED"?"No Mets game this week":"Set up Wi-Fi first"));
-    text("game-2",g?(when(g.scheduled)+(g.gameNumber===2?" · Game 2":"")):(w.state==="CONNECTED"?"Checks the schedule every 10 minutes":""));
+    text("game-2",g?(when(g.scheduled)+(g.gameNumber===2?" · Game 2":"")):(w.state==="CONNECTED"?"Checks the schedule "+everyText:""));
   }
-  var p=s.poll||{},nextS=Math.max(0,Math.round(p.nextInMs/1000));
-  if(p.lastError){text("feed","Problem","bad");text("feed-2",p.lastError)}
-  else if(p.ok){text("feed",snap?mode(snap.phase):(g&&g.state?g.state:"Following the game"),"ok");text("feed-2","Updated "+p.ok+" times, next check in "+nextS+" s")}
-  else{text("feed",g?"Waiting for the first update":"No game to follow");text("feed-2",g?"":"Checks the schedule every 10 minutes")}
+  // Between games the only thing the Apple fetches is the schedule, so that is
+  // what this tile reports; the live feed takes over once a game is on. A
+  // failure only shows while the latest attempt is the one that failed.
+  var p=s.poll||{},nextS=Math.max(0,Math.round(p.nextInMs/1000)),weak=w.rssi&&w.rssi<-80?" · Wi-Fi "+w.rssi+" dBm":"";
+  if(!sc||s.mode==="LIVE"||s.mode==="REPLAY"||snap){
+    text("feed-label","Game feed");
+    if(p.lastError){text("feed","Problem","bad");text("feed-2",p.lastError+weak+" · retrying")}
+    else if(p.ok){text("feed",snap?mode(snap.phase):(g&&g.state?g.state:"Following the game"),"ok");text("feed-2","Updated "+p.ok+" times, next check in "+nextS+" s"+(p.failed?" · "+p.failed+(p.failed===1?" retry":" retries"):""))}
+    else{text("feed",g?"Waiting for the first update":"No game to follow");text("feed-2",g?"":"Checks the schedule "+everyText)}
+  }else{
+    text("feed-label","Schedule");
+    var ago=sc.checkedAgoMs>=0?Math.round(sc.checkedAgoMs/60000):-1;
+    if(sc.lastError){text("feed","Problem","bad");text("feed-2",sc.lastError+weak+" · retrying")}
+    else if(sc.ok){text("feed",g?"Up to date":"No Mets game this week","ok");text("feed-2","Checked "+(ago<1?"just now":ago+" min ago")+" · "+everyText+(sc.failed?" · "+sc.failed+(sc.failed===1?" retry":" retries")+" since power-on":""))}
+    else{text("feed",w.state==="CONNECTED"?"Waiting for the schedule":"Needs Wi-Fi");text("feed-2","")}
+  }
   var seq=(s.sequence||"IDLE"),liftWord={IDLE:"Home",LEAD_IN:"Getting ready",REVIEW_HOLD:"Waiting on a review",EXTENDING:"Rising",RAISED:"Raised",RETRACTING:"Lowering",FAULT:"Stopped"}[seq]||seq;
   text("lift",s.fault?"Stopped: fault":liftWord,s.fault?"bad":"");
   text("lift-2",(s.motion==="L298N"?"Motor on":"Motor off")+(s.positionMm?", "+s.positionMm+" mm up":""));
-  var lc=s.lastCelebration;if(lc&&lc.at){text("last",(lc.kind==="WIN"?"Mets win":"Home run")+(lc.subject?", "+lc.subject:""));text("last-2",when(new Date(lc.at*1000).toISOString())+(lc.moved?" · the Apple rose":" · screen only"))}else{text("last","None yet");text("last-2","")}
+  var lc=s.lastCelebration;if(lc&&lc.at){text("last",(lc.kind==="WIN"?"Mets win":"Home run")+(lc.subject?", "+lc.subject:""));text("last-2",when(new Date(lc.at*1000).toISOString())+" · "+({ROSE:"the Apple rose",RUNNING:"running now",SCREEN_ONLY:"screen only, motor off",STOPPED:"stopped before it rose",FAULT:"stopped by a motor fault",INTERRUPTED:"cut short by a restart"}[lc.outcome]||(lc.moved?"the Apple rose":"screen only")))}else{text("last","None yet");text("last-2","")}
   text("fw",s.firmwareVersion||"");if(s.firmwareVersion)installedVersion=s.firmwareVersion;text("fw-installed",s.firmwareVersion||"");renderUpdate(s);text("fw-2",(s.hostname||"home-run-apple")+".local");
   var st=s.settings;
   if(st){lastSettings=st;if(!settingsDirty)fillSettings(st)}

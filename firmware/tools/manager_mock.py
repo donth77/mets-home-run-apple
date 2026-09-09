@@ -96,6 +96,8 @@ def make_handler(state):
                          "half": "TOP", "outs": 2, "awayId": 121, "homeId": 139} if connected else None,
             "poll": {"ok": 3 if connected else 0, "failed": 0, "lastMs": 1800, "lastBytes": 34000,
                      "nextInMs": 42000, "lastError": ""},
+            "schedule": {"ok": 5 if connected else 0, "failed": 1, "lastMs": 900, "lastError": "",
+                         "checkedAgoMs": 240000, "nextInMs": 360000, "refreshMs": 600000, "games": 8},
             "settings": dict(settings, timeZoneLabel=zone_label(settings["timeZone"]),
                              setupKey="" if settings["requireCode"] else "00000000"),
             "audio": state["audio"],

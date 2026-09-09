@@ -30,8 +30,12 @@ export interface ManagedDevice {
   motionAdapter: "RECORDING" | "L298N" | string;
   wifiNetwork: string;
   wifiSignalDbm: number;
+  // What the Apple is fetching right now: the live feed during a game, the
+  // schedule between games.
+  feedLabel: "Game feed" | "Schedule";
   feedStatus: string;
   feedFreshness: string;
+  feedHealthy: boolean;
   power: string;
   uptime: string;
   positionMm: number | null;
@@ -54,8 +58,10 @@ export const fakeManagedDevice: ManagedDevice & { snapshot: GameSnapshot } = {
   motionAdapter: "RECORDING",
   wifiNetwork: "Home Wi-Fi",
   wifiSignalDbm: -54,
+  feedLabel: "Game feed",
   feedStatus: "Healthy",
   feedFreshness: "Accepted patch 9 seconds ago",
+  feedHealthy: true,
   power: "12 V DC",
   uptime: "2d 14h",
   positionMm: 0,

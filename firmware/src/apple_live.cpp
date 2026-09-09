@@ -181,7 +181,14 @@ constexpr std::uint32_t kJoinGraceMs = 10'000;
 constexpr std::uint32_t kSetupNetworkLingerMs = 20'000;
 // The setup display alternates between the QR code and the typed details.
 constexpr std::uint32_t kSetupScreenFlipMs = 10'000;
+// The schedule is re-read often only around a game, when a postponement,
+// a moved start or a doubleheader's Game 2 matters within minutes. The rest
+// of the time hourly is plenty: a change noticed within the hour still
+// leaves the whole pregame hour before the Apple would start polling.
 constexpr std::uint32_t kScheduleRefreshMs = 10 * 60 * 1000;
+constexpr std::uint32_t kScheduleRefreshIdleMs = 60 * 60 * 1000;
+constexpr std::int64_t kScheduleCloseSeconds = 2 * 60 * 60;
+constexpr std::uint32_t kSlowFetchMs = 3000;  // worth a log line even when nothing changed
 constexpr std::uint32_t kScheduleRetryMs = 60 * 1000;
 constexpr std::uint32_t kPollRetryMs = 30 * 1000;
 constexpr std::uint32_t kPollRetryMaxMs = 5 * 60 * 1000;
@@ -369,14 +376,38 @@ struct Settings {
 };
 
 // The most recent real celebration, kept in flash for the Manager's status.
+Preferences history_store;
+
+// What the Apple's lift actually did the last time it celebrated for real.
+// RUNNING while the sequence is under way; ROSE only once it reached the top
+// and came home; STOPPED, FAULT or INTERRUPTED when it did not; SCREEN_ONLY
+// when the motor was off.
 struct LastCelebration {
   char kind[8] = "";      // "HR" or "WIN"
   char subject[40] = "";  // batter, or the final score
   std::int64_t at{0};     // epoch seconds
-  bool moved{false};      // the motor was on at the time
+  bool moved{false};      // the lift completed: reached the top and came home
+  char outcome[14] = "";
 };
 LastCelebration last_celebration;
-Preferences history_store;
+bool last_celebration_tracking = false;  // the running record is this celebration's
+bool last_celebration_raised = false;    // and it has reached the top
+
+void save_last_celebration() {
+  history_store.putString("kind", last_celebration.kind);
+  history_store.putString("subject", last_celebration.subject);
+  history_store.putLong64("at", last_celebration.at);
+  history_store.putBool("moved", last_celebration.moved);
+  history_store.putString("outcome", last_celebration.outcome);
+}
+
+void settle_last_celebration(const char* outcome) {
+  if (!last_celebration_tracking) return;
+  last_celebration_tracking = false;
+  last_celebration.moved = std::strcmp(outcome, "ROSE") == 0;
+  copy_text(last_celebration.outcome, sizeof(last_celebration.outcome), outcome);
+  save_last_celebration();
+}
 Settings settings;
 
 // Resolves an IANA id through the Manager's table; false leaves the zone as is.
@@ -421,6 +452,15 @@ std::uint32_t polls_ok = 0;
 std::uint32_t polls_failed = 0;
 std::uint32_t last_poll_duration_ms = 0;
 std::uint32_t last_poll_bytes = 0;
+// The schedule lookup has its own health; between games it is the only
+// thing the Apple fetches, and one hiccup must not read as a feed problem.
+std::uint32_t schedule_ok = 0;
+std::uint32_t schedule_failed = 0;
+std::uint32_t last_schedule_ms = 0;
+std::uint32_t last_schedule_ok_ms = 0;
+std::uint32_t schedule_refresh_ms = kScheduleRefreshMs;
+std::uint64_t schedule_fingerprint = 0;
+char last_schedule_error[64] = "";
 std::uint32_t final_card_started_ms = 0;
 std::uint32_t regressed_in_a_row = 0;
 constexpr std::uint32_t kRegressionsBeforeResync = 5;
@@ -913,6 +953,7 @@ void fill_status(JsonDocument& doc) {
     last["subject"] = last_celebration.subject;
     last["at"] = last_celebration.at;
     last["moved"] = last_celebration.moved;
+    last["outcome"] = last_celebration.outcome;
   }
   // The page shows the code once when the owner turns the lock on; with the
   // lock off anyone on the network could change settings anyway.
@@ -968,6 +1009,15 @@ void fill_status(JsonDocument& doc) {
   poll["lastBytes"] = last_poll_bytes;
   poll["nextInMs"] = static_cast<std::int32_t>(next_poll_ms - now32());
   poll["lastError"] = last_error;
+  JsonObject sched = doc["schedule"].to<JsonObject>();
+  sched["ok"] = schedule_ok;
+  sched["failed"] = schedule_failed;
+  sched["lastMs"] = last_schedule_ms;
+  sched["lastError"] = last_schedule_error;
+  sched["checkedAgoMs"] = schedule_ok ? static_cast<std::int32_t>(now32() - last_schedule_ok_ms) : -1;
+  sched["nextInMs"] = static_cast<std::int32_t>(next_schedule_ms - now32());
+  sched["refreshMs"] = schedule_refresh_ms;
+  sched["games"] = static_cast<std::uint32_t>(schedule.size());
   doc["ledger"] = nvs_ledger.count();
   doc["sequence"] = apple::core::sequence_state_name(engine ? engine->sequence_state() : SequenceState::Idle);
   doc["fault"] = engine && engine->fault_latched();
@@ -2034,12 +2084,14 @@ void begin_celebration(const apple::core::CoreEvent& event) {
     } else {
       ascii_fold(event.subject.c_str(), last_celebration.subject, sizeof(last_celebration.subject));
     }
+    // A previous celebration still being tracked was cut short by this one.
+    settle_last_celebration(last_celebration_raised ? "ROSE" : "STOPPED");
     last_celebration.at = wall_epoch();
-    last_celebration.moved = settings.motor;
-    history_store.putString("kind", last_celebration.kind);
-    history_store.putString("subject", last_celebration.subject);
-    history_store.putLong64("at", last_celebration.at);
-    history_store.putBool("moved", last_celebration.moved);
+    last_celebration.moved = false;
+    copy_text(last_celebration.outcome, sizeof(last_celebration.outcome), settings.motor ? "RUNNING" : "SCREEN_ONLY");
+    last_celebration_tracking = settings.motor;
+    last_celebration_raised = false;
+    save_last_celebration();
   }
   Serial.printf("APPLE_LIVE:{\"type\":\"celebration\",\"status\":\"STARTED\",\"kind\":\"%s\","
                 "\"subject\":\"%s\",\"eventKey\":\"%s\"}\n",
@@ -2121,6 +2173,11 @@ void service_motion(std::uint64_t now) {
     Serial.printf("APPLE_LIVE:{\"type\":\"sequence\",\"state\":\"%s\",\"fault\":%s}\n",
                   apple::core::sequence_state_name(state),
                   engine && engine->fault_latched() ? "true" : "false");
+    if (last_celebration_tracking) {
+      if (state == SequenceState::Raised) last_celebration_raised = true;
+      if (engine && engine->fault_latched()) settle_last_celebration("FAULT");
+      else if (state == SequenceState::Idle) settle_last_celebration(last_celebration_raised ? "ROSE" : "STOPPED");
+    }
     if (engine && engine->fault_latched()) {
       apply_drive(Drive::Off);
       copy_text(model.waiting_title, sizeof(model.waiting_title), "MOTION DISABLED");
@@ -2466,7 +2523,36 @@ struct FetchStats {
   int http_status{0};
   std::uint32_t bytes{0};
   std::uint32_t elapsed_ms{0};
+  char error[64] = "";  // why it failed, in words the Manager can show
 };
+
+// The TLS library is built without its error-string table, so name the
+// failures weak Wi-Fi actually produces; anything else keeps its code.
+const char* describe_tls_error(int code) {
+  switch (-code) {
+    case 0x0042: return "could not open a connection";
+    case 0x0044: return "connection failed";
+    case 0x004C: return "connection dropped while receiving";
+    case 0x004E: return "connection dropped while sending";
+    case 0x0050: return "connection reset by the network";
+    case 0x0052: return "DNS lookup failed";
+    case 0x2700: return "certificate check failed";
+    case 0x6800: return "connection timed out";
+    case 0x7780: return "server closed the connection";
+    default: return nullptr;
+  }
+}
+
+const char* describe_json_error(ArduinoJson::DeserializationError error) {
+  switch (error.code()) {
+    case ArduinoJson::DeserializationError::IncompleteInput: return "reply cut short";
+    case ArduinoJson::DeserializationError::EmptyInput: return "empty reply";
+    case ArduinoJson::DeserializationError::InvalidInput: return "reply was not valid JSON";
+    case ArduinoJson::DeserializationError::NoMemory: return "reply too large for memory";
+    case ArduinoJson::DeserializationError::TooDeep: return "reply nested too deeply";
+    default: return error.c_str();
+  }
+}
 
 // The response body, watched: feeds the watchdog while bytes arrive and ends
 // the stream at a deadline, which the parser then reports as incomplete input
@@ -2507,23 +2593,28 @@ bool fetch_json(const String& url, JsonDocument& doc, const char* filter_json, F
   http.useHTTP10(true);
   http.setUserAgent("HomeRunApple/0.1 (Arduino Nano ESP32)");
   if (!http.begin(secure_client, url)) {
-    set_error("HTTP_BEGIN");
+    copy_text(stats.error, sizeof(stats.error), "could not start the request");
     return false;
   }
   http.addHeader("Accept", "application/json");
   esp_task_wdt_reset();
   stats.http_status = http.GET();
   if (stats.http_status != HTTP_CODE_OK) {
-    char detail[64];
     if (stats.http_status < 0) {
       char tls[40] = "";
-      secure_client.lastError(tls, sizeof(tls));
-      std::snprintf(detail, sizeof(detail), "HTTP %d %s", stats.http_status, tls[0] ? tls : http.errorToString(stats.http_status).c_str());
+      const int tls_code = secure_client.lastError(tls, sizeof(tls));
+      const char* words = tls_code ? describe_tls_error(tls_code) : nullptr;
+      if (words) {
+        copy_text(stats.error, sizeof(stats.error), words);
+      } else if (tls_code) {
+        std::snprintf(stats.error, sizeof(stats.error), "TLS error %04X", static_cast<unsigned>(-tls_code) & 0xFFFFU);
+      } else {
+        copy_text(stats.error, sizeof(stats.error), http.errorToString(stats.http_status).c_str());
+      }
     } else {
-      std::snprintf(detail, sizeof(detail), "HTTP_%d", stats.http_status);
+      std::snprintf(stats.error, sizeof(stats.error), "MLB answered HTTP %d", stats.http_status);
     }
     http.end();
-    set_error(detail);
     return false;
   }
   stats.bytes = http.getSize() > 0 ? static_cast<std::uint32_t>(http.getSize()) : 0;
@@ -2535,13 +2626,11 @@ bool fetch_json(const String& url, JsonDocument& doc, const char* filter_json, F
   http.end();
   stats.elapsed_ms = now32() - started;
   if (error != ArduinoJson::DeserializationError::Ok) {
-    char detail[48];
-    std::snprintf(detail, sizeof(detail), "JSON %s", error.c_str());
-    set_error(detail);
+    copy_text(stats.error, sizeof(stats.error), describe_json_error(error));
     return false;
   }
   if (doc.overflowed()) {
-    set_error("JSON_OVERFLOW");
+    copy_text(stats.error, sizeof(stats.error), "reply too large for memory");
     return false;
   }
   return true;
@@ -2580,6 +2669,7 @@ void follow(const std::optional<ScheduleGame>& chosen) {
   tracker.reset();
   reset_final_tracking();
   poll_failure_streak = 0;
+  last_error[0] = '\0';
   next_poll_ms = now32();
   if (!game) {
     // Nothing scheduled from October through February is the offseason (a
@@ -2613,6 +2703,31 @@ void follow(const std::optional<ScheduleGame>& chosen) {
   show_upcoming(*game);
 }
 
+// Every fact the schedule can change under us: which games, when, and their state.
+std::uint64_t schedule_digest(const std::vector<ScheduleGame>& games) {
+  std::uint64_t hash = 1469598103934665603ULL;
+  auto mix = [&hash](const void* data, std::size_t length) {
+    const auto* bytes = static_cast<const std::uint8_t*>(data);
+    for (std::size_t i = 0; i < length; ++i) hash = (hash ^ bytes[i]) * 1099511628211ULL;
+  };
+  for (const ScheduleGame& g : games) {
+    mix(&g.game_pk, sizeof(g.game_pk));
+    mix(&g.game_number, sizeof(g.game_number));
+    mix(g.game_date.data(), g.game_date.size());
+    mix(g.detailed_state.data(), g.detailed_state.size());
+  }
+  return hash;
+}
+
+// Often around a game, hourly otherwise. Also hourly with nothing to follow.
+std::uint32_t schedule_refresh_interval_ms() {
+  if (!game) return kScheduleRefreshIdleMs;
+  if (game->live() || final_seen) return kScheduleRefreshMs;
+  const std::optional<std::int64_t> start = apple::mlb_feed::parse_iso8601_utc(game->game_date);
+  if (!start) return kScheduleRefreshMs;
+  return *start - wall_epoch() <= kScheduleCloseSeconds ? kScheduleRefreshMs : kScheduleRefreshIdleMs;
+}
+
 void refresh_schedule() {
   next_schedule_ms = now32() + kScheduleRetryMs;
   if (!clock_valid()) {
@@ -2628,7 +2743,12 @@ void refresh_schedule() {
   JsonDocument doc(&json_allocator);
   FetchStats stats;
   if (!fetch_json(url, doc, apple::mlb_feed::schedule_filter_json(), stats)) {
-    ++polls_failed;
+    ++schedule_failed;
+    copy_text(last_schedule_error, sizeof(last_schedule_error), stats.error);
+    char detail[160];  // the log keeps the first 80 characters; the serial line keeps it all
+    std::snprintf(detail, sizeof(detail), "lookup failed: %s; retry in %lu s", stats.error,
+                  static_cast<unsigned long>(kScheduleRetryMs / 1000));
+    publish_trace("SCHEDULE", detail);
     if (!game) {
       copy_text(model.waiting_note, sizeof(model.waiting_note), "RETRYING");
       show_waiting("SCHEDULE UNAVAILABLE", apple::firmware::kDelayYellow);
@@ -2636,13 +2756,26 @@ void refresh_schedule() {
     return;
   }
   schedule = apple::mlb_feed::parse_schedule(doc.as<JsonVariantConst>());
-  char detail[64];
-  std::snprintf(detail, sizeof(detail), "%lu games %s..%s in %lu ms",
-                static_cast<unsigned long>(schedule.size()), start, end,
-                static_cast<unsigned long>(stats.elapsed_ms));
-  publish_trace("SCHEDULE", detail);
-  next_schedule_ms = now32() + kScheduleRefreshMs;
+  ++schedule_ok;
+  last_schedule_ms = stats.elapsed_ms;
+  last_schedule_ok_ms = now32();
+  last_schedule_error[0] = '\0';
+  const std::uint64_t fingerprint = schedule_digest(schedule);
+  const bool changed = fingerprint != schedule_fingerprint;
+  if (changed || stats.elapsed_ms >= kSlowFetchMs) {
+    char detail[sizeof(TraceEntry::detail)];
+    std::snprintf(detail, sizeof(detail), "%lu games %s..%s in %lu ms%s",
+                  static_cast<unsigned long>(schedule.size()), start, end,
+                  static_cast<unsigned long>(stats.elapsed_ms),
+                  !changed ? " (slow)" : schedule_fingerprint == 0 ? "" : " (changed)");
+    publish_trace("SCHEDULE", detail);
+  }
+  schedule_fingerprint = fingerprint;
   schedule_ok_since_boot = true;
+  // The early returns below are all around a final, where the short interval
+  // is right; the ordinary path picks its interval once the game is chosen.
+  schedule_refresh_ms = kScheduleRefreshMs;
+  next_schedule_ms = now32() + schedule_refresh_ms;
 
   const std::optional<ScheduleGame> game_two = doubleheader_game_two();
   if (final_seen) final_has_game_two = game_two.has_value();
@@ -2665,6 +2798,8 @@ void refresh_schedule() {
     return;
   }
   follow(apple::mlb_feed::choose_game(schedule, wall_epoch()));
+  schedule_refresh_ms = schedule_refresh_interval_ms();
+  next_schedule_ms = now32() + schedule_refresh_ms;
 }
 
 void poll_feed() {
@@ -2681,13 +2816,14 @@ void poll_feed() {
   if (!fetch_json(url, doc, apple::mlb_feed::live_feed_filter_json(), stats)) {
     ++polls_failed;
     ++poll_failure_streak;
+    copy_text(last_error, sizeof(last_error), stats.error);
     const bool live = game->live();
     const std::uint32_t cap = live ? kLivePollRetryMaxMs : kPollRetryMaxMs;
     std::uint32_t wait = live ? kLivePollRetryMs : kPollRetryMs;
     for (std::uint32_t i = 1; i < poll_failure_streak && wait < cap; ++i) wait *= 2;
     if (wait > cap) wait = cap;
-    char detail[sizeof(TraceEntry::detail)];
-    std::snprintf(detail, sizeof(detail), "live feed fetch failed after %lu ms (%lu in a row); retry in %lu s",
+    char detail[160];
+    std::snprintf(detail, sizeof(detail), "live feed: %s after %lu ms (%lu in a row); retry in %lu s", stats.error,
                   static_cast<unsigned long>(now32() - poll_started), static_cast<unsigned long>(poll_failure_streak),
                   static_cast<unsigned long>(wait / 1000));
     publish_trace("FEED", detail);
@@ -2734,6 +2870,19 @@ void load_settings() {
   history_store.getString("subject", "").toCharArray(last_celebration.subject, sizeof(last_celebration.subject));
   last_celebration.at = history_store.getLong64("at", 0);
   last_celebration.moved = history_store.getBool("moved", false);
+  history_store.getString("outcome", "").toCharArray(last_celebration.outcome, sizeof(last_celebration.outcome));
+  if (last_celebration.at != 0) {
+    if (last_celebration.outcome[0] == '\0') {
+      // Recorded by firmware that only noted whether the motor was on.
+      copy_text(last_celebration.outcome, sizeof(last_celebration.outcome),
+                last_celebration.moved ? "ROSE" : "SCREEN_ONLY");
+    } else if (std::strcmp(last_celebration.outcome, "RUNNING") == 0) {
+      // Power was lost or the Apple restarted before the lift finished.
+      last_celebration.moved = false;
+      copy_text(last_celebration.outcome, sizeof(last_celebration.outcome), "INTERRUPTED");
+      save_last_celebration();
+    }
+  }
 }
 
 void save_settings() {

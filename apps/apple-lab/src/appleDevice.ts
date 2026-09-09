@@ -44,7 +44,7 @@ export interface AppleStatus {
     tracks: AppleTrack[];
   };
   update: { state: string; version: string; error: string };
-  lastCelebration: { kind: string; subject: string; at: number; moved: boolean } | null;
+  lastCelebration: { kind: string; subject: string; at: number; moved: boolean; outcome: string } | null;
   wifi: { state: string; ssid: string; rssi: number; ip: string; configured: boolean };
   clock: boolean;
   heapFree: number;
@@ -53,6 +53,17 @@ export interface AppleStatus {
   game: AppleGame | null;
   snapshot: GameSnapshot | null;
   poll: { ok: number; failed: number; lastMs: number; lastBytes: number; nextInMs: number; lastError: string };
+  /** The schedule lookup's own health; null on firmware that reports only the feed. */
+  schedule: {
+    ok: number;
+    failed: number;
+    lastMs: number;
+    lastError: string;
+    checkedAgoMs: number;
+    nextInMs: number;
+    refreshMs: number;
+    games: number;
+  } | null;
   uptimeMs: number | null;
   resetReason: string | null;
   sequence: string;
@@ -133,6 +144,7 @@ export function parseAppleStatus(value: unknown): AppleStatus {
   const update = record(root.update);
   const wifi = record(root.wifi);
   const poll = record(root.poll);
+  const sched = root.schedule === null || root.schedule === undefined ? null : record(root.schedule);
   const game = root.game === null || root.game === undefined ? null : record(root.game);
   const last =
     root.lastCelebration === null || root.lastCelebration === undefined ? null : record(root.lastCelebration);
@@ -177,7 +189,14 @@ export function parseAppleStatus(value: unknown): AppleStatus {
     lastCelebration:
       last === null
         ? null
-        : { kind: text(last.kind), subject: text(last.subject), at: number(last.at), moved: flag(last.moved) },
+        : {
+            kind: text(last.kind),
+            subject: text(last.subject),
+            at: number(last.at),
+            moved: flag(last.moved),
+            // Older firmware only knew whether the motor was on.
+            outcome: text(last.outcome) || (flag(last.moved) ? "ROSE" : "SCREEN_ONLY"),
+          },
     wifi: {
       state: text(wifi.state, "UNKNOWN"),
       ssid: text(wifi.ssid),
@@ -211,6 +230,18 @@ export function parseAppleStatus(value: unknown): AppleStatus {
       nextInMs: number(poll.nextInMs),
       lastError: text(poll.lastError),
     },
+    schedule: sched
+      ? {
+          ok: number(sched.ok),
+          failed: number(sched.failed),
+          lastMs: number(sched.lastMs),
+          lastError: text(sched.lastError),
+          checkedAgoMs: number(sched.checkedAgoMs, -1),
+          nextInMs: number(sched.nextInMs),
+          refreshMs: number(sched.refreshMs),
+          games: number(sched.games),
+        }
+      : null,
     uptimeMs: typeof root.uptimeMs === "number" ? root.uptimeMs : null,
     resetReason: typeof root.resetReason === "string" ? root.resetReason : null,
     sequence: text(root.sequence, "UNKNOWN"),
@@ -303,8 +334,48 @@ export function describeNextGame(game: AppleGame | null, mode: string, now = new
   return `${matchup} · ${day} · ${time}`;
 }
 
+// The Apple fetches one thing at a time: the live feed during a game, the
+// schedule between games. Report whichever it is on, and only call a failure
+// out while the latest attempt is the one that failed.
+function describeFetching(status: AppleStatus): Pick<ManagedDevice, "feedLabel" | "feedStatus" | "feedFreshness" | "feedHealthy"> {
+  const weak = status.wifi.rssi < -80 ? ` · Wi-Fi ${status.wifi.rssi} dBm` : "";
+  const retries = (count: number) => (count ? ` · ${count} ${count === 1 ? "retry" : "retries"} since power-on` : "");
+  const inGame = status.schedule === null || status.mode === "LIVE" || status.mode === "REPLAY" || status.snapshot !== null;
+  if (inGame) {
+    const error = status.poll.lastError;
+    return {
+      feedLabel: "Game feed",
+      feedStatus: error ? "Problem" : status.snapshot ? "Live" : status.clock ? "Waiting for a game" : "Waiting for clock",
+      feedFreshness: error
+        ? `${error}${weak} · retrying`
+        : status.poll.ok > 0
+          ? `Updated ${status.poll.ok} times${retries(status.poll.failed)}`
+          : "No live poll yet",
+      feedHealthy: !error,
+    };
+  }
+  const schedule = status.schedule as NonNullable<AppleStatus["schedule"]>;
+  const every = schedule.refreshMs >= 3_600_000 ? "every hour" : `every ${Math.round(schedule.refreshMs / 60_000)} minutes`;
+  const agoMin = Math.round(schedule.checkedAgoMs / 60_000);
+  return {
+    feedLabel: "Schedule",
+    feedStatus: schedule.lastError
+      ? "Problem"
+      : schedule.ok > 0
+        ? status.game
+          ? "Up to date"
+          : "No Mets game this week"
+        : "Waiting for the schedule",
+    feedFreshness: schedule.lastError
+      ? `${schedule.lastError}${weak} · retrying`
+      : schedule.ok > 0
+        ? `Checked ${agoMin < 1 ? "just now" : `${agoMin} min ago`} · ${every}${retries(schedule.failed)}`
+        : "",
+    feedHealthy: !schedule.lastError,
+  };
+}
+
 export function toManagedDevice(status: AppleStatus, host: string, transport: "WIFI" | "USB" = "WIFI"): ManagedDevice {
-  const feedError = status.poll.lastError.length > 0;
   return {
     id: status.hostname,
     name: "Home Run Apple",
@@ -316,18 +387,7 @@ export function toManagedDevice(status: AppleStatus, host: string, transport: "W
     motionAdapter: status.motion,
     wifiNetwork: status.wifi.ssid || status.wifi.state,
     wifiSignalDbm: status.wifi.rssi,
-    feedStatus: feedError
-      ? "Errors"
-      : status.snapshot
-        ? "Live"
-        : status.clock
-          ? "Waiting for a game"
-          : "Waiting for clock",
-    feedFreshness: feedError
-      ? `Last error: ${status.poll.lastError}`
-      : status.poll.ok > 0
-        ? `${status.poll.ok} polls ok · ${status.poll.failed} failed`
-        : "No live poll yet",
+    ...describeFetching(status),
     power: status.settings.motor ? "Motor enabled" : "Motor disabled",
     uptime: status.clock ? "Clock synced" : "Clock not synced",
     positionMm: status.positionMm,
@@ -420,6 +480,21 @@ export function deriveTransitionEvents(
     });
   }
   return events;
+}
+
+const LIFT_OUTCOMES: Record<string, string> = {
+  ROSE: "the Apple rose",
+  RUNNING: "running now",
+  SCREEN_ONLY: "screen only, motor off",
+  STOPPED: "stopped before it rose",
+  FAULT: "stopped by a motor fault",
+  INTERRUPTED: "cut short by a restart",
+};
+
+/** "Home run · Juan Soto · the Apple rose" — what the last real celebration did. */
+export function describeLastCelebration(last: NonNullable<AppleStatus["lastCelebration"]>): string {
+  const kind = last.kind === "WIN" ? "Mets win" : "Home run";
+  return `${kind} · ${last.subject} · ${LIFT_OUTCOMES[last.outcome] ?? last.outcome.toLowerCase()}`;
 }
 
 function formatBytes(bytes: number): string {

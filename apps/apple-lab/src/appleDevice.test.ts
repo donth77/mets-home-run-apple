@@ -88,6 +88,34 @@ describe("toManagedDevice", () => {
     expect(device.nextGame).toMatch(/^NYM @ MIA · /);
     expect(device.snapshot).toBeNull();
   });
+
+  it("reports the schedule between games and the live feed during one, without stale errors", () => {
+    const schedule = { ok: 12, failed: 1, lastMs: 900, lastError: "", checkedAgoMs: 4 * 60_000, nextInMs: 0, refreshMs: 3_600_000, games: 8 };
+    const between = toManagedDevice({ ...status, mode: "UPCOMING", schedule, wifi: { ...status.wifi, rssi: -90 } }, "apple");
+    expect(between.feedLabel).toBe("Schedule");
+    expect(between.feedStatus).toBe("Up to date");
+    expect(between.feedFreshness).toBe("Checked 4 min ago · every hour · 1 retry since power-on");
+    expect(between.feedHealthy).toBe(true);
+    // An old live-feed error means nothing between games.
+    const staleFeedError = toManagedDevice(
+      { ...status, mode: "UPCOMING", schedule, poll: { ...status.poll, lastError: "connection reset by the network" } },
+      "apple",
+    );
+    expect(staleFeedError.feedHealthy).toBe(true);
+    const failing = toManagedDevice(
+      { ...status, mode: "UPCOMING", schedule: { ...schedule, lastError: "connection reset by the network" }, wifi: { ...status.wifi, rssi: -90 } },
+      "apple",
+    );
+    expect(failing.feedStatus).toBe("Problem");
+    expect(failing.feedFreshness).toBe("connection reset by the network · Wi-Fi -90 dBm · retrying");
+    expect(failing.feedHealthy).toBe(false);
+    // Firmware without the schedule block keeps the old feed-only view.
+    const old = toManagedDevice({ ...status, mode: "UPCOMING", schedule: null }, "apple");
+    expect(old.feedLabel).toBe("Game feed");
+    const live = toManagedDevice({ ...status, mode: "LIVE", schedule, poll: { ...status.poll, ok: 40, failed: 2, lastError: "" } }, "apple");
+    expect(live.feedLabel).toBe("Game feed");
+    expect(live.feedFreshness).toBe("Updated 40 times · 2 retries since power-on");
+  });
 });
 
 describe("descriptions", () => {
