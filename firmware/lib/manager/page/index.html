@@ -231,7 +231,7 @@ a.btn{display:inline-block;font-size:15px;font-weight:600;padding:11px 16px;bord
 </label>
 <div class="for-row"><label class="for-label" for="track-for">Plays for</label><select id="track-for"><option value="hr">Home runs</option><option value="win">Mets wins</option><option value="both">Home runs and Mets wins</option><optgroup id="track-for-players" label="One player's home runs"></optgroup></select></div>
 <div class="row"><button id="track-add" type="button" disabled>Add track</button></div>
-<p class="note tiny">MP3, M4A, WAV and most others. Up to 30 MB. The first 90 seconds are kept, converted here on your device to what the Apple plays.</p>
+<p class="note tiny">MP3, M4A, WAV and most others. Up to 30 MB. The first 5 minutes are kept, converted here on your device to what the Apple plays. A home run plays about the first 40 seconds; a win plays the whole track.</p>
 <p class="note tiny"><b>Preview</b> plays a track here, on this device. <b>Play on the Apple</b> plays it through the Apple's own speaker, at the volume set in Settings.</p>
 <div class="progress" id="track-bar" hidden><i id="track-bar-fill"></i></div>
 <p class="note" id="track-note" aria-live="polite"></p>
@@ -478,7 +478,7 @@ $("install").addEventListener("click",function(){var f=$("fw-file").files[0];if(
    PCM WAV, with the bass its small speaker cannot reproduce rolled off. The
    conversion happens here rather than on the Apple, which has no processor time
    to spare during a celebration. */
-var APPLE_RATE=22050,HIGHPASS_HZ=180,HEADROOM=0.89,MAX_SECONDS=90,MAX_SOURCE_BYTES=30*1024*1024;
+var APPLE_RATE=22050,HIGHPASS_HZ=180,HEADROOM=0.89,MAX_SECONDS=300,MAX_SOURCE_BYTES=30*1024*1024;
 var AUDIO_EXT=/\.(mp3|m4a|aac|wav|ogg|oga|flac|aiff?|wma|opus|webm)$/i;
 var PAGE_SIZE=10,PLAYER_PAGE_SIZE=8,trackSort="name",trackPage=1,playerPage=1,trackQuery="",trackFilter="all";try{trackSort=localStorage.getItem("apple-track-sort")||"name";trackFilter=localStorage.getItem("apple-track-filter")||"all"}catch(e){}
 var FILTERS={all:function(){return true},hr:function(t){return !!t.hr},win:function(t){return !!t.win},players:function(t,a){return usedBy(t.file,a.players||[]).length>0},unused:function(t,a){return !t.hr&&!t.win&&!usedBy(t.file,a.players||[]).length}};
