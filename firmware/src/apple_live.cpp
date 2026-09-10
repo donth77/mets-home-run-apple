@@ -114,7 +114,7 @@ constexpr char kProfileName[] = "apple_live";
 #ifdef APPLE_UPDATE_CRASH_TEST
 constexpr char kFirmwareVersion[] = "0.2.2-crashtest";
 #else
-constexpr char kFirmwareVersion[] = "0.3.0";
+constexpr char kFirmwareVersion[] = "0.3.1";
 #endif
 constexpr char kHostname[] = "home-run-apple";
 constexpr char kEasternTz[] = "EST5EDT,M3.2.0,M11.1.0";
@@ -148,7 +148,10 @@ constexpr std::uint32_t kSdClockHz = 20'000'000;
 constexpr int kI2sDmaBuffers = 32;
 constexpr std::uint8_t kMaxTracks = 50;        // about 80 bytes each; the page paginates
 constexpr std::uint8_t kMaxPlayerTracks = 32;
-constexpr std::uint32_t kMaxTrackBytes = 4UL * 1024 * 1024;  // 90 s at 22,050 Hz mono is 3.97 MB
+// A win plays its whole track and holds the Apple up for as long as five
+// minutes (kWinMaxDwellMs), so a track may be that long: 5 min at 22,050 Hz
+// mono is 13.2 MB.
+constexpr std::uint32_t kMaxTrackBytes = 14UL * 1024 * 1024;
 constexpr char kAudioManifestPath[] = "/audio.json";
 // A celebration runs about 46 s, so there is no point holding more of a track
 // than that. Two of these live in PSRAM at once, one per list.

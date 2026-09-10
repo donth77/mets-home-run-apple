@@ -2,7 +2,7 @@
 
 How the physical Home Run Apple is wired. One Arduino Nano ESP32 runs
 everything, from a 12 V power jack on the back of the box; any 12 V supply
-or battery pack will do.
+or battery pack will do. The [parts list](PARTS.md) has every component.
 
 ![Home Run Apple wiring diagram](wiring/home-run-apple-wiring.svg)
 

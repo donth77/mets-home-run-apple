@@ -78,6 +78,7 @@ rebuild them for every change.
 | `packages/` | Browser libraries, UI, 3D scene, protocol, and test fixtures |
 | `docs/ARCHITECTURE.md` | [System map and code boundaries](docs/ARCHITECTURE.md) |
 | `docs/WIRING.md` | [Wiring diagram](docs/WIRING.md) for the physical build |
+| `docs/PARTS.md` | [Parts list](docs/PARTS.md) for the physical build |
 
 ## Inspiration
 
