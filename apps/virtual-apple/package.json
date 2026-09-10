@@ -28,6 +28,7 @@
     "@testing-library/react": "^16.3.2",
     "@types/canvas-confetti": "1.9.0",
     "axe-core": "^4.13.0",
-    "happy-dom": "^20.11.8"
+    "happy-dom": "^20.11.8",
+    "wrangler": "^4.128.0"
   }
 }
