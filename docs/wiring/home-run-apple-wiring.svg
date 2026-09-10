@@ -1,0 +1,206 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="1075" viewBox="0 0 1500 1075" role="img" aria-labelledby="t">
+<title id="t">Home Run Apple wiring</title>
+<rect width="100%" height="100%" fill="white"/>
+<text x="60" y="50" font-family="Helvetica, Arial, sans-serif" font-size="30" fill="#1d2b3a" font-weight="bold" text-anchor="start">Home Run Apple wiring</text>
+<text x="60" y="76" font-family="Helvetica, Arial, sans-serif" font-size="15" fill="#5b6b7c" text-anchor="start">One Nano ESP32, powered from 12 V.</text>
+<rect x="60" y="110" width="180" height="80" rx="6" fill="#f6f8fb" stroke="#8fa1b3" stroke-width="1.5"/>
+<text x="72" y="134" font-family="Helvetica, Arial, sans-serif" font-size="17" fill="#1d2b3a" font-weight="bold" text-anchor="start">12 V power jack</text>
+<text x="72" y="154" font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#5b6b7c" text-anchor="start">any 12 V supply</text>
+<text x="232" y="155" font-family="Helvetica, Arial, sans-serif" font-size="14" fill="#c8322b" text-anchor="end">+</text>
+<circle cx="240" cy="150" r="4" fill="#c8322b"/>
+<polyline points="100,190 100,202" fill="none" stroke="#4a5561" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="88,202 112,202" fill="none" stroke="#4a5561" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="92,207 108,207" fill="none" stroke="#4a5561" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="96,212 104,212" fill="none" stroke="#4a5561" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="112" y="210" font-family="Helvetica, Arial, sans-serif" font-size="14" fill="#4a5561" text-anchor="start">−</text>
+<rect x="290" y="120" width="110" height="60" rx="6" fill="#f6f8fb" stroke="#8fa1b3" stroke-width="1.5"/>
+<text x="302" y="144" font-family="Helvetica, Arial, sans-serif" font-size="17" fill="#1d2b3a" font-weight="bold" text-anchor="start">3 A fuse</text>
+<polyline points="240,150 290,150" fill="none" stroke="#c8322b" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="440" y="120" width="130" height="60" rx="6" fill="#f6f8fb" stroke="#8fa1b3" stroke-width="1.5"/>
+<text x="452" y="144" font-family="Helvetica, Arial, sans-serif" font-size="17" fill="#1d2b3a" font-weight="bold" text-anchor="start">Power switch</text>
+<polyline points="400,150 440,150" fill="none" stroke="#c8322b" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="570,150 1440,150" fill="none" stroke="#c8322b" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="760" y="138" font-family="Helvetica, Arial, sans-serif" font-size="15" fill="#c8322b" font-weight="bold" text-anchor="start">+12 V</text>
+<rect x="1180" y="172" width="240" height="76" rx="6" fill="#f6f8fb" stroke="#8fa1b3" stroke-width="1.5"/>
+<text x="1192" y="196" font-family="Helvetica, Arial, sans-serif" font-size="17" fill="#1d2b3a" font-weight="bold" text-anchor="start">Buck converter</text>
+<text x="1192" y="216" font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#5b6b7c" text-anchor="start">12 V in, 5 V out</text>
+<polyline points="1230,150 1230,172" fill="none" stroke="#c8322b" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="1230" cy="150" r="4" fill="#c8322b"/>
+<text x="1238" y="168" font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#c8322b" text-anchor="start">IN+</text>
+<polyline points="1370,248 1370,290" fill="none" stroke="#b07a00" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="1370" cy="290" r="4" fill="#b07a00"/>
+<text x="1378" y="278" font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#b07a00" text-anchor="start">OUT+</text>
+<polyline points="1310,248 1310,260" fill="none" stroke="#4a5561" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1298,260 1322,260" fill="none" stroke="#4a5561" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1302,265 1318,265" fill="none" stroke="#4a5561" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1306,270 1314,270" fill="none" stroke="#4a5561" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="1300" y="264" font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#4a5561" text-anchor="end">IN−, OUT−</text>
+<polyline points="60,290 1440,290" fill="none" stroke="#b07a00" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="760" y="278" font-family="Helvetica, Arial, sans-serif" font-size="15" fill="#b07a00" font-weight="bold" text-anchor="start">+5 V</text>
+<rect x="600" y="350" width="300" height="660" rx="6" fill="#f6f8fb" stroke="#8fa1b3" stroke-width="1.5"/>
+<text x="612" y="374" font-family="Helvetica, Arial, sans-serif" font-size="17" fill="#1d2b3a" font-weight="bold" text-anchor="start">Arduino Nano ESP32</text>
+<polyline points="660,150 660,350" fill="none" stroke="#c8322b" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="660" cy="150" r="4" fill="#c8322b"/>
+<text x="668" y="342" font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#c8322b" text-anchor="start">VIN</text>
+<polyline points="750,1010 750,1022" fill="none" stroke="#4a5561" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="738,1022 762,1022" fill="none" stroke="#4a5561" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="742,1027 758,1027" fill="none" stroke="#4a5561" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="746,1032 754,1032" fill="none" stroke="#4a5561" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="762" y="1030" font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#4a5561" text-anchor="start">GND (both pins)</text>
+<text x="608" y="475" font-family="Helvetica, Arial, sans-serif" font-size="14" fill="#1d5fa6" text-anchor="start">D4</text>
+<circle cx="600" cy="470" r="4" fill="#1d5fa6"/>
+<text x="608" y="505" font-family="Helvetica, Arial, sans-serif" font-size="14" fill="#1d5fa6" text-anchor="start">D5</text>
+<circle cx="600" cy="500" r="4" fill="#1d5fa6"/>
+<text x="608" y="535" font-family="Helvetica, Arial, sans-serif" font-size="14" fill="#1d5fa6" text-anchor="start">D6</text>
+<circle cx="600" cy="530" r="4" fill="#1d5fa6"/>
+<text x="608" y="765" font-family="Helvetica, Arial, sans-serif" font-size="14" fill="#1d5fa6" text-anchor="start">D3</text>
+<circle cx="600" cy="760" r="4" fill="#1d5fa6"/>
+<text x="608" y="795" font-family="Helvetica, Arial, sans-serif" font-size="14" fill="#4a5561" text-anchor="start">GND</text>
+<circle cx="600" cy="790" r="4" fill="#4a5561"/>
+<text x="892" y="405" font-family="Helvetica, Arial, sans-serif" font-size="14" fill="#1d5fa6" text-anchor="end">A5</text>
+<circle cx="900" cy="400" r="4" fill="#1d5fa6"/>
+<text x="892" y="435" font-family="Helvetica, Arial, sans-serif" font-size="14" fill="#1d5fa6" text-anchor="end">A6</text>
+<circle cx="900" cy="430" r="4" fill="#1d5fa6"/>
+<text x="892" y="465" font-family="Helvetica, Arial, sans-serif" font-size="14" fill="#1d5fa6" text-anchor="end">A7</text>
+<circle cx="900" cy="460" r="4" fill="#1d5fa6"/>
+<text x="892" y="495" font-family="Helvetica, Arial, sans-serif" font-size="14" fill="#1d5fa6" text-anchor="end">A0</text>
+<circle cx="900" cy="490" r="4" fill="#1d5fa6"/>
+<text x="892" y="605" font-family="Helvetica, Arial, sans-serif" font-size="14" fill="#1d5fa6" text-anchor="end">A1</text>
+<circle cx="900" cy="600" r="4" fill="#1d5fa6"/>
+<text x="892" y="635" font-family="Helvetica, Arial, sans-serif" font-size="14" fill="#1d5fa6" text-anchor="end">A2</text>
+<circle cx="900" cy="630" r="4" fill="#1d5fa6"/>
+<text x="892" y="665" font-family="Helvetica, Arial, sans-serif" font-size="14" fill="#1d5fa6" text-anchor="end">A3</text>
+<circle cx="900" cy="660" r="4" fill="#1d5fa6"/>
+<text x="892" y="815" font-family="Helvetica, Arial, sans-serif" font-size="14" fill="#1d5fa6" text-anchor="end">D13</text>
+<circle cx="900" cy="810" r="4" fill="#1d5fa6"/>
+<text x="892" y="845" font-family="Helvetica, Arial, sans-serif" font-size="14" fill="#1d5fa6" text-anchor="end">D11</text>
+<circle cx="900" cy="840" r="4" fill="#1d5fa6"/>
+<text x="892" y="875" font-family="Helvetica, Arial, sans-serif" font-size="14" fill="#1d5fa6" text-anchor="end">D10</text>
+<circle cx="900" cy="870" r="4" fill="#1d5fa6"/>
+<text x="892" y="905" font-family="Helvetica, Arial, sans-serif" font-size="14" fill="#1d5fa6" text-anchor="end">D7</text>
+<circle cx="900" cy="900" r="4" fill="#1d5fa6"/>
+<text x="892" y="935" font-family="Helvetica, Arial, sans-serif" font-size="14" fill="#1d5fa6" text-anchor="end">D8</text>
+<circle cx="900" cy="930" r="4" fill="#1d5fa6"/>
+<text x="892" y="965" font-family="Helvetica, Arial, sans-serif" font-size="14" fill="#1d5fa6" text-anchor="end">D9</text>
+<circle cx="900" cy="960" r="4" fill="#1d5fa6"/>
+<text x="892" y="990" font-family="Helvetica, Arial, sans-serif" font-size="14" fill="#1f7a4d" text-anchor="end">3V3</text>
+<circle cx="900" cy="985" r="4" fill="#1f7a4d"/>
+<rect x="60" y="350" width="320" height="220" rx="6" fill="#f6f8fb" stroke="#8fa1b3" stroke-width="1.5"/>
+<text x="72" y="374" font-family="Helvetica, Arial, sans-serif" font-size="17" fill="#1d2b3a" font-weight="bold" text-anchor="start">L298N motor driver</text>
+<text x="72" y="394" font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#5b6b7c" text-anchor="start">Remove its 5V-EN and ENA jumpers</text>
+<polyline points="120,290 120,350" fill="none" stroke="#b07a00" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="120" cy="290" r="4" fill="#b07a00"/>
+<text x="128" y="344" font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#b07a00" text-anchor="start">+5V</text>
+<polyline points="590,150 590,325 200,325 200,350" fill="none" stroke="#c8322b" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="590" cy="150" r="4" fill="#c8322b"/>
+<text x="208" y="344" font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#c8322b" text-anchor="start">+12V</text>
+<text x="372" y="475" font-family="Helvetica, Arial, sans-serif" font-size="14" fill="#1d5fa6" text-anchor="end">IN1</text>
+<circle cx="380" cy="470" r="4" fill="#1d5fa6"/>
+<polyline points="380,470 600,470" fill="none" stroke="#1d5fa6" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="372" y="505" font-family="Helvetica, Arial, sans-serif" font-size="14" fill="#1d5fa6" text-anchor="end">IN2</text>
+<circle cx="380" cy="500" r="4" fill="#1d5fa6"/>
+<polyline points="380,500 600,500" fill="none" stroke="#1d5fa6" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="372" y="535" font-family="Helvetica, Arial, sans-serif" font-size="14" fill="#1d5fa6" text-anchor="end">ENA</text>
+<circle cx="380" cy="530" r="4" fill="#1d5fa6"/>
+<polyline points="380,530 600,530" fill="none" stroke="#1d5fa6" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="320,570 320,582" fill="none" stroke="#4a5561" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="308,582 332,582" fill="none" stroke="#4a5561" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="312,587 328,587" fill="none" stroke="#4a5561" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="316,592 324,592" fill="none" stroke="#4a5561" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="332" y="590" font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#4a5561" text-anchor="start">GND</text>
+<circle cx="120" cy="570" r="4" fill="#c8322b"/>
+<circle cx="200" cy="570" r="4" fill="#222222"/>
+<text x="128" y="590" font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#c8322b" text-anchor="start">OUT1</text>
+<text x="208" y="590" font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#222222" text-anchor="start">OUT2</text>
+<rect x="60" y="610" width="320" height="80" rx="6" fill="#f6f8fb" stroke="#8fa1b3" stroke-width="1.5"/>
+<text x="72" y="634" font-family="Helvetica, Arial, sans-serif" font-size="17" fill="#1d2b3a" font-weight="bold" text-anchor="start">Linear actuator</text>
+<text x="72" y="654" font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#5b6b7c" text-anchor="start">12 V, two wires, with its own end stops</text>
+<polyline points="120,570 120,610" fill="none" stroke="#c8322b" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="200,570 200,610" fill="none" stroke="#222222" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="72" y="676" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#5b6b7c" text-anchor="start">red lead → OUT1 (nearest the heatsink), black lead → OUT2</text>
+<rect x="60" y="720" width="320" height="140" rx="6" fill="#f6f8fb" stroke="#8fa1b3" stroke-width="1.5"/>
+<text x="72" y="744" font-family="Helvetica, Arial, sans-serif" font-size="17" fill="#1d2b3a" font-weight="bold" text-anchor="start">Reset button</text>
+<text x="72" y="764" font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#5b6b7c" text-anchor="start">lit, momentary</text>
+<text x="372" y="765" font-family="Helvetica, Arial, sans-serif" font-size="14" fill="#1d5fa6" text-anchor="end">switch</text>
+<circle cx="380" cy="760" r="4" fill="#1d5fa6"/>
+<polyline points="380,760 600,760" fill="none" stroke="#1d5fa6" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="372" y="795" font-family="Helvetica, Arial, sans-serif" font-size="14" fill="#1d5fa6" text-anchor="end">switch</text>
+<circle cx="380" cy="790" r="4" fill="#1d5fa6"/>
+<polyline points="380,790 600,790" fill="none" stroke="#4a5561" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="72" y="826" font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#c8322b" text-anchor="start">lamp +  →  +12 V</text>
+<text x="72" y="846" font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#4a5561" text-anchor="start">lamp −  →  ground</text>
+<rect x="1130" y="340" width="300" height="160" rx="6" fill="#f6f8fb" stroke="#8fa1b3" stroke-width="1.5"/>
+<text x="1142" y="364" font-family="Helvetica, Arial, sans-serif" font-size="17" fill="#1d2b3a" font-weight="bold" text-anchor="start">microSD card reader</text>
+<text x="1142" y="384" font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#5b6b7c" text-anchor="start">Adafruit 254, on its own SPI bus</text>
+<polyline points="1190,290 1190,340" fill="none" stroke="#b07a00" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="1190" cy="290" r="4" fill="#b07a00"/>
+<text x="1198" y="334" font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#b07a00" text-anchor="start">5V</text>
+<text x="1138" y="405" font-family="Helvetica, Arial, sans-serif" font-size="14" fill="#1d5fa6" text-anchor="start">CLK</text>
+<circle cx="1130" cy="400" r="4" fill="#1d5fa6"/>
+<polyline points="900,400 1130,400" fill="none" stroke="#1d5fa6" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="1138" y="435" font-family="Helvetica, Arial, sans-serif" font-size="14" fill="#1d5fa6" text-anchor="start">DO</text>
+<circle cx="1130" cy="430" r="4" fill="#1d5fa6"/>
+<polyline points="900,430 1130,430" fill="none" stroke="#1d5fa6" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="1138" y="465" font-family="Helvetica, Arial, sans-serif" font-size="14" fill="#1d5fa6" text-anchor="start">DI</text>
+<circle cx="1130" cy="460" r="4" fill="#1d5fa6"/>
+<polyline points="900,460 1130,460" fill="none" stroke="#1d5fa6" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="1138" y="495" font-family="Helvetica, Arial, sans-serif" font-size="14" fill="#1d5fa6" text-anchor="start">CS</text>
+<circle cx="1130" cy="490" r="4" fill="#1d5fa6"/>
+<polyline points="900,490 1130,490" fill="none" stroke="#1d5fa6" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1360,500 1360,512" fill="none" stroke="#4a5561" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1348,512 1372,512" fill="none" stroke="#4a5561" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1352,517 1368,517" fill="none" stroke="#4a5561" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1356,522 1364,522" fill="none" stroke="#4a5561" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="1372" y="520" font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#4a5561" text-anchor="start">GND</text>
+<rect x="1130" y="528" width="300" height="172" rx="6" fill="#f6f8fb" stroke="#8fa1b3" stroke-width="1.5"/>
+<text x="1142" y="552" font-family="Helvetica, Arial, sans-serif" font-size="17" fill="#1d2b3a" font-weight="bold" text-anchor="start">Amplifier</text>
+<text x="1142" y="572" font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#5b6b7c" text-anchor="start">MAX98357A</text>
+<text x="1330" y="588" font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#b07a00" text-anchor="start">VIN  ←  +5 V</text>
+<text x="1138" y="605" font-family="Helvetica, Arial, sans-serif" font-size="14" fill="#1d5fa6" text-anchor="start">BCLK</text>
+<circle cx="1130" cy="600" r="4" fill="#1d5fa6"/>
+<polyline points="900,600 1130,600" fill="none" stroke="#1d5fa6" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="1138" y="635" font-family="Helvetica, Arial, sans-serif" font-size="14" fill="#1d5fa6" text-anchor="start">LRC</text>
+<circle cx="1130" cy="630" r="4" fill="#1d5fa6"/>
+<polyline points="900,630 1130,630" fill="none" stroke="#1d5fa6" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="1138" y="665" font-family="Helvetica, Arial, sans-serif" font-size="14" fill="#1d5fa6" text-anchor="start">DIN</text>
+<circle cx="1130" cy="660" r="4" fill="#1d5fa6"/>
+<polyline points="900,660 1130,660" fill="none" stroke="#1d5fa6" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="1142" y="690" font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#1d2b3a" text-anchor="start">SPK+ and SPK−  →  4 Ω speaker</text>
+<polyline points="1360,700 1360,712" fill="none" stroke="#4a5561" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1348,712 1372,712" fill="none" stroke="#4a5561" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1352,717 1368,717" fill="none" stroke="#4a5561" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1356,722 1364,722" fill="none" stroke="#4a5561" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="1372" y="720" font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#4a5561" text-anchor="start">GND</text>
+<rect x="1130" y="740" width="300" height="270" rx="6" fill="#f6f8fb" stroke="#8fa1b3" stroke-width="1.5"/>
+<text x="1142" y="764" font-family="Helvetica, Arial, sans-serif" font-size="17" fill="#1d2b3a" font-weight="bold" text-anchor="start">Display</text>
+<text x="1142" y="784" font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#5b6b7c" text-anchor="start">Waveshare 2″ ST7789</text>
+<text x="1138" y="815" font-family="Helvetica, Arial, sans-serif" font-size="14" fill="#1d5fa6" text-anchor="start">SCK</text>
+<circle cx="1130" cy="810" r="4" fill="#1d5fa6"/>
+<polyline points="900,810 1130,810" fill="none" stroke="#1d5fa6" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="1138" y="845" font-family="Helvetica, Arial, sans-serif" font-size="14" fill="#1d5fa6" text-anchor="start">MOSI</text>
+<circle cx="1130" cy="840" r="4" fill="#1d5fa6"/>
+<polyline points="900,840 1130,840" fill="none" stroke="#1d5fa6" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="1138" y="875" font-family="Helvetica, Arial, sans-serif" font-size="14" fill="#1d5fa6" text-anchor="start">CS</text>
+<circle cx="1130" cy="870" r="4" fill="#1d5fa6"/>
+<polyline points="900,870 1130,870" fill="none" stroke="#1d5fa6" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="1138" y="905" font-family="Helvetica, Arial, sans-serif" font-size="14" fill="#1d5fa6" text-anchor="start">DC</text>
+<circle cx="1130" cy="900" r="4" fill="#1d5fa6"/>
+<polyline points="900,900 1130,900" fill="none" stroke="#1d5fa6" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="1138" y="935" font-family="Helvetica, Arial, sans-serif" font-size="14" fill="#1d5fa6" text-anchor="start">RST</text>
+<circle cx="1130" cy="930" r="4" fill="#1d5fa6"/>
+<polyline points="900,930 1130,930" fill="none" stroke="#1d5fa6" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="1138" y="965" font-family="Helvetica, Arial, sans-serif" font-size="14" fill="#1d5fa6" text-anchor="start">BL</text>
+<circle cx="1130" cy="960" r="4" fill="#1d5fa6"/>
+<polyline points="900,960 1130,960" fill="none" stroke="#1d5fa6" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="940" y="803" width="60" height="14" fill="white" stroke="#1d5fa6" stroke-width="2"/>
+<text x="970" y="798" font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#1d5fa6" text-anchor="middle">100 Ω</text>
+<text x="1138" y="990" font-family="Helvetica, Arial, sans-serif" font-size="14" fill="#1f7a4d" text-anchor="start">VCC</text>
+<circle cx="1130" cy="985" r="4" fill="#1f7a4d"/>
+<polyline points="900,985 1130,985" fill="none" stroke="#1f7a4d" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1360,1010 1360,1022" fill="none" stroke="#4a5561" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1348,1022 1372,1022" fill="none" stroke="#4a5561" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1352,1027 1368,1027" fill="none" stroke="#4a5561" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1356,1032 1364,1032" fill="none" stroke="#4a5561" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="1372" y="1030" font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#4a5561" text-anchor="start">GND</text>
+<text x="600" y="1058" font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#5b6b7c" text-anchor="start">Optional: WS2812B LED sticks on A4; INA219 current sensor on the 12 V lead after the switch.</text>
+</svg>

@@ -107,6 +107,7 @@ vi.mock("@apple/apple-3d", () => ({
     );
   },
   getTrademarkFreeTeamLogoUrl: async () => null,
+  teamLogoNeedsLightBackdrop: () => false,
   useActuatorSimulation: (positionMm: number) => ({
     positionMm: actuatorTestState.positionMm ?? positionMm,
   }),

@@ -7,6 +7,10 @@ The main target, `nano_esp32_apple`, follows Mets games over Wi-Fi and runs the
 display on its own. It records motion commands but keeps the motor pins low.
 `nano_esp32_apple_motion` uses the same code and drives the commissioned lift.
 
+The [wiring diagram](../docs/WIRING.md) shows how the Nano, display, card,
+amplifier, motor driver and button connect. Its pins are the ones defined in
+`include/apple/firmware/board_pins.hpp` and at the top of `src/apple_live.cpp`.
+
 ## Build and test
 
 You need pnpm 10, CMake, and a C++17 compiler for the native tests. From the
@@ -95,9 +99,16 @@ Apple Manager controls raised time, motor enable, pause, screen sleep,
 brightness, time zone, and its optional password lock. Settings and Wi-Fi
 credentials live in flash.
 
-A short press of the reset button on `D3` shows the address and setup code. Hold
-it for ten seconds to erase Wi-Fi and settings. If the saved network cannot be
-reached, the setup network reopens after about 45 seconds.
+The owner button on `D3` does three things, by how long it is held:
+
+| Hold | What happens |
+| --- | --- |
+| Tap (under a second) | Shows the Apple's address and setup code for a minute. When Apple Lab has asked to run a test, the tap approves that one run instead. |
+| 1 to 3 seconds | The screen says `RELEASE TO RESTART`; letting go restarts the Apple with its Wi-Fi and settings kept. Refused during a celebration. |
+| 10 seconds | The screen counts down, then the Apple erases its Wi-Fi and settings and reopens the setup network. Letting go early cancels. |
+
+If the saved network cannot be reached, the setup network reopens after about
+45 seconds.
 
 The full owner walkthrough is at [metsapple.com/setup](https://metsapple.com/setup/).
 

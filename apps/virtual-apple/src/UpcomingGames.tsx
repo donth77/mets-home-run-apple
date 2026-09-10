@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getTrademarkFreeTeamLogoUrl } from "@apple/apple-3d";
+import { getTrademarkFreeTeamLogoUrl, teamLogoNeedsLightBackdrop } from "@apple/apple-3d";
 import { gameDateParts, timeZoneAbbreviation } from "./gameDateDisplay";
 import type { UpcomingMetsGame } from "./useMetsSchedule";
 
@@ -18,7 +18,11 @@ function OpponentLogo({ abbreviation, teamId }: { abbreviation: string; teamId: 
   }, [teamId]);
 
   return (
-    <span className="upcoming-game__logo" aria-hidden="true">
+    <span
+      className="upcoming-game__logo"
+      data-light-backdrop={source !== null && teamLogoNeedsLightBackdrop(teamId, abbreviation)}
+      aria-hidden="true"
+    >
       {source ? <img src={source} alt="" /> : <b>{abbreviation}</b>}
     </span>
   );

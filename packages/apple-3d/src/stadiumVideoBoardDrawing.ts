@@ -4,7 +4,7 @@ import { stadiumEventPanelText } from "./stadiumEventPanel";
 import { stadiumHeaderText, stadiumVenueLabel } from "./stadiumHeader";
 import { stadiumInningScores, stadiumInningWindow } from "./stadiumInnings";
 import { stadiumMatchupFooter } from "./stadiumMatchup";
-import { getTrademarkFreeTeamLogoUrl } from "./teamLogos";
+import { getTrademarkFreeTeamLogoUrl, teamLogoNeedsLightBackdrop } from "./teamLogos";
 import type { StadiumScoreboardData } from "./types";
 
 const teamLogoCache = new Map<number, Promise<HTMLImageElement | null>>();
@@ -225,6 +225,15 @@ export function drawStadiumScoreboard(
       context.fillRect(34, y - 64, 8, 118);
     }
 
+    if (logo && teamLogoNeedsLightBackdrop(team.id, team.abbreviation)) {
+      context.fillStyle = "#e7edf3";
+      context.strokeStyle = "#b9c9d7";
+      context.lineWidth = 2;
+      context.beginPath();
+      context.roundRect(52, y - 57, 102, 102, 22);
+      context.fill();
+      context.stroke();
+    }
     if (logo) {
       drawContainedTeamLogo(context, logo, 62, y - 47, 82, 82);
     } else {

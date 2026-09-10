@@ -1,7 +1,7 @@
 # Architecture
 
 The Nano ESP32 runs the physical Apple. It reads the game, decides whether an
-event counts, draws the screen, and controls the lift.
+event counts, draws the screen, and controls the actuator.
 
 ![Mets Home Run Apple architecture](assets/architecture.svg)
 
@@ -9,7 +9,7 @@ event counts, draws the screen, and controls the lift.
 
 | Part | Runs on | Job |
 | --- | --- | --- |
-| Physical Apple | Nano ESP32 | Follow the game, run the display, and control the lift |
+| Physical Apple | Nano ESP32 | Follow the game, run the display, and control the actuator |
 | Apple Manager | Web page served by the Nano | Set up Wi-Fi, show device status, and change owner settings |
 | Apple Lab | Developer's computer | Simulate games, replay history, inspect feeds, and run guarded USB tests |
 | Virtual Apple | Public website and edge worker | Show the game in a 3D Citi Field scene and send optional alerts |

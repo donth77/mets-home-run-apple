@@ -24,7 +24,7 @@ export type { ActuatorMotionState } from "./actuatorPhysics";
 export { useActuatorSimulation } from "./useActuatorSimulation";
 export type { ActuatorSimulationOptions } from "./useActuatorSimulation";
 export { APPLE_MODEL_URL, CITI_BASE_MODEL_URL, METS_DECAL_URL } from "./assets";
-export { getTrademarkFreeTeamLogoUrl } from "./teamLogos";
+export { getTrademarkFreeTeamLogoUrl, teamLogoNeedsLightBackdrop } from "./teamLogos";
 export { stadiumCelebrationKind } from "./stadiumCelebration";
 export type { StadiumCelebrationKind } from "./stadiumCelebration";
 import "./apple-stage.css";

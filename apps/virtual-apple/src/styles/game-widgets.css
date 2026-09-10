@@ -212,6 +212,16 @@
   width: 30px;
 }
 
+.upcoming-game__logo[data-light-backdrop="true"] {
+  background: #e7edf3;
+  border-color: #b9c9d7;
+}
+
+.upcoming-game__logo[data-light-backdrop="true"] img {
+  height: 26px;
+  width: 26px;
+}
+
 .upcoming-game__logo b {
   color: #bcd0df;
   font-size: 0.62rem;

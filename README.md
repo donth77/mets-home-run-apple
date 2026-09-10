@@ -15,6 +15,19 @@ This fan project is inspired by the Home Run Apple at Citi Field. The physical
 build follows Mets games live, shows the score, and raises for confirmed Mets home
 runs and wins. Once it has Wi-Fi, it runs on its own without a computer or browser.
 
+<table align="center">
+  <tr>
+    <td align="center" valign="top">
+      <img src="docs/assets/physical-apple-home-run.jpg" height="360" alt="The physical Home Run Apple raised on its box for a home run, its screen reading HOME RUN" /><br />
+      <sub><strong>Physical Apple build</strong> </sub>
+    </td>
+    <td align="center" valign="top">
+      <img src="docs/assets/virtual-apple-mets-win.jpg" height="360" alt="The Virtual Apple site during a Mets win: the scoreboard reads NYM 4, ATL 2, the big screen says METS WIN! and the Apple rises through confetti" /><br />
+      <sub><strong>Virtual Apple</strong> · <a href="https://metsapple.com/">metsapple.com</a></sub>
+    </td>
+  </tr>
+</table>
+
 | | |
 | --- | --- |
 | [Physical Apple](firmware/README.md) | Autonomous Nano ESP32 firmware, display, and lift control |
@@ -64,6 +77,7 @@ rebuild them for every change.
 | `firmware/` | Shared C++, Nano firmware, native tests, and Apple Manager |
 | `packages/` | Browser libraries, UI, 3D scene, protocol, and test fixtures |
 | `docs/ARCHITECTURE.md` | [System map and code boundaries](docs/ARCHITECTURE.md) |
+| `docs/WIRING.md` | [Wiring diagram](docs/WIRING.md) for the physical build |
 
 ## Inspiration
 

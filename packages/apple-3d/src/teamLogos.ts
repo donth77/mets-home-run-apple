@@ -1,7 +1,15 @@
+import { prepareTeamLogoPixels, removeEmbeddedTeamLogoTrademark } from "./teamLogoArtwork";
+
 const TEAM_LOGO_SIZE = 256;
 const TEAM_LOGO_MAX_BYTES = 256 * 1024;
 const TEAM_LOGO_TIMEOUT_MS = 10_000;
 const teamLogoUrlCache = new Map<number, Promise<string | null>>();
+
+// These primary marks are solid navy with no contrasting edge. Keep other
+// artwork, including the Mets, on its existing background.
+export function teamLogoNeedsLightBackdrop(teamId?: number, abbreviation = "") {
+  return teamId === 147 || teamId === 116 || ["NYY", "DET"].includes(abbreviation.trim().toUpperCase());
+}
 
 function assertTeamId(teamId: number) {
   if (!Number.isSafeInteger(teamId) || teamId <= 0) {
@@ -95,81 +103,11 @@ function loadImage(source: string) {
   });
 }
 
-function clearLikelyTrademarkComponents(context: CanvasRenderingContext2D, width: number, height: number) {
-  const image = context.getImageData(0, 0, width, height);
-  const visited = new Uint8Array(width * height);
-  const components: number[][] = [];
-  let opaquePixels = 0;
-
-  for (let pixel = 0; pixel < visited.length; pixel += 1) {
-    if (image.data[pixel * 4 + 3] >= 24) opaquePixels += 1;
-  }
-
-  for (let start = 0; start < visited.length; start += 1) {
-    if (visited[start] || image.data[start * 4 + 3] < 24) continue;
-
-    const queue = [start];
-    const component: number[] = [];
-    visited[start] = 1;
-
-    for (let cursor = 0; cursor < queue.length; cursor += 1) {
-      const pixel = queue[cursor];
-      component.push(pixel);
-      const x = pixel % width;
-      const y = Math.floor(pixel / width);
-
-      for (let offsetY = -1; offsetY <= 1; offsetY += 1) {
-        for (let offsetX = -1; offsetX <= 1; offsetX += 1) {
-          if (offsetX === 0 && offsetY === 0) continue;
-          const nextX = x + offsetX;
-          const nextY = y + offsetY;
-          if (nextX < 0 || nextX >= width || nextY < 0 || nextY >= height) continue;
-          const next = nextY * width + nextX;
-          if (visited[next] || image.data[next * 4 + 3] < 24) continue;
-          visited[next] = 1;
-          queue.push(next);
-        }
-      }
-    }
-
-    components.push(component);
-  }
-
-  const largestComponent = Math.max(0, ...components.map((component) => component.length));
-  const smallComponentLimit = Math.max(48, Math.floor(opaquePixels * 0.025));
-
-  components.forEach((component) => {
-    if (component.length === largestComponent || component.length > smallComponentLimit) return;
-
-    let minX = width;
-    let minY = height;
-    let maxX = 0;
-    let maxY = 0;
-    component.forEach((pixel) => {
-      const x = pixel % width;
-      const y = Math.floor(pixel / width);
-      minX = Math.min(minX, x);
-      minY = Math.min(minY, y);
-      maxX = Math.max(maxX, x);
-      maxY = Math.max(maxY, y);
-    });
-
-    const inLowerRight = minX >= width * 0.55 && minY >= height * 0.48;
-    const nearOuterEdge = maxX >= width * 0.86 || maxY >= height * 0.86;
-    if (!inLowerRight || !nearOuterEdge) return;
-
-    component.forEach((pixel) => {
-      image.data[pixel * 4 + 3] = 0;
-    });
-  });
-
-  context.putImageData(image, 0, 0);
-}
-
 async function buildTrademarkFreeTeamLogoUrl(teamId: number) {
   if (typeof document === "undefined" || typeof Image === "undefined") return null;
 
-  const image = await loadImage(svgDataUrl(await fetchTeamLogoSvg(teamId)));
+  const source = removeEmbeddedTeamLogoTrademark(await fetchTeamLogoSvg(teamId), teamId);
+  const image = await loadImage(svgDataUrl(source));
   if (!image) return null;
 
   const canvas = document.createElement("canvas");
@@ -184,7 +122,10 @@ async function buildTrademarkFreeTeamLogoUrl(teamId: number) {
   const drawWidth = sourceWidth * scale;
   const drawHeight = sourceHeight * scale;
   context.drawImage(image, (TEAM_LOGO_SIZE - drawWidth) / 2, (TEAM_LOGO_SIZE - drawHeight) / 2, drawWidth, drawHeight);
-  clearLikelyTrademarkComponents(context, TEAM_LOGO_SIZE, TEAM_LOGO_SIZE);
+  const pixels = context.getImageData(0, 0, TEAM_LOGO_SIZE, TEAM_LOGO_SIZE);
+  const offset = prepareTeamLogoPixels(pixels);
+  context.clearRect(0, 0, TEAM_LOGO_SIZE, TEAM_LOGO_SIZE);
+  context.putImageData(pixels, offset.x, offset.y);
   return canvas.toDataURL("image/png");
 }
 
