@@ -22,7 +22,6 @@
 #include "apple/firmware/lab_fixtures.generated.hpp"
 #include "apple/firmware/status_snapshot.hpp"
 #include "apple/firmware/release_pick.hpp"
-#include <AudioFileSourceBuffer.h>
 #include <AudioFileSourceSD.h>
 #include <AudioGeneratorWAV.h>
 #include <AudioOutputI2S.h>
@@ -70,6 +69,7 @@ inline constexpr char kWifiPassword[] = "";
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <cstdarg>
 #include <ctime>
 #include <new>
 #include <optional>
@@ -140,9 +140,6 @@ constexpr std::uint8_t kI2sBitClockPin = A1;
 constexpr std::uint8_t kI2sWordSelectPin = A2;
 constexpr std::uint8_t kI2sDataPin = A3;
 constexpr std::uint32_t kSdClockHz = 20'000'000;
-// AudioFileSourceBuffer refills through a blocking read, so buffer size sets
-// the worst-case stall. Small on purpose.
-constexpr std::size_t kAudioBufferBytes = 8 * 1024;
 // About 190 ms of queued audio, at 16 KB of DMA memory. Playback has a core to
 // itself, so the queue only has to absorb Wi-Fi bursts rather than the
 // celebration display, which occupies its own core for ~24 ms a frame. A
@@ -494,7 +491,6 @@ struct CardLock {
 AudioOutputI2S* audio_out = nullptr;
 AudioGeneratorWAV* audio_gen = nullptr;
 AudioFileSource* audio_file = nullptr;
-AudioFileSourceBuffer* audio_buffered = nullptr;
 // The same rounded fixed-point scaling as apply_volume, on a run of samples.
 void scale_samples(std::int16_t* samples, std::uint32_t count, std::int32_t scale) {
   for (std::uint32_t i = 0; i < count; ++i) {
@@ -506,11 +502,29 @@ void scale_samples(std::int16_t* samples, std::uint32_t count, std::int32_t scal
 // track played straight off the card is scaled the same way as one held in
 // memory. Only bytes from the data chunk onward are touched; a read that ends
 // halfway through a sample carries the odd byte to the next call.
+volatile std::uint32_t audio_short_read_at = 0;  // where the card last returned nothing mid-file
+// The track fades out over the last seconds before the Apple comes down
+// instead of being cut. The main loop sets when the fade should start (0 =
+// none); the audio task applies it and stops the track once it is silent.
+constexpr std::uint32_t kAudioFadeMs = 3000;
+volatile std::uint32_t audio_fade_at_ms = 0;
+volatile bool audio_faded_out = false;
+
+// A track on the card, read ahead in one piece and scaled for volume from
+// where the samples begin. This replaces the library's buffered reader, which
+// loses its place after the header's seek: it hands the decoder bytes from
+// 8 KB into the song where the data size belongs, so a track that opens with
+// silence reports zero bytes of music and never plays.
 class AudioFileSourceScaled : public AudioFileSource {
  public:
-  AudioFileSourceScaled(AudioFileSource* inner, std::uint32_t data_at, std::uint8_t percent)
+  static constexpr std::size_t kBufferBytes = 16 * 1024;
+  static constexpr std::size_t kLowWater = 4 * 1024;  // refill once this little is left
+
+  AudioFileSourceScaled(AudioFileSource* inner, std::uint32_t data_at, std::uint8_t percent, bool scale_volume = true)
       : inner_(inner), data_at_(data_at), scale_((static_cast<std::int32_t>(percent) * 4096) / 100),
-        bypass_(percent >= 100) {}
+        bypass_(percent >= 100), scale_volume_(scale_volume),
+        buffer_(static_cast<std::uint8_t*>(malloc(kBufferBytes))) {}
+  ~AudioFileSourceScaled() override { free(buffer_); }
   bool open(const char*) override { return true; }
   bool isOpen() override { return inner_ != nullptr && inner_->isOpen(); }
   bool close() override { return inner_ != nullptr && inner_->close(); }
@@ -519,37 +533,69 @@ class AudioFileSourceScaled : public AudioFileSource {
     if (dir == SEEK_SET) target = static_cast<uint32_t>(pos);
     else if (dir == SEEK_CUR) target = static_cast<uint32_t>(static_cast<int32_t>(pos_) + pos);
     else target = inner_->getSize() + pos;
+    // Forward within what is already read: just skip it.
+    if (target >= pos_ && target - pos_ <= held_) {
+      const uint32_t skip = target - pos_;
+      head_ += skip;
+      held_ -= skip;
+      pos_ = target;
+      have_carry_ = false;
+      return true;
+    }
     CardLock lock;
     if (!inner_->seek(static_cast<int32_t>(target), SEEK_SET)) return false;
+    head_ = held_ = 0;
     pos_ = target;
     have_carry_ = false;
     return true;
   }
   uint32_t getSize() override { return inner_->getSize(); }
   uint32_t getPos() override { return pos_; }
-  bool loop() override { return inner_->loop(); }
+  bool loop() override {
+    if (held_ < kLowWater) refill();
+    return inner_->loop();
+  }
   uint32_t read(void* data, uint32_t len) override {
-    uint32_t got = 0;
-    {
-      CardLock lock;  // the buffered source may refill from the card here
-      got = inner_->read(data, len);
+    if (buffer_ == nullptr) return 0;
+    if (held_ < len) refill();
+    const uint32_t got = static_cast<uint32_t>(std::min<std::size_t>(len, held_));
+    std::memcpy(data, buffer_ + head_, got);
+    head_ += got;
+    held_ -= got;
+    // The owner may move the volume while the song plays; a held copy was
+    // scaled when it was loaded, so only the fade applies to it.
+    scale_ = scale_volume_ ? (static_cast<std::int32_t>(settings.volume) * 4096) / 100 : 4096;
+    std::int32_t fade = 4096;
+    const std::uint32_t fade_at = audio_fade_at_ms;
+    if (fade_at != 0) {
+      const std::int32_t into = static_cast<std::int32_t>(millis() - fade_at);
+      if (into >= static_cast<std::int32_t>(kAudioFadeMs)) {
+        fade = 0;
+        audio_faded_out = true;
+      } else if (into > 0) {
+        fade = 4096 - (into * 4096) / static_cast<std::int32_t>(kAudioFadeMs);
+      }
     }
-    const uint32_t start = pos_;  // where these bytes sit in the file, by our own count
+    const std::int32_t effective = (scale_ * fade) >> 12;
+    bypass_ = effective >= 4096;
+    const uint32_t start = pos_;  // where these bytes sit in the file
+    if (got == 0 && len > 0 && pos_ + 1 < inner_->getSize()) audio_short_read_at = pos_;
     pos_ += got;
     if (bypass_ || got == 0) return got;
+    const std::int32_t scale_now = effective;
     auto* bytes = static_cast<std::uint8_t*>(data);
     uint32_t first = start < data_at_ ? data_at_ - start : 0;  // header bytes pass untouched
     if (first >= got) return got;
     if (have_carry_) {
       // finish the sample split across the previous read
       std::int16_t sample = static_cast<std::int16_t>(carry_ | (bytes[first] << 8));
-      scale_samples(&sample, 1, scale_);
+      scale_samples(&sample, 1, scale_now);
       bytes[first] = static_cast<std::uint8_t>(sample >> 8);
       have_carry_ = false;
       ++first;
     }
     const uint32_t count = (got - first) / 2;
-    scale_samples(reinterpret_cast<std::int16_t*>(bytes + first), count, scale_);
+    scale_samples(reinterpret_cast<std::int16_t*>(bytes + first), count, scale_now);
     if ((got - first) & 1) {
       carry_ = bytes[got - 1];
       have_carry_ = true;
@@ -558,10 +604,25 @@ class AudioFileSourceScaled : public AudioFileSource {
   }
 
  private:
+  // Move what is left to the front and top the buffer up from the card.
+  void refill() {
+    if (buffer_ == nullptr || eof_) return;
+    if (held_ > 0 && head_ > 0) std::memmove(buffer_, buffer_ + head_, held_);
+    head_ = 0;
+    CardLock lock;
+    const uint32_t got = inner_->read(buffer_ + held_, static_cast<uint32_t>(kBufferBytes - held_));
+    if (got == 0) eof_ = true;
+    held_ += got;
+  }
   AudioFileSource* inner_;
   std::uint32_t data_at_;
   std::int32_t scale_;
   bool bypass_;
+  bool scale_volume_;
+  std::uint8_t* buffer_;
+  std::size_t head_{0};  // next unread byte in buffer_
+  std::size_t held_{0};  // unread bytes in buffer_
+  bool eof_{false};
   std::uint8_t carry_{0};
   bool have_carry_{false};
   uint32_t pos_{0};
@@ -619,6 +680,10 @@ TaskHandle_t audio_task = nullptr;
 // is drawing, so the queue stalls however deep it is. It must be installed
 // from this task.
 volatile bool audio_task_should_play = false;
+// Set by the audio task when a track streamed off the card stopped early
+// and the held copy took over; the main loop shortens the raised dwell.
+volatile bool audio_stream_broke = false;
+std::uint32_t audio_stream_size = 0;      // the streamed file's length, noted while it is still open
 volatile bool audio_task_playing = false;
 volatile bool audio_request_is_win = false;
 // A win with the whole-track setting streams its file off the card rather
@@ -724,6 +789,21 @@ bool clock_valid() { return wall_epoch() > 1'700'000'000; }
 
 void start_replay(bool win = false);
 bool motion_idle();
+GameSnapshot with_replay_score(const GameSnapshot& snapshot);
+// A score for the win replay's card, so a real game's ending can be played
+// back: the recorded game supplies the plays, this supplies the picture.
+struct ReplayScore {
+  bool active{false};
+  char away[5] = "";
+  char home[5] = "";
+  unsigned away_runs{0};
+  unsigned home_runs{0};
+  bool mets_home{false};
+  char venue[40] = "";
+  char away_name[32] = "";
+  char home_name[32] = "";
+};
+ReplayScore replay_score;
 
 // The last traces, kept for the Lab and the Manager: what the Apple did while
 // nobody was watching, starting with why it booted. Entries logged before the
@@ -1000,7 +1080,8 @@ void fill_status(JsonDocument& doc) {
     doc["game"] = nullptr;
   }
   if (projector.has_projection()) {
-    const GameSnapshot& snapshot = projector.snapshot();
+    const GameSnapshot& snapshot =
+        replay_active && replay_score.active ? with_replay_score(projector.snapshot()) : projector.snapshot();
     JsonObject node = doc["snapshot"].to<JsonObject>();
     apple::firmware::write_status_snapshot(node, snapshot);
     node["cursor"] = tracker.cursor();
@@ -1161,7 +1242,35 @@ void show_upcoming(const ScheduleGame& next) {
   request_redraw();
 }
 
+// A win replay asked to show a real game's ending: the recorded game supplies
+// the plays, this puts the requested teams and score on every screen.
+GameSnapshot with_replay_score(const GameSnapshot& snapshot) {
+  GameSnapshot shown = snapshot;
+  shown.away.abbreviation = replay_score.away;
+  shown.away.runs = static_cast<std::int32_t>(replay_score.away_runs);
+  shown.away.id = replay_score.mets_home ? 0 : apple::mlb_feed::kMetsTeamId;
+  shown.home.abbreviation = replay_score.home;
+  shown.home.runs = static_cast<std::int32_t>(replay_score.home_runs);
+  shown.home.id = replay_score.mets_home ? apple::mlb_feed::kMetsTeamId : 0;
+  if (replay_score.venue[0] != '\0') shown.venue = replay_score.venue;
+  if (replay_score.away_name[0] != '\0') shown.away.name = replay_score.away_name;
+  if (replay_score.home_name[0] != '\0') shown.home.name = replay_score.home_name;
+  return shown;
+}
+
+void show_snapshot(const GameSnapshot& snapshot);
+
+void show_snapshot_as_is(const GameSnapshot& snapshot);
+
 void show_snapshot(const GameSnapshot& snapshot) {
+  if (replay_active && replay_score.active) {
+    show_snapshot_as_is(with_replay_score(snapshot));
+    return;
+  }
+  show_snapshot_as_is(snapshot);
+}
+
+void show_snapshot_as_is(const GameSnapshot& snapshot) {
   char label[48];
   ascii_fold(snapshot.label.c_str(), label, sizeof(label));
   upper(label);
@@ -1305,8 +1414,6 @@ void teardown_audio() {
   }
   delete audio_scaled;
   audio_scaled = nullptr;
-  delete audio_buffered;
-  audio_buffered = nullptr;
   delete audio_file;
   audio_file = nullptr;
   if (audio_playing[0] != '\0') {
@@ -1630,6 +1737,8 @@ void mount_audio_card() {
 // that touches the I2S driver happens on the audio task; see the note above.
 void start_celebration_audio(bool is_win) {
   stop_audio();
+  audio_fade_at_ms = 0;
+  audio_faded_out = false;
   if (audio_out == nullptr) return;
   // Always the resident copy in PSRAM. The display holds the SPI bus in a
   // hard-timed loop while it draws, so a celebration never reads the card.
@@ -1666,13 +1775,15 @@ void audio_task_main(void*) {
       if (stream) {
         CardLock lock;
         audio_file = new AudioFileSourceSD(win_stream_file);
-        audio_buffered = new AudioFileSourceBuffer(audio_file, kAudioBufferBytes);
-        audio_scaled = new AudioFileSourceScaled(audio_buffered, win_stream_data_at, settings.volume);
+        audio_scaled = new AudioFileSourceScaled(audio_file, win_stream_data_at, settings.volume);
         source = audio_scaled;
         name = win_stream_file;
       } else {
         audio_file = new AudioFileSourcePROGMEM(track.data, track.bytes);
-        source = audio_file;
+        std::uint32_t at = 44, length = 0;
+        if (!find_wav_data(track.data, track.bytes, at, length)) at = 44;
+        audio_scaled = new AudioFileSourceScaled(audio_file, at, 100, false);
+        source = audio_scaled;
       }
       audio_gen = new AudioGeneratorWAV();
       audio_out->SetGain(1.0F);  // never anything else; see the note above
@@ -1687,6 +1798,8 @@ void audio_task_main(void*) {
         continue;
       }
       copy_text(audio_playing, sizeof(audio_playing), name);
+      audio_stream_size = stream ? audio_file->getSize() : 0;
+      audio_short_read_at = 0;
       audio_started_ms = millis();
       audio_depth_min = 0x7FFFFFFF;
       audio_burst_max = 0;
@@ -1700,7 +1813,32 @@ void audio_task_main(void*) {
       if (gap > audio_gap_worst_us) audio_gap_worst_us = gap;
     }
     ++audio_service_calls;
-    if (!audio_gen->loop()) audio_task_should_play = false;  // track finished
+    if (audio_faded_out) {
+      publish_trace("AUDIO", "faded out");
+      audio_task_should_play = false;
+      continue;
+    }
+    if (!audio_gen->loop()) {
+      // The player has closed the file by now, so judge by what was read.
+      const std::uint32_t at = audio_bytes_read;
+      const std::uint32_t size = audio_stream_size;
+      const bool stream = audio_request_is_win && audio_request_stream;
+      if (stream && size > 0 && at + 4096 < size) {
+        // The card stopped delivering long before the end of the track. A
+        // silent win is worse than a shorter song, so play the copy in memory.
+        char detail[112];
+        std::snprintf(detail, sizeof(detail), "stream broke at %lu of %lu KB (card gave nothing at %lu); playing the held copy",
+                      static_cast<unsigned long>(at / 1024), static_cast<unsigned long>(size / 1024),
+                      static_cast<unsigned long>(audio_short_read_at));
+        publish_trace("AUDIO", detail);
+        teardown_audio();
+        audio_request_stream = false;
+        audio_stream_broke = true;
+        if (resident_win.data == nullptr || resident_win.bytes == 0) audio_task_should_play = false;
+        continue;
+      }
+      audio_task_should_play = false;  // track finished
+    }
     const std::uint32_t pos = audio_file->getPos();
     if (pos > audio_bytes_read) {
       const std::uint32_t delta = pos - audio_bytes_read;
@@ -1725,7 +1863,20 @@ void audio_task_main(void*) {
 
 // The display core only tidies up after a finished track and reloads the
 // resident copies while nothing is celebrating. It never feeds the generator.
+// The owner's hold, or the fixed one a Lab scenario expects.
+void apply_raised_dwell() {
+  if (!engine) return;
+  engine->set_raised_dwell_ms(active_fixture ? apple::core::kRaisedDwellMs
+                                             : static_cast<std::uint64_t>(settings.raised_seconds) * 1000);
+}
+
 void service_audio() {
+  if (audio_stream_broke) {
+    audio_stream_broke = false;
+    if (engine && celebration_active) {
+      engine->set_raised_dwell_ms(static_cast<std::uint64_t>(settings.raised_seconds) * 1000);
+    }
+  }
   // Never while a track is playing or being torn down: the refresh overwrites
   // the very buffer the audio task reads from.
   if (resident_refresh_wanted && !celebration_active && audio_gen == nullptr &&
@@ -1915,6 +2066,29 @@ String change_audio(const apple::firmware::AudioChange& change) {
     resident_refresh_wanted = true;
     return String();
   }
+  if (action == "stream") {
+    // The whole track off the card, the way a win plays it: same reader,
+    // same buffering, same volume scaling. For finding card trouble.
+    TrackEntry* entry = find_track(change.file.c_str());
+    if (entry == nullptr) return "NO_TRACK";
+    std::uint32_t at = 44, length = 0;
+    bool found = false;
+    {
+      CardLock lock;
+      File probe = SD.open(entry->file, FILE_READ);
+      if (probe) {
+        found = find_wav_data_in_file(probe, at, length);
+        probe.close();
+      }
+    }
+    if (!found) at = 44;
+    stop_audio();
+    copy_text(win_stream_file, sizeof(win_stream_file), entry->file);
+    win_stream_data_at = at;
+    audio_request_stream = true;
+    start_celebration_audio(true);
+    return String();
+  }
   if (action == "stop") {
     stop_audio();
     return String();
@@ -2011,7 +2185,10 @@ void begin_celebration(const apple::core::CoreEvent& event) {
   end_celebration("REPLACED");
   const GameSnapshot& snapshot = projector.snapshot();
   celebration_is_win = event.celebration == apple::core::CelebrationKind::MetsWin;
-  if (celebration_is_win) {
+  if (celebration_is_win && replay_active && replay_score.active) {
+    mets_win_loop->begin(replay_score.away, replay_score.away_runs, replay_score.home, replay_score.home_runs,
+                         replay_score.mets_home, esp_random());
+  } else if (celebration_is_win) {
     char away[5];
     char home[5];
     ascii_fold(snapshot.away.abbreviation.c_str(), away, sizeof(away));
@@ -2178,6 +2355,14 @@ void service_motion(std::uint64_t now) {
     Serial.printf("APPLE_LIVE:{\"type\":\"sequence\",\"state\":\"%s\",\"fault\":%s}\n",
                   apple::core::sequence_state_name(state),
                   engine && engine->fault_latched() ? "true" : "false");
+    if (state == SequenceState::Idle) apply_raised_dwell();  // a streamed win stretched it
+    if (state == SequenceState::Raised && engine && celebration_active && !audio_request_stream) {
+      // The Apple comes down when the hold ends and would cut the track; fade
+      // it out first. A win streaming its whole song is timed to end on its
+      // own and is left alone.
+      const std::uint32_t hold = static_cast<std::uint32_t>(engine->raised_dwell_ms());
+      audio_fade_at_ms = millis() + (hold > kAudioFadeMs ? hold - kAudioFadeMs : 0);
+    }
     if (last_celebration_tracking) {
       if (state == SequenceState::Raised) last_celebration_raised = true;
       if (engine && engine->fault_latched()) settle_last_celebration("FAULT");
@@ -2403,11 +2588,24 @@ void start_wifi() {
   });
   manager.set_fixture_hooks(start_lab_fixture, stop_lab_fixture);
   manager.set_events_hook(fill_events);
-  manager.set_replay_hook([](const String& kind) -> String {
+  manager.set_replay_hook([](const apple::firmware::ManagerServer::ReplayRequest& request) -> String {
     if (celebration_active) return "CELEBRATING";
     if (!engine || engine->fault_latched() || manager.update_in_progress()) return "BUSY";
     if (!motion_idle() || replay_active || actuator.busy() || actuator.estimated_position_mm(now_ms()) != 0) return "BUSY";
-    start_replay(kind == "win");
+    const bool win = request.kind == "win";
+    replay_score.active = win && request.away.length() > 0 && request.home.length() > 0 &&
+                          request.away_runs >= 0 && request.home_runs >= 0;
+    if (replay_score.active) {
+      ascii_fold(request.away.c_str(), replay_score.away, sizeof(replay_score.away));
+      ascii_fold(request.home.c_str(), replay_score.home, sizeof(replay_score.home));
+      replay_score.away_runs = static_cast<unsigned>(std::min(request.away_runs, 99));
+      replay_score.home_runs = static_cast<unsigned>(std::min(request.home_runs, 99));
+      replay_score.mets_home = request.mets_home;
+      ascii_fold(request.venue.c_str(), replay_score.venue, sizeof(replay_score.venue));
+      ascii_fold(request.away_name.c_str(), replay_score.away_name, sizeof(replay_score.away_name));
+      ascii_fold(request.home_name.c_str(), replay_score.home_name, sizeof(replay_score.home_name));
+    }
+    start_replay(win);
     return String();
   });
   if (credentials.configured()) {
@@ -3000,7 +3198,9 @@ String on_settings(const apple::firmware::SettingsUpdate& update) {
   }
   if (update.raised_seconds >= 0) {
     settings.raised_seconds = static_cast<std::uint16_t>(update.raised_seconds);
-    if (engine) engine->set_raised_dwell_ms(active_fixture ? apple::core::kRaisedDwellMs : static_cast<std::uint64_t>(settings.raised_seconds) * 1000);
+    // A celebration under way keeps the hold it started with (a streamed win
+    // holds for the whole song); the engine picks the new value up at idle.
+    if (engine && motion_idle()) apply_raised_dwell();
   }
   if (update.motor >= 0) {
     if (active_fixture) stop_lab_fixture();
@@ -3543,6 +3743,13 @@ void start_replay(bool win) {
   replay_game.venue = "Tropicana Field";
   replay_game.away = {121, "NYM", "New York Mets"};
   replay_game.home = {139, "TB", "Tampa Bay Rays"};
+  if (win && replay_score.active) {
+    if (replay_score.venue[0] != '\0') replay_game.venue = replay_score.venue;
+    replay_game.away = {replay_score.mets_home ? 0 : 121, replay_score.away,
+                        replay_score.away_name[0] ? replay_score.away_name : replay_score.away};
+    replay_game.home = {replay_score.mets_home ? 121 : 0, replay_score.home,
+                        replay_score.home_name[0] ? replay_score.home_name : replay_score.home};
+  }
   game = replay_game;
   Serial.println("APPLE_LIVE:{\"type\":\"replay\",\"status\":\"STARTED\"}");
 }
@@ -3550,6 +3757,7 @@ void start_replay(bool win) {
 void finish_replay(const char* status) {
   if (!replay_active) return;
   replay_active = false;
+  replay_score.active = false;
   Serial.printf("APPLE_LIVE:{\"type\":\"replay\",\"status\":\"%s\"}\n", status);
   make_engine(nvs_ledger);
   tracker.reset();

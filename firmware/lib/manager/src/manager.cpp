@@ -596,7 +596,17 @@ void ManagerServer::handle_replay() {
     server_.send(403, "application/json", "{\"ok\":false,\"error\":\"MAINTENANCE_REQUIRED\"}");
     return;
   }
-  const String why = replay_ ? replay_(kind) : String("NO_REPLAY");
+  ReplayRequest request;
+  request.kind = kind;
+  request.away = server_.arg("away");
+  request.home = server_.arg("home");
+  request.away_runs = server_.hasArg("awayRuns") ? server_.arg("awayRuns").toInt() : -1;
+  request.home_runs = server_.hasArg("homeRuns") ? server_.arg("homeRuns").toInt() : -1;
+  request.mets_home = server_.arg("metsHome") == "1" || server_.arg("metsHome") == "true";
+  request.venue = server_.arg("venue");
+  request.away_name = server_.arg("awayName");
+  request.home_name = server_.arg("homeName");
+  const String why = replay_ ? replay_(request) : String("NO_REPLAY");
   if (why.length() > 0) {
     server_.send(why == "NO_REPLAY" ? 404 : 409, "application/json",
                  String("{\"ok\":false,\"error\":\"") + why + "\"}");

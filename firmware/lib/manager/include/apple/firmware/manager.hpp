@@ -124,8 +124,22 @@ class ManagerServer {
   }
   /// Runs a built-in replay after authenticated physical approval.
   /// `kind` is "hr" for a home run or "win" for a Mets win.
-  using ReplayFn = std::function<String(const String& kind)>;
-  void set_fixture_hooks(ReplayFn run, ActionFn stop) { fixture_run_ = std::move(run); fixture_stop_ = std::move(stop); }
+  /// A test celebration from the recorded game. For a win, an optional score
+  /// (both teams and runs) is drawn on the card instead of the recording's.
+  struct ReplayRequest {
+    String kind;
+    String away;
+    String home;
+    int away_runs{-1};
+    int home_runs{-1};
+    bool mets_home{false};
+    String venue;
+    String away_name;
+    String home_name;
+  };
+  using ReplayFn = std::function<String(const ReplayRequest&)>;
+  using FixtureFn = std::function<String(const String& scenario)>;
+  void set_fixture_hooks(FixtureFn run, ActionFn stop) { fixture_run_ = std::move(run); fixture_stop_ = std::move(stop); }
   void set_replay_hook(ReplayFn replay) { replay_ = std::move(replay); }
   /// Recent traces for the Lab: what the Apple did while nobody was watching.
   void set_events_hook(StatusFn events) { events_ = std::move(events); }
@@ -198,7 +212,7 @@ class ManagerServer {
   ActionFn release_install_;
   ReplayFn replay_;
   StatusFn events_;
-  ReplayFn fixture_run_;
+  FixtureFn fixture_run_;
   ActionFn fixture_stop_;
   String fixture_stop_token_;
   void handle_fixture();
