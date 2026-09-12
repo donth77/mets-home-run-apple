@@ -102,7 +102,7 @@ def make_handler(state):
                              setupKey="" if settings["requireCode"] else "00000000"),
             "audio": state["audio"],
             "update": release_status(),
-            "lastCelebration": {"kind": "HR", "subject": "Juan Soto", "at": 1788392040, "moved": True},
+            "lastCelebration": {"kind": "HR", "subject": "Juan Soto", "at": 1788392040, "moved": True, "track": "Takeover"},
             "sequence": "IDLE", "fault": False, "positionMm": 0,
         }
 
@@ -226,6 +226,28 @@ def make_handler(state):
                 if action == "stop":
                     audio["playing"] = ""
                     return self.send_json({"ok": True})
+                if action in ("queue", "unqueue", "clear"):
+                    win = args.get("win", [""])[0] in ("on", "1", "true")
+                    name = "" if win else args.get("text", [""])[0]
+                    who = 0 if win else int(args.get("id", ["0"])[0] or 0)
+                    queue = audio.setdefault("next", [])
+                    same = lambda n: n["win"] == win and (win or n["name"] == name)
+                    if action == "clear":
+                        audio["next"] = [n for n in queue if not same(n)]
+                    elif track is None:
+                        return self.send_json({"ok": False, "error": "NO_TRACK"}, 400)
+                    elif action == "unqueue":
+                        for i, n in enumerate(queue):
+                            if same(n) and n["file"] == target:
+                                del queue[i]
+                                break
+                        else:
+                            return self.send_json({"ok": False, "error": "NO_TRACK"}, 400)
+                    else:
+                        if sum(1 for n in queue if same(n)) >= 5:
+                            return self.send_json({"ok": False, "error": "QUEUE_FULL"}, 400)
+                        queue.append({"win": win, "id": who, "name": name, "file": target})
+                    return self.send_json({"ok": True})
                 if action in ("test", "delete", "rename", "pool") and track is None:
                     return self.send_json({"ok": False, "error": "NO_TRACK"}, 400)
                 if action == "test":
@@ -233,6 +255,7 @@ def make_handler(state):
                 elif action == "delete":
                     audio["tracks"].remove(track)
                     audio["players"] = [p for p in audio["players"] if p["file"] != target]
+                    audio["next"] = [n for n in audio.get("next", []) if n["file"] != target]
                 elif action == "rename":
                     track["title"] = args.get("text", [""])[0]
                 elif action == "pool":
@@ -252,6 +275,8 @@ def make_handler(state):
                     audio["players"] = [p for p in audio["players"] if not (p["name"] == name and (not target or p["file"] == target))]
                     if len(audio["players"]) == before:
                         return self.send_json({"ok": False, "error": "NO_PLAYER"}, 400)
+                    if not target:
+                        audio["next"] = [n for n in audio.get("next", []) if n["win"] or n["name"] != name]
                 else:
                     return self.send_json({"ok": False, "error": "BAD_ACTION"}, 400)
                 return self.send_json({"ok": True})
@@ -296,7 +321,7 @@ def main():
         "settings": {"raisedSeconds": 30, "motor": True, "follow": True, "sleepDisplay": False,
                      "requireCode": False, "timeZone": "America/New_York", "timeZoneChosen": False,
                      "brightness": 100, "volume": 80, "winFullTrack": True, "autoUpdate": True, "beta": False, "tokenSet": False},
-        "audio": {"card": True, "playing": "", "batter": "Francisco Lindor", "maxTracks": 20,
+        "audio": {"card": True, "playing": "", "batter": "Francisco Lindor", "maxTracks": 20, "next": [],
                   "tracks": [
                       {"file": "/hr1.wav", "title": "hr1.wav", "bytes": 1_600_000, "added": 1_788_200_000, "hr": True, "win": False},
                       {"file": "/hr2.wav", "title": "Takeover", "bytes": 1_900_000, "added": 1_788_250_000, "hr": True, "win": False},

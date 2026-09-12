@@ -68,7 +68,7 @@ struct SettingsUpdate {
 
 /// One change to the track library from the page.
 struct AudioChange {
-  String action;    ///< "delete", "rename", "pool", "assign", "unassign", "test"
+  String action;    ///< "delete", "rename", "pool", "assign", "unassign", "test", "queue", "unqueue", "clear"
   String file;      ///< the track on the card, "/hr1.wav"
   String text;      ///< new title, or the player's name
   long number{0};   ///< the player's MLB id

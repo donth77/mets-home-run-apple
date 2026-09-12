@@ -114,7 +114,7 @@ constexpr char kProfileName[] = "apple_live";
 #ifdef APPLE_UPDATE_CRASH_TEST
 constexpr char kFirmwareVersion[] = "0.2.2-crashtest";
 #else
-constexpr char kFirmwareVersion[] = "0.4.0";
+constexpr char kFirmwareVersion[] = "0.4.1";
 #endif
 constexpr char kHostname[] = "home-run-apple";
 constexpr char kEasternTz[] = "EST5EDT,M3.2.0,M11.1.0";
@@ -392,6 +392,7 @@ struct LastCelebration {
   std::int64_t at{0};     // epoch seconds
   bool moved{false};      // the lift completed: reached the top and came home
   char outcome[14] = "";
+  char track[40] = "";    // the title of the track that played, or empty
 };
 LastCelebration last_celebration;
 bool last_celebration_tracking = false;  // the running record is this celebration's
@@ -403,6 +404,7 @@ void save_last_celebration() {
   history_store.putLong64("at", last_celebration.at);
   history_store.putBool("moved", last_celebration.moved);
   history_store.putString("outcome", last_celebration.outcome);
+  history_store.putString("track", last_celebration.track);
 }
 
 void settle_last_celebration(const char* outcome) {
@@ -656,6 +658,25 @@ struct PlayerTrack {
 };
 PlayerTrack player_tracks[kMaxPlayerTracks];
 std::uint8_t player_track_count = 0;
+
+// Up next: tracks the owner lined up to play before the random pick takes
+// over again. One queue for the next win, one for the next home run by
+// anyone, and one per player. A queued track plays once and leaves its queue.
+// Kept on the card with the other assignments, so a song queued for a
+// walk-off survives the Apple's own restarts.
+constexpr std::uint8_t kMaxNextTracks = 24;
+constexpr std::uint8_t kMaxNextPerQueue = 5;
+struct NextTrack {
+  bool win = false;
+  std::int32_t player_id = 0;
+  char player[40] = "";  // empty: the next home run by anyone
+  char file[32] = "";
+};
+NextTrack next_tracks[kMaxNextTracks];
+std::uint8_t next_track_count = 0;
+// A queue changed while the card was busy with a celebration; write it once
+// the card is free again.
+bool manifest_save_wanted = false;
 
 char audio_playing[40] = "";
 // Whoever is at the plate, so their track can be brought into memory before
@@ -1026,6 +1047,14 @@ void fill_status(JsonDocument& doc) {
     node["name"] = player_tracks[i].name;
     node["file"] = player_tracks[i].file;
   }
+  JsonArray next_list = audio["next"].to<JsonArray>();
+  for (std::uint8_t i = 0; i < next_track_count; ++i) {
+    JsonObject node = next_list.add<JsonObject>();
+    node["win"] = next_tracks[i].win;
+    node["id"] = next_tracks[i].player_id;
+    node["name"] = next_tracks[i].player;
+    node["file"] = next_tracks[i].file;
+  }
   JsonObject rel = doc["update"].to<JsonObject>();
   rel["state"] = release_state_name(release.state);
   rel["version"] = release.pick.found ? release.pick.version.c_str() : "";
@@ -1042,6 +1071,7 @@ void fill_status(JsonDocument& doc) {
     last["at"] = last_celebration.at;
     last["moved"] = last_celebration.moved;
     last["outcome"] = last_celebration.outcome;
+    last["track"] = last_celebration.track;
   }
   // The page shows the code once when the owner turns the lock on; with the
   // lock off anyone on the network could change settings anyway.
@@ -1551,6 +1581,56 @@ const char* track_for_player(const char* batter) {
   return picks[esp_random() % count];
 }
 
+// Queue membership: the win queue, or a home run queue keyed by the player's
+// name as the game feed reports it (empty for the next home run by anyone).
+bool next_matches(const NextTrack& next, bool win, const char* player) {
+  if (next.win != win) return false;
+  if (win) return true;
+  return strcasecmp(next.player, player == nullptr ? "" : player) == 0;
+}
+
+// The first track queued for this kind of celebration, or none.
+const char* next_track(bool win, const char* player) {
+  for (std::uint8_t i = 0; i < next_track_count; ++i) {
+    if (next_matches(next_tracks[i], win, player)) return next_tracks[i].file;
+  }
+  return nullptr;
+}
+
+std::uint8_t next_count(bool win, const char* player) {
+  std::uint8_t count = 0;
+  for (std::uint8_t i = 0; i < next_track_count; ++i) {
+    if (next_matches(next_tracks[i], win, player)) ++count;
+  }
+  return count;
+}
+
+void forget_next(std::uint8_t index) {
+  for (std::uint8_t i = index; i + 1 < next_track_count; ++i) next_tracks[i] = next_tracks[i + 1];
+  --next_track_count;
+}
+
+// Drops the first queued entry of this kind that names the file: the track
+// has had its turn, or the owner changed their mind.
+bool consume_next(bool win, const char* player, const char* file) {
+  if (file == nullptr || file[0] == '\0') return false;
+  for (std::uint8_t i = 0; i < next_track_count; ++i) {
+    if (next_matches(next_tracks[i], win, player) && strcasecmp(next_tracks[i].file, file) == 0) {
+      forget_next(i);
+      return true;
+    }
+  }
+  return false;
+}
+
+// Everything queued for one kind of celebration, or for one player.
+void clear_next(bool win, const char* player) {
+  for (std::uint8_t i = 0; i < next_track_count;) {
+    if (next_matches(next_tracks[i], win, player)) forget_next(i);
+    else ++i;
+  }
+}
+
 // Whether a track is still one the owner wants for this kind of celebration.
 bool in_pool(const char* file, bool win) {
   if (file == nullptr || file[0] == '\0') return false;
@@ -1573,26 +1653,29 @@ const char* random_track(bool win) {
 }
 
 // Brings the next celebration's audio into memory. The home run slot follows
-// whoever is at the plate, so a hitter with their own track has it ready
-// before they swing; otherwise it is a fresh pick from the pool. Never runs
-// during a celebration, because reading the card needs the display's bus.
+// whoever is at the plate: first anything queued for that hitter, then the
+// queue for the next home run by anyone, then one of the hitter's own tracks,
+// and only then a fresh pick from the pool. Never runs during a celebration,
+// because reading the card needs the display's bus.
 void refresh_resident_tracks() {
   resident_refresh_wanted = false;
   if (!audio_card_ready) return;
-  // The home run slot follows the hitter. A pool pick only replaces another
-  // pool pick, so a track already held is not fetched again.
-  const char* wanted = track_for_player(current_batter);
+  // A pool pick only replaces another pool pick, so a track already held is
+  // not fetched again.
+  const char* wanted = next_track(false, current_batter);
+  if (wanted == nullptr) wanted = next_track(false, "");
+  if (wanted == nullptr) wanted = track_for_player(current_batter);
   if (wanted == nullptr && !in_pool(resident_home_run.name, false)) {
     wanted = random_track(false);
   }
   if (wanted != nullptr && strcmp(wanted, resident_home_run.name) != 0) {
     load_resident(resident_home_run, wanted);
   }
-  // A win happens once a game, so the slot is filled when empty and left alone.
-  if (!in_pool(resident_win.name, true)) {
-    const char* win = random_track(true);
-    if (win != nullptr) load_resident(resident_win, win);
-  }
+  // A win happens once a game, so the slot is filled when empty and left
+  // alone, unless the owner queued something for it.
+  const char* win = next_track(true, "");
+  if (win == nullptr && !in_pool(resident_win.name, true)) win = random_track(true);
+  if (win != nullptr && strcmp(win, resident_win.name) != 0) load_resident(resident_win, win);
 }
 
 TrackEntry* find_track(const char* file) {
@@ -1625,6 +1708,14 @@ void save_audio_manifest() {
     node["name"] = player_tracks[i].name;
     node["file"] = player_tracks[i].file;
   }
+  JsonArray next = doc["next"].to<JsonArray>();
+  for (std::uint8_t i = 0; i < next_track_count; ++i) {
+    JsonObject node = next.add<JsonObject>();
+    node["win"] = next_tracks[i].win;
+    node["id"] = next_tracks[i].player_id;
+    node["name"] = next_tracks[i].player;
+    node["file"] = next_tracks[i].file;
+  }
   File file = SD.open(kAudioManifestPath, FILE_WRITE);
   if (!file) {
     publish_trace("AUDIO", "could not write the track list");
@@ -1639,6 +1730,7 @@ void save_audio_manifest() {
 void load_audio_manifest() {
   CardLock lock;
   player_track_count = 0;
+  next_track_count = 0;
   if (!audio_card_ready) return;
   File file = SD.open(kAudioManifestPath, FILE_READ);
   if (!file) return;
@@ -1666,6 +1758,19 @@ void load_audio_manifest() {
     PlayerTrack& slot = player_tracks[player_track_count++];
     slot.id = node["id"] | 0;
     copy_text(slot.name, sizeof(slot.name), name);
+    copy_text(slot.file, sizeof(slot.file), file_name);
+  }
+  for (JsonObjectConst node : doc["next"].as<JsonArrayConst>()) {
+    if (next_track_count >= kMaxNextTracks) break;
+    const char* file_name = node["file"] | "";
+    const bool win = node["win"] | false;
+    const char* name = win ? "" : (node["name"] | "");
+    if (file_name[0] == '\0' || find_track(file_name) == nullptr) continue;  // queued track deleted
+    if (next_count(win, name) >= kMaxNextPerQueue) continue;
+    NextTrack& slot = next_tracks[next_track_count++];
+    slot.win = win;
+    slot.player_id = win ? 0 : (node["id"] | 0);
+    copy_text(slot.player, sizeof(slot.player), name);
     copy_text(slot.file, sizeof(slot.file), file_name);
   }
 }
@@ -1886,6 +1991,10 @@ void service_audio() {
       !audio_task_should_play) {
     refresh_resident_tracks();
   }
+  if (manifest_save_wanted && !celebration_active && audio_gen == nullptr && !audio_task_should_play) {
+    manifest_save_wanted = false;
+    save_audio_manifest();
+  }
 }
 
 // Watches who is at the plate. When the hitter changes, the next celebration's
@@ -2055,10 +2164,40 @@ void forget_player(PlayerTrack* slot) {
   --player_track_count;
 }
 
+// Up next edits touch only memory, so they are allowed during a game and
+// even mid-celebration, when the owner most wants them; the card is written
+// once it is free.
+String change_next(const apple::firmware::AudioChange& change) {
+  const bool win = change.win == 1;
+  const char* player = win ? "" : change.text.c_str();
+  if (change.action == "clear") {
+    clear_next(win, player);
+    return String();
+  }
+  TrackEntry* entry = find_track(change.file.c_str());
+  if (entry == nullptr) return "NO_TRACK";
+  if (change.action == "unqueue") return consume_next(win, player, entry->file) ? String() : "NO_TRACK";
+  if (next_track_count >= kMaxNextTracks || next_count(win, player) >= kMaxNextPerQueue) return "QUEUE_FULL";
+  NextTrack& slot = next_tracks[next_track_count++];
+  slot.win = win;
+  slot.player_id = win ? 0 : static_cast<std::int32_t>(change.number);
+  copy_text(slot.player, sizeof(slot.player), player);
+  copy_text(slot.file, sizeof(slot.file), entry->file);
+  return String();
+}
+
 String change_audio(const apple::firmware::AudioChange& change) {
   if (!audio_card_ready) return "NO_CARD";
-  if (celebration_active) return "CELEBRATING";
   const String& action = change.action;
+  if (action == "queue" || action == "unqueue" || action == "clear") {
+    const String failed = change_next(change);
+    if (failed.length() != 0) return failed;
+    resident_refresh_wanted = true;
+    if (celebration_active) manifest_save_wanted = true;
+    else save_audio_manifest();
+    return String();
+  }
+  if (celebration_active) return "CELEBRATING";
 
   if (action == "test") {
     TrackEntry* entry = find_track(change.file.c_str());
@@ -2155,6 +2294,8 @@ String change_audio(const apple::firmware::AudioChange& change) {
       }
     }
     if (!removed) return "NO_PLAYER";
+    // Taking a player off the list takes his queue with him.
+    if (change.file.length() == 0) clear_next(false, change.text.c_str());
     resident_refresh_wanted = true;
     save_audio_manifest();
     return String();
@@ -2213,7 +2354,8 @@ void begin_celebration(const apple::core::CoreEvent& event) {
   if (celebration_is_win && settings.win_full_track && audio_card_ready && !active_fixture) {
     // The game is over, so stay up for the whole track: stream it off the
     // card and stretch the raised dwell to match, less the lift itself.
-    const char* file = random_track(true);
+    const char* file = next_track(true, "");
+    if (file == nullptr) file = random_track(true);
     TrackEntry* entry = file != nullptr ? find_track(file) : nullptr;
     if (entry != nullptr && entry->bytes > 44) {
       // Where the samples begin has to be exact: the streamed copy is scaled
@@ -2248,6 +2390,22 @@ void begin_celebration(const apple::core::CoreEvent& event) {
   // The resident home run slot already follows whoever is batting, so a hitter
   // with their own track has it loaded. Fall back to the pool otherwise.
   start_celebration_audio(celebration_is_win);
+  // A queued track that just started has had its turn. The card is busy for
+  // the whole celebration, so the shorter list is written afterwards.
+  const char* played_file = celebration_is_win ? (audio_request_stream ? win_stream_file : resident_win.name)
+                                               : resident_home_run.name;
+  if (audio_task_should_play) {
+    const bool consumed = celebration_is_win
+                              ? consume_next(true, "", played_file)
+                              : consume_next(false, current_batter, played_file) ||
+                                    consume_next(false, event.subject.c_str(), played_file) ||
+                                    consume_next(false, "", played_file);
+    if (consumed) {
+      manifest_save_wanted = true;
+      resident_refresh_wanted = true;
+    }
+  }
+  const TrackEntry* played = audio_task_should_play ? find_track(played_file) : nullptr;
   celebration_last_key = 0xFFFFFFFFU;
   wake_panel();
   scan_lock->enter(1);
@@ -2273,6 +2431,7 @@ void begin_celebration(const apple::core::CoreEvent& event) {
     settle_last_celebration(last_celebration_raised ? "ROSE" : "STOPPED");
     last_celebration.at = wall_epoch();
     last_celebration.moved = false;
+    copy_text(last_celebration.track, sizeof(last_celebration.track), played != nullptr ? played->title : "");
     copy_text(last_celebration.outcome, sizeof(last_celebration.outcome), settings.motor ? "RUNNING" : "SCREEN_ONLY");
     last_celebration_tracking = settings.motor;
     last_celebration_raised = false;
@@ -3077,6 +3236,7 @@ void load_settings() {
   last_celebration.at = history_store.getLong64("at", 0);
   last_celebration.moved = history_store.getBool("moved", false);
   history_store.getString("outcome", "").toCharArray(last_celebration.outcome, sizeof(last_celebration.outcome));
+  history_store.getString("track", "").toCharArray(last_celebration.track, sizeof(last_celebration.track));
   if (last_celebration.at != 0) {
     if (last_celebration.outcome[0] == '\0') {
       // Recorded by firmware that only noted whether the motor was on.

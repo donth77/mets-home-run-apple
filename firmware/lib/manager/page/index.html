@@ -161,6 +161,13 @@ input[type=file]::file-selector-button{font:inherit;font-weight:600;padding:7px 
 .pager .count{font-size:12.5px;color:var(--muted);margin:0 6px}
 .player-remove{margin-left:auto}
 .player-add{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px}
+.upnext{margin-top:10px;padding:2px 14px 4px;border:1px solid var(--blue-line);border-radius:12px;background:rgba(0,0,0,.14)}
+.upnext .player{padding:11px 0}
+.upnext .player-who{min-width:140px}
+.upnext .next-empty{font-size:13px;color:var(--muted)}
+.song .n{color:var(--muted);font-size:11.5px;font-weight:600}
+.next-pick{font:inherit;font-size:12.5px;font-weight:600;padding:5px 8px;border-radius:999px;border:1px solid var(--blue-line);background:transparent;color:var(--muted);margin-left:auto;max-width:180px;cursor:pointer}
+.next-pick:hover{border-color:var(--orange-soft);color:var(--text)}
 .player-add select{font:inherit;font-size:14px;padding:8px 10px;border-radius:8px;border:1px solid var(--blue-line);background:var(--blue-deep);color:var(--text);flex:1;min-width:150px}
 .player-add button{margin-top:0}
 .progress{height:8px;border-radius:4px;background:rgba(0,0,0,.28);margin-top:12px;overflow:hidden}.progress i{display:block;height:100%;width:0;background:var(--orange);transition:width .2s}
@@ -247,6 +254,9 @@ a.btn{display:inline-block;font-size:15px;font-weight:600;padding:11px 16px;bord
 <section id="audio" hidden>
 <h2>Celebration audio</h2>
 <p class="note" id="audio-note">Add your own tracks. Choose which play for a home run and which play when the Mets win, and give any player tracks of his own.</p>
+<h3 class="sub" style="margin-top:16px">Up next</h3>
+<p class="note">Line up exactly what plays next, from any track below. A queued track plays once, then the random pick takes over again.</p>
+<div class="upnext" id="upnext"></div>
 <label class="dropzone" id="dropzone" for="track-file">
   <svg class="dz-icon" viewBox="0 0 24 24" width="28" height="28" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M12 16V5m0 0l-4 4m4-4l4 4M4 15v3a2 2 0 002 2h12a2 2 0 002-2v-3"/></svg>
   <span class="dz-text"><b id="track-pick-label">Tap to choose an audio file</b><small id="track-pick-hint">or drop one here</small></span>
@@ -385,7 +395,7 @@ function render(s){
   var seq=(s.sequence||"IDLE"),liftWord={IDLE:"Home",LEAD_IN:"Getting ready",REVIEW_HOLD:"Waiting on a review",EXTENDING:"Rising",RAISED:"Raised",RETRACTING:"Lowering",FAULT:"Stopped"}[seq]||seq;
   text("lift",s.fault?"Stopped: fault":liftWord,s.fault?"bad":"");
   text("lift-2",(s.motion==="L298N"?"Motor on":"Motor off")+(s.positionMm?", "+s.positionMm+" mm up":""));
-  var lc=s.lastCelebration;if(lc&&lc.at){text("last",(lc.kind==="WIN"?"Mets win":"Home run")+(lc.subject?", "+lc.subject:""));text("last-2",when(new Date(lc.at*1000).toISOString())+" · "+({ROSE:"the Apple rose",RUNNING:"running now",SCREEN_ONLY:"screen only, motor off",STOPPED:"stopped before it rose",FAULT:"stopped by a motor fault",INTERRUPTED:"cut short by a restart"}[lc.outcome]||(lc.moved?"the Apple rose":"screen only")))}else{text("last","None yet");text("last-2","")}
+  var lc=s.lastCelebration;if(lc&&lc.at){text("last",(lc.kind==="WIN"?"Mets win":"Home run")+(lc.subject?", "+lc.subject:""));text("last-2",when(new Date(lc.at*1000).toISOString())+" · "+({ROSE:"the Apple rose",RUNNING:"running now",SCREEN_ONLY:"screen only, motor off",STOPPED:"stopped before it rose",FAULT:"stopped by a motor fault",INTERRUPTED:"cut short by a restart"}[lc.outcome]||(lc.moved?"the Apple rose":"screen only"))+(lc.track?" \u00b7 "+lc.track:""))}else{text("last","None yet");text("last-2","")}
   text("fw",s.firmwareVersion||"");if(s.firmwareVersion)installedVersion=s.firmwareVersion;text("fw-installed",s.firmwareVersion||"");renderUpdate(s);text("fw-2",(s.hostname||"home-run-apple")+".local");
   var st=s.settings;
   if(st){lastSettings=st;if(!settingsDirty)fillSettings(st)}
@@ -685,6 +695,7 @@ function audioMessage(code,err){
     NOT_MONO:"That file did not convert cleanly.",NOT_PCM:"That file did not convert cleanly.",NOT_16_BIT:"That file did not convert cleanly.",
     BAD_NAME:"That file name will not work.",WRITE_FAILED:"The memory card would not take it.",NO_CARD:"No memory card in the Apple.",
     CELEBRATING:"Not now: a celebration is playing.",GAME_IN_PROGRESS:"Not during a game.",PLAYERS_FULL:"That is as many player tracks as the Apple holds.",
+    QUEUE_FULL:"That line is full. Five is the most it holds.",
     CODE:"The password is needed.",LOCKED:"Too many wrong passwords. Wait a minute."};
   if(err&&map[err])return map[err];
   if(code===401)return map.CODE;if(code===409)return map.CELEBRATING;if(code===503)return map.NO_CARD;
@@ -718,6 +729,22 @@ function trackRow(t,a){
     });
     uses.appendChild(chip);
   });
+  var pick=document.createElement("select");pick.className="next-pick";pick.setAttribute("aria-label","Line up "+trackTitle(t)+" to play next");
+  var ph=el("option",null,"Up next for\u2026");ph.value="";pick.appendChild(ph);
+  var forHr=el("option",null,"a home run");forHr.value="hr";pick.appendChild(forHr);
+  var forWin=el("option",null,"a Mets win");forWin.value="win";pick.appendChild(forWin);
+  var byWho=document.createElement("optgroup");byWho.label="a home run by";
+  nextPlayers(a).forEach(function(p){var o=el("option",null,p.name);o.value="p:"+(p.id||0)+":"+p.name;byWho.appendChild(o)});
+  if(byWho.children.length)pick.appendChild(byWho);
+  pick.addEventListener("change",function(){
+    var v=pick.value;if(!v)return;pick.disabled=true;
+    var p={action:"queue",file:t.file},label;
+    if(v==="win"){p.win="on";label="a Mets win"}
+    else if(v==="hr")label="a home run";
+    else{var m=v.match(/^p:(\d*):([\s\S]*)$/);p.id=m[1]||0;p.text=m[2];label="a home run by "+m[2]}
+    audioSet(p).then(function(ok){pick.disabled=false;pick.value="";if(ok)toast("Up next for "+label+": "+trackTitle(t)+".","ok",{id:"audio"})});
+  });
+  uses.appendChild(pick);
   var actions=el("div","track-actions");
   var preview=el("button","act",previewing===t.file?"■ Stop preview":"▶ Preview");preview.type="button";preview.title="Play it here, on this device";
   preview.addEventListener("click",function(){
@@ -765,7 +792,7 @@ function fillPager(pager,page,pages,size,total,pick){
   pager.appendChild(el("span","count",(page-1)*size+1+"–"+Math.min(page*size,total)+" of "+total));
 }
 function renderAudio(s){
-  lastStatus=s;trimPlays();var a=s.audio||{},sig=JSON.stringify([a.card,a.tracks,a.players,a.playing,previewing,rosterLoaded,trackSort,trackPage,playerPage,trackQuery,trackFilter]);
+  lastStatus=s;trimPlays();var a=s.audio||{},sig=JSON.stringify([a.card,a.tracks,a.players,a.next,a.playing,previewing,rosterLoaded,trackSort,trackPage,playerPage,trackQuery,trackFilter]);
   $("audio").hidden=setupOnlyNow||tab!=="audio";
   $("audio-note").textContent=a.card?"Add your own tracks. Choose which play for a home run and which play when the Mets win, and give any player tracks of his own.":"No memory card. Put one in and restart the Apple to add tracks.";
   if(sig===trackSig)return;
@@ -801,7 +828,48 @@ function renderAudio(s){
   fillPager($("track-pager"),trackPage,pages,PAGE_SIZE,tracks.length,function(n){trackPage=n;trackSig="";renderAudio(lastStatus)});
   var chooser=$("player-track");chooser.textContent="";
   all.forEach(function(t){var o=el("option",null,trackTitle(t));o.value=t.file;chooser.appendChild(o)});
-  renderPlayers(a,all);refreshAssignButton();
+  renderUpNext(a,all);renderPlayers(a,all);refreshAssignButton();
+}
+/* Players the owner can line a song up for: the roster, plus anyone who
+   already has tracks or something queued, so the list works offline too. */
+function nextPlayers(a){
+  var seen={},list=[];
+  function add(id,name){if(!name||seen[name])return;seen[name]=true;list.push({id:id||0,name:name})}
+  roster.forEach(function(r){add(r.id,r.name)});
+  (a.players||[]).forEach(function(p){add(p.id,p.name)});
+  (a.next||[]).forEach(function(n){if(!n.win)add(n.id,n.name)});
+  return list.sort(function(x,y){return x.name<y.name?-1:1});
+}
+function renderUpNext(a,tracks){
+  var box=$("upnext");box.textContent="";
+  var next=a.next||[],seen={},players=[];
+  next.forEach(function(n){if(!n.win&&n.name&&!seen[n.name]){seen[n.name]=true;players.push({id:n.id,name:n.name})}});
+  function row(label,items,params,emptyText,offRoster){
+    var r=el("div","player"),who=el("div","player-who"),b=el("b",null,label);
+    if(offRoster)b.appendChild(el("span","tag","not on the roster"));
+    who.appendChild(b);
+    var songs=el("div","songs");
+    if(!items.length)songs.appendChild(el("span","next-empty",emptyText));
+    items.forEach(function(n,i){
+      var t=tracks.filter(function(x){return x.file===n.file})[0],pill=el("span","song");
+      pill.appendChild(el("span","n",(i+1)+"."));pill.appendChild(document.createTextNode(t?trackTitle(t):n.file.replace(/^\//,"")));
+      var x=el("button",null,"\u00d7");x.type="button";x.title="Take this out of the line";
+      x.addEventListener("click",function(){x.disabled=true;var p={action:"unqueue",file:n.file};for(var k in params)p[k]=params[k];audioSet(p).then(function(ok){if(!ok)x.disabled=false})});
+      pill.appendChild(x);songs.appendChild(pill);
+    });
+    r.appendChild(who);r.appendChild(songs);
+    if(items.length){
+      var clear=el("button","link danger player-remove","Clear");clear.type="button";
+      clear.addEventListener("click",function(){busy(clear);var p={action:"clear"};for(var k in params)p[k]=params[k];audioSet(p).then(function(ok){if(!ok)unbusy(clear)})});
+      r.appendChild(clear);
+    }
+    box.appendChild(r);
+  }
+  row("Next home run",next.filter(function(n){return !n.win&&!n.name}),{},"Random from the home run tracks");
+  row("Next Mets win",next.filter(function(n){return n.win}),{win:"on"},"Random from the Mets win tracks");
+  players.forEach(function(p){
+    row("Next home run by "+p.name,next.filter(function(n){return !n.win&&n.name===p.name}),{id:p.id||0,text:p.name},"",rosterLoaded&&!roster.some(function(r){return r.name===p.name}));
+  });
 }
 function renderPlayers(a,tracks){
   var list=$("player-list");list.textContent="";
