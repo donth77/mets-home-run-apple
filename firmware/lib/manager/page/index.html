@@ -143,6 +143,8 @@ input[type=file]::file-selector-button{font:inherit;font-weight:600;padding:7px 
 .for-row{display:flex;flex-direction:column;gap:6px;margin-top:12px}
 .for-label{font-size:13px;color:var(--muted)}
 #track-for{font:inherit;font-size:14px;padding:9px 10px;border-radius:8px;border:1px solid var(--blue-line);background:var(--blue-deep);color:var(--text);max-width:360px}
+#track-title{font:inherit;font-size:15px;padding:9px 10px;border-radius:8px;max-width:360px}
+#track-title-hint{color:var(--muted);font-weight:400}
 .list-tools{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:14px}
 .filters{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
 .filters button{margin:0;padding:6px 12px;border-radius:99px;border:1px solid var(--blue-line);background:transparent;color:var(--muted);font-size:13px;font-weight:600}
@@ -260,9 +262,10 @@ a.btn{display:inline-block;font-size:15px;font-weight:600;padding:11px 16px;bord
   <p class="trim-plays" id="trim-plays"></p>
   <div class="trim-row"><button id="trim-listen" class="act" type="button">▶ Play the selection</button><button id="trim-reset" class="link" type="button">Reset</button></div>
 </div>
+<div class="for-row" id="track-name" hidden><label class="for-label" for="track-title">Name <span id="track-title-hint"></span></label><input id="track-title" type="text" maxlength="39" autocomplete="off" autocapitalize="words" spellcheck="false" placeholder="What to call this track"></div>
 <div class="for-row"><label class="for-label" for="track-for">Plays for</label><select id="track-for"><option value="hr">Home runs</option><option value="win">Mets wins</option><option value="both">Home runs and Mets wins</option><optgroup id="track-for-players" label="One player's home runs"></optgroup></select></div>
 <div class="row"><button id="track-add" type="button" disabled>Add track</button></div>
-<p class="note tiny">MP3, M4A, WAV and most others. Up to 30 MB. Drag the handles to keep up to 7 minutes of it; that part is converted here on your device to what the Apple plays. A home run plays the start of what you keep, for as long as the Apple stays up; a win can play all of it. The handles show exactly how much.</p>
+<p class="note tiny">MP3, M4A, WAV and most others. Up to 30 MB. Drag the handles to keep up to 7 minutes of it. A home run plays the start of what you keep, for as long as the Apple stays up; a win can play all of it.</p>
 <p class="note tiny"><b>Preview</b> plays a track here, on this device. <b>Play on the Apple</b> plays it through the Apple's own speaker, at the volume set in Settings.</p>
 <div class="progress" id="track-bar" hidden><i id="track-bar-fill"></i></div>
 <p class="note" id="track-note" aria-live="polite"></p>
@@ -548,9 +551,131 @@ function convertForApple(decoded,start,end){
     return {wav:encodeWav(s,peak>0?HEADROOM/peak:1),seconds:Math.round(s.length/APPLE_RATE)};
   });
 }
-function trackFileName(name){
-  var base=name.replace(/\.[^.]*$/,"").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"")||"track";
-  return base.slice(0,20)+"-"+Math.floor(Math.random()*9000+1000)+".wav";
+/* Naming. The file on the card keeps a short, FAT-safe name; the name the
+   owner sees is the track's title, which the Apple stores separately (39
+   bytes). It comes from the song's own tags when the file carries any (ID3
+   in an MP3, iTunes atoms in an M4A, Vorbis comments in a FLAC), otherwise
+   from the file name with the usual download clutter removed. */
+var TITLE_MAX_BYTES=39;
+function trackFileName(title){
+  var base=title.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"")||"track";
+  return base.slice(0,20).replace(/-+$/,"")+"-"+Math.floor(Math.random()*9000+1000)+".wav";
+}
+function utf8Bytes(s){return new TextEncoder().encode(s).length}
+function fitTitle(s){
+  s=String(s||"").replace(/\s+/g," ").trim();
+  if(utf8Bytes(s)<=TITLE_MAX_BYTES)return s;
+  var out="",chars=Array.from(s),i;
+  for(i=0;i<chars.length;i++){if(utf8Bytes(out+chars[i])>TITLE_MAX_BYTES)break;out+=chars[i]}
+  var atWord=out.replace(/\s+\S*$/,"").replace(/[\s\-\u2013,:;.]+$/,"");
+  return atWord||out.trim();
+}
+function cleanFileTitle(name){
+  var s=name.replace(/\.[^.]*$/,"").replace(/_/g," ");
+  s=s.replace(/^\s*\d{1,2}\s*[.\-\u2013]?\s+/,"");
+  s=s.replace(/\s*[\(\[][^\)\]]*(?:audio|official|video|lyric|lyrics|\bhd\b|\bhq\b|4k|visuali[sz]er|remaster|explicit|clean|mp3|m4a|youtube|topic)[^\)\]]*[\)\]]/gi,"");
+  return s.replace(/\s+/g," ").replace(/^[\s\-\u2013]+|[\s\-\u2013]+$/g,"").trim();
+}
+function bytesAt(file,at,len){return file.slice(at,at+len).arrayBuffer().then(function(b){return new DataView(b)})}
+function ascii(v,at,len){var s="",i;for(i=0;i<len;i++)s+=String.fromCharCode(v.getUint8(at+i));return s}
+function decodeText(bytes,enc){
+  var label=enc===0?"iso-8859-1":enc===2?"utf-16be":enc===3?"utf-8":"utf-16";
+  try{return new TextDecoder(label).decode(bytes).replace(/^\uFEFF/,"").replace(/\0[\s\S]*$/,"").trim()}catch(e){return ""}
+}
+function syncsafe(v,at){return (v.getUint8(at)<<21)|(v.getUint8(at+1)<<14)|(v.getUint8(at+2)<<7)|v.getUint8(at+3)}
+function readId3v2(file){
+  return bytesAt(file,0,10).then(function(h){
+    if(h.byteLength<10||ascii(h,0,3)!=="ID3")return null;
+    var ver=h.getUint8(3),flags=h.getUint8(5),size=syncsafe(h,6);
+    if(ver<2||ver>4||(flags&0x80))return null;
+    return bytesAt(file,10,Math.min(size,2*1024*1024)).then(function(v){
+      var at=0,end=v.byteLength,head=ver===2?6:10,tags={};
+      if(flags&0x40)at+=ver===4?syncsafe(v,0):v.getUint32(0)+4;
+      while(at+head<=end){
+        var id,len;
+        if(ver===2){id=ascii(v,at,3);len=(v.getUint8(at+3)<<16)|(v.getUint8(at+4)<<8)|v.getUint8(at+5)}
+        else{id=ascii(v,at,4);len=ver===4?syncsafe(v,at+4):v.getUint32(at+4)}
+        if(!/^[A-Z0-9]+$/.test(id)||len<=0||at+head+len>end)break;
+        var want=id==="TIT2"||id==="TT2"?"title":id==="TPE1"||id==="TP1"?"artist":"";
+        if(want&&!tags[want])tags[want]=decodeText(new Uint8Array(v.buffer,at+head+1,len-1),v.getUint8(at+head));
+        at+=head+len;
+        if(tags.title&&tags.artist)break;
+      }
+      return tags.title||tags.artist?tags:null;
+    });
+  });
+}
+function readId3v1(file){
+  if(file.size<128)return Promise.resolve(null);
+  return bytesAt(file,file.size-128,128).then(function(v){
+    if(ascii(v,0,3)!=="TAG")return null;
+    var tags={title:decodeText(new Uint8Array(v.buffer,3,30),0),artist:decodeText(new Uint8Array(v.buffer,33,30),0)};
+    return tags.title||tags.artist?tags:null;
+  });
+}
+function readMp4(file){
+  var at=0;
+  function parseList(v){
+    var n=v.byteLength,i,p,tags={};
+    for(i=8;i+8<=n;i++){
+      if(ascii(v,i,4)!=="ilst")continue;
+      var listEnd=Math.min(n,i-4+v.getUint32(i-4));p=i+4;
+      while(p+8<=listEnd){
+        var size=v.getUint32(p),type=ascii(v,p+4,4);if(size<8)break;
+        var want=type==="\u00a9nam"?"title":type==="\u00a9ART"?"artist":"";
+        if(want){var q=p+8;while(q+8<=p+size){var ds=v.getUint32(q);if(ds<8)break;if(ascii(v,q+4,4)==="data"&&ds>16){tags[want]=decodeText(new Uint8Array(v.buffer,q+16,ds-16),3);break}q+=ds}}
+        p+=size;
+      }
+      break;
+    }
+    return tags.title||tags.artist?tags:null;
+  }
+  function next(){
+    if(at+16>file.size)return null;
+    return bytesAt(file,at,16).then(function(h){
+      var size=h.getUint32(0),type=ascii(h,4,4);
+      if(size===1)size=h.getUint32(8)*4294967296+h.getUint32(12);else if(size===0)size=file.size-at;
+      if(size<8)return null;
+      if(type==="moov")return bytesAt(file,at,Math.min(size,8*1024*1024)).then(parseList);
+      at+=size;return next();
+    });
+  }
+  return bytesAt(file,4,4).then(function(h){return h.byteLength===4&&ascii(h,0,4)==="ftyp"?next():null});
+}
+function readFlac(file){
+  return bytesAt(file,0,4).then(function(h){
+    if(h.byteLength<4||ascii(h,0,4)!=="fLaC")return null;
+    var at=4;
+    function block(){
+      return bytesAt(file,at,4).then(function(b){
+        if(b.byteLength<4)return null;
+        var last=b.getUint8(0)&0x80,type=b.getUint8(0)&0x7f,len=(b.getUint8(1)<<16)|(b.getUint8(2)<<8)|b.getUint8(3);
+        if(type===4)return bytesAt(file,at+4,len).then(function(v){
+          var p=4+v.getUint32(0,true),count=v.getUint32(p,true),tags={},i;p+=4;
+          for(i=0;i<count&&p+4<=v.byteLength;i++){
+            var l=v.getUint32(p,true);p+=4;if(p+l>v.byteLength)break;
+            var entry=decodeText(new Uint8Array(v.buffer,p,l),3),eq=entry.indexOf("=");p+=l;
+            var key=entry.slice(0,eq).toUpperCase(),val=entry.slice(eq+1).trim();
+            if(key==="TITLE"&&!tags.title)tags.title=val;else if(key==="ARTIST"&&!tags.artist)tags.artist=val;
+          }
+          return tags.title||tags.artist?tags:null;
+        });
+        if(last)return null;at+=4+len;return block();
+      });
+    }
+    return block();
+  });
+}
+function readTags(file){
+  return readId3v2(file).then(function(t){return t||readMp4(file)}).then(function(t){return t||readFlac(file)}).then(function(t){return t||readId3v1(file)}).catch(function(){return null});
+}
+function suggestedTitle(file,tags){
+  var title=tags&&tags.title?tags.title:"",artist=tags&&tags.artist?tags.artist:"";
+  if(title){
+    var full=artist&&title.toLowerCase().indexOf(artist.toLowerCase())<0?artist+" - "+title:title;
+    return {text:fitTitle(utf8Bytes(full)<=TITLE_MAX_BYTES?full:title),source:"tags"};
+  }
+  return {text:fitTitle(cleanFileTitle(file.name)),source:"name"};
 }
 function seconds(t){var s=Math.round((t.bytes||0)/44100);return s>=60?Math.floor(s/60)+":"+("0"+s%60).slice(-2):s+" s"}
 function busy(btn,label){btn.disabled=true;btn.dataset.was=btn.textContent;btn.textContent=label||"…"}
@@ -842,15 +967,20 @@ $("trim-listen").addEventListener("click",function(){
 });
 window.addEventListener("resize",function(){if(picked&&picked.decoded&&!$("trim").hidden){drawWave();placeTrim()}});
 function pickedFile(){return $("track-file").files&&$("track-file").files[0]}
-function resetPicker(){stopListen();picked=null;$("trim").hidden=true;$("track-pick-label").textContent="Tap to choose an audio file";$("track-pick-hint").textContent="or drop one here";$("dropzone").classList.remove("has");$("track-add").disabled=true}
+function resetPicker(){stopListen();picked=null;$("trim").hidden=true;$("track-name").hidden=true;$("track-title").value="";$("track-pick-label").textContent="Tap to choose an audio file";$("track-pick-hint").textContent="or drop one here";$("dropzone").classList.remove("has");$("track-add").disabled=true}
 function takeFile(f){
-  $("track-note").textContent="";stopListen();picked=null;$("trim").hidden=true;$("track-add").disabled=true;
+  $("track-note").textContent="";stopListen();picked=null;$("trim").hidden=true;$("track-name").hidden=true;$("track-title").value="";$("track-add").disabled=true;
   if(!f){resetPicker();return}
   var okType=(f.type&&f.type.indexOf("audio/")===0)||AUDIO_EXT.test(f.name);
   if(!okType){resetPicker();$("track-file").value="";toast("That is not an audio file.","bad",{id:"audio"});return}
   if(f.size>MAX_SOURCE_BYTES){resetPicker();$("track-file").value="";toast("That file is over 30 MB. Trim it first.","bad",{id:"audio"});return}
   $("track-pick-label").textContent=f.name;$("track-pick-hint").textContent="Reading\u2026";$("dropzone").classList.add("has");
   var mine={file:f,decoded:null,duration:0,start:0,end:0,peaks:null};picked=mine;
+  readTags(f).then(function(tags){
+    if(picked!==mine)return;
+    var s=suggestedTitle(f,tags);
+    $("track-title").value=s.text;text("track-title-hint",s.source==="tags"?"\u00b7 from the song\u2019s tags":"\u00b7 from the file name");$("track-name").hidden=false;
+  });
   decodeFile(f).then(function(decoded){
     if(picked!==mine)return;
     mine.decoded=decoded;mine.duration=decoded.duration;
@@ -875,12 +1005,13 @@ $("track-add").addEventListener("click",function(){
   convertForApple(p.decoded,p.start,p.end).then(function(out){
     var whole=p.start<=0&&p.end>=p.duration;
     btn.textContent="Sending…";$("track-note").textContent=whole?"Kept the whole track, "+mmss(out.seconds)+".":"Kept "+mmss(out.seconds)+", from "+mmss(p.start)+" to "+mmss(p.end)+".";
-    sendTrack(out.wav,trackFileName(p.file.name),true);
+    var title=fitTitle($("track-title").value)||fitTitle(cleanFileTitle(p.file.name));
+    sendTrack(out.wav,trackFileName(title),title,true);
   }).catch(function(){
     audioBusy=false;unbusy(btn);toast("That file could not be converted.","bad",{id:"audio"});
   });
 });
-function sendTrack(wav,name,retry){
+function sendTrack(wav,name,title,retry){
   var bar=$("track-bar"),fill=$("track-bar-fill"),btn=$("track-add");
   bar.hidden=false;fill.style.width="0%";
   var fd=new FormData();fd.append("track",new Blob([wav],{type:"audio/wav"}),name);
@@ -889,19 +1020,22 @@ function sendTrack(wav,name,retry){
   function done(){audioBusy=false;bar.hidden=true;unbusy(btn);btn.textContent="Add track";$("track-file").value="";resetPicker();$("track-for").value="hr"}
   x.onload=function(){
     if(x.status===200){
-      var choice=$("track-for").value,who=roster.filter(function(p){return String(p.id)===String(choice)})[0];
+      var choice=$("track-for").value,who=roster.filter(function(p){return String(p.id)===String(choice)})[0],file="/"+name;
       done();$("track-note").textContent="";trackSig="";
-      /* The Apple files a new track under home runs; anything else is set here, right after. */
-      if(who){
-        audioSet({action:"assign",file:"/"+name,id:who.id,text:who.name}).then(function(){return audioSet({action:"pool",file:"/"+name,hr:"off"})})
-          .then(function(){toast("Added for "+who.name+".","ok",{id:"audio"})});
-      } else if(choice==="win"){
-        audioSet({action:"pool",file:"/"+name,hr:"off",win:"on"}).then(function(){toast("Added to the Mets win tracks.","ok",{id:"audio"})});
-      } else if(choice==="both"){
-        audioSet({action:"pool",file:"/"+name,win:"on"}).then(function(){toast("Added to the home run and Mets win tracks.","ok",{id:"audio"})});
-      } else {toast("Added to the home run tracks.","ok",{id:"audio"});status()}
+      /* The Apple files a new track under home runs with the card name as its
+         title; the chosen name and anything else are set here, right after. */
+      var named=title?audioSet({action:"rename",file:file,text:title}):Promise.resolve(true);
+      named.then(function(){
+        if(who){
+          return audioSet({action:"assign",file:file,id:who.id,text:who.name}).then(function(){return audioSet({action:"pool",file:file,hr:"off"})})
+            .then(function(){toast("Added for "+who.name+".","ok",{id:"audio"})});
+        }
+        if(choice==="win")return audioSet({action:"pool",file:file,hr:"off",win:"on"}).then(function(){toast("Added to the Mets win tracks.","ok",{id:"audio"})});
+        if(choice==="both")return audioSet({action:"pool",file:file,win:"on"}).then(function(){toast("Added to the home run and Mets win tracks.","ok",{id:"audio"})});
+        toast("Added to the home run tracks.","ok",{id:"audio"});status();
+      });
       return}
-    if(x.status===401&&retry!==false){askCode().then(function(v){if(v!==null)sendTrack(wav,name,false);else done()});return}
+    if(x.status===401&&retry!==false){askCode().then(function(v){if(v!==null)sendTrack(wav,name,title,false);else done()});return}
     done();var err="";try{err=(JSON.parse(x.responseText)||{}).error||""}catch(e){}
     toast(audioMessage(x.status,err),"bad",{id:"audio"});
   };
