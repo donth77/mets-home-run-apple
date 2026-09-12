@@ -37,7 +37,10 @@ export function isAllowedPushEndpoint(value: unknown): value is string {
 export function parsePushSubscription(value: unknown): BrowserPushSubscription | undefined {
   if (!isRecord(value) || !isAllowedPushEndpoint(value.endpoint) || !isRecord(value.keys)) return undefined;
   if (!isBase64Url(value.keys.p256dh, 40, 160) || !isBase64Url(value.keys.auth, 8, 64)) return undefined;
-  const expirationTime = value.expirationTime;
+  // Chrome and Firefox serialize a subscription that never expires as
+  // expirationTime: null. WebKit declares the member optional without a
+  // default, so Safari and iOS home-screen apps omit the key instead.
+  const expirationTime = value.expirationTime ?? null;
   if (expirationTime !== null && (typeof expirationTime !== "number" || !Number.isFinite(expirationTime))) {
     return undefined;
   }

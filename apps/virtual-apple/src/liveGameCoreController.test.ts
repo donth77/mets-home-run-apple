@@ -1,6 +1,6 @@
 import type { NormalizedGameInput } from "@apple/protocol";
 import { afterEach, describe, expect, it } from "vitest";
-import { coreSequenceNeedsTicking, LiveGameCoreController } from "./liveGameCoreController";
+import { coreSequenceNeedsTicking, LiveGameCoreController, VIRTUAL_ACTUATOR_STROKE_MS } from "./liveGameCoreController";
 
 const activeControllers: LiveGameCoreController[] = [];
 
@@ -92,5 +92,75 @@ describe("Virtual Apple live core controller", () => {
       kind: "GRAND_SLAM",
       subject: "Francisco Lindor",
     });
+  });
+
+  it("arrives by drive time when a paused animation never reports a position", async () => {
+    const controller = await LiveGameCoreController.create();
+    activeControllers.push(controller);
+
+    controller.ingest(input("20260912_195135", "BOOTSTRAP"), 0);
+    controller.ingest(input("20260912_195154", "INCREMENTAL", "GRAND_SLAM"), 100);
+    expect(controller.tick(2_100).decision?.sequenceState).toBe("EXTENDING");
+
+    const extendDueAt = 2_100 + VIRTUAL_ACTUATOR_STROKE_MS;
+    expect(controller.tick(extendDueAt - 100).decision?.sequenceState).toBe("EXTENDING");
+    const raised = controller.tick(extendDueAt);
+    expect(raised.decision?.sequenceState).toBe("RAISED");
+    expect(raised.celebration?.kind).toBe("GRAND_SLAM");
+    expect(raised.targetPositionMm).toBe(50);
+
+    // The core's 10 s motion deadline passes without a fault; a hidden tab used to end the celebration here.
+    const pastDeadline = controller.tick(2_100 + 10_000 + 100);
+    expect(pastDeadline.decision?.faultLatched).toBe(false);
+    expect(pastDeadline.decision?.sequenceState).toBe("RAISED");
+    expect(pastDeadline.celebration?.kind).toBe("GRAND_SLAM");
+
+    const retractIssuedAt = extendDueAt + 30_000;
+    const retracting = controller.tick(retractIssuedAt);
+    expect(retracting.decision?.sequenceState).toBe("RETRACTING");
+    expect(retracting.targetPositionMm).toBe(0);
+    expect(retracting.celebration?.kind).toBe("GRAND_SLAM");
+
+    const retractDueAt = retractIssuedAt + VIRTUAL_ACTUATOR_STROKE_MS;
+    expect(controller.tick(retractDueAt - 100).celebration?.kind).toBe("GRAND_SLAM");
+    const home = controller.tick(retractDueAt);
+    expect(home.decision?.sequenceState).toBe("IDLE");
+    expect(home.decision?.faultLatched).toBe(false);
+    expect(home.celebration).toBeUndefined();
+  });
+
+  it("finishes the sequence when the page clock jumps far ahead, without tripping the motion deadline", async () => {
+    const controller = await LiveGameCoreController.create();
+    activeControllers.push(controller);
+
+    controller.ingest(input("20260912_195135", "BOOTSTRAP"), 0);
+    controller.ingest(input("20260912_195154", "INCREMENTAL"), 100);
+    expect(controller.tick(2_100).decision?.sequenceState).toBe("EXTENDING");
+
+    // A frozen page resumes a minute later: the drive finished on time, so the dwell has also elapsed.
+    const resumed = controller.tick(60_000);
+    expect(resumed.decision?.faultLatched).toBe(false);
+    expect(resumed.decision?.sequenceState).toBe("RETRACTING");
+    expect(resumed.targetPositionMm).toBe(0);
+    expect(resumed.celebration?.eventKey).toBe("824560:play-42");
+    expect(resumed.decision?.traces.map((trace) => trace.code)).toEqual(["MOTION_RETRACT_ISSUED"]);
+
+    const home = controller.tick(60_000 + VIRTUAL_ACTUATOR_STROKE_MS);
+    expect(home.decision?.sequenceState).toBe("IDLE");
+    expect(home.celebration).toBeUndefined();
+  });
+
+  it("lets an animation frame report arrival early without a duplicate report later", async () => {
+    const controller = await LiveGameCoreController.create();
+    activeControllers.push(controller);
+
+    controller.ingest(input("20260912_195135", "BOOTSTRAP"), 0);
+    controller.ingest(input("20260912_195154", "INCREMENTAL"), 100);
+    controller.tick(2_100);
+    expect(controller.reportPosition(50, 4_000)?.decision?.sequenceState).toBe("RAISED");
+    const afterDriveTime = controller.tick(2_100 + VIRTUAL_ACTUATOR_STROKE_MS);
+    expect(afterDriveTime.decision?.sequenceState).toBe("RAISED");
+    expect(afterDriveTime.decision?.traces).toEqual([]);
+    expect(controller.reportPosition(50, 8_000)).toBeUndefined();
   });
 });

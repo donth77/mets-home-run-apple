@@ -43,6 +43,28 @@ describe("notification API", () => {
     expect(response.status).toBe(403);
   });
 
+  it("stores an iPhone subscription that carries no expirationTime key", async () => {
+    const fake = store();
+    const response = await handleNotificationApi(
+      context("subscription", "PUT", {
+        subscription: {
+          endpoint: "https://web.push.apple.com/QP1/token",
+          keys: { p256dh: "a".repeat(87), auth: "b".repeat(22) },
+        },
+        preferences: { homeRuns: true, metsWins: true },
+      }),
+      123,
+      () => fake,
+    );
+
+    expect(response.status).toBe(200);
+    expect(fake.saveSubscription).toHaveBeenCalledWith(
+      expect.objectContaining({ endpoint: "https://web.push.apple.com/QP1/token", expirationTime: null }),
+      { homeRuns: true, metsWins: true },
+      123,
+    );
+  });
+
   it("stores explicit home-run and win preferences", async () => {
     const fake = store();
     const response = await handleNotificationApi(

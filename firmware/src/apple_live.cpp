@@ -114,7 +114,7 @@ constexpr char kProfileName[] = "apple_live";
 #ifdef APPLE_UPDATE_CRASH_TEST
 constexpr char kFirmwareVersion[] = "0.2.2-crashtest";
 #else
-constexpr char kFirmwareVersion[] = "0.3.1";
+constexpr char kFirmwareVersion[] = "0.3.2";
 #endif
 constexpr char kHostname[] = "home-run-apple";
 constexpr char kEasternTz[] = "EST5EDT,M3.2.0,M11.1.0";
@@ -148,10 +148,10 @@ constexpr std::uint32_t kSdClockHz = 20'000'000;
 constexpr int kI2sDmaBuffers = 32;
 constexpr std::uint8_t kMaxTracks = 50;        // about 80 bytes each; the page paginates
 constexpr std::uint8_t kMaxPlayerTracks = 32;
-// A win plays its whole track and holds the Apple up for as long as five
-// minutes (kWinMaxDwellMs), so a track may be that long: 5 min at 22,050 Hz
-// mono is 13.2 MB.
-constexpr std::uint32_t kMaxTrackBytes = 14UL * 1024 * 1024;
+// A win plays its whole track and holds the Apple up for as long as seven
+// minutes (kWinMaxDwellMs), so a track may be that long: 7 min at 22,050 Hz
+// mono is 18.5 MB. The Manager page keeps at most that much of an upload.
+constexpr std::uint32_t kMaxTrackBytes = 18UL * 1024 * 1024;
 constexpr char kAudioManifestPath[] = "/audio.json";
 // A celebration runs about 46 s, so there is no point holding more of a track
 // than that. Two of these live in PSRAM at once, one per list.
@@ -696,7 +696,7 @@ volatile bool audio_request_stream = false;
 char win_stream_file[32] = "";
 std::uint32_t win_stream_data_at = 44;
 constexpr std::uint32_t kWinExtendAllowanceMs = 7'000;   // the lift, before the dwell starts
-constexpr std::uint32_t kWinMaxDwellMs = 5UL * 60 * 1000;  // however long the track, stop here
+constexpr std::uint32_t kWinMaxDwellMs = 7UL * 60 * 1000;  // however long the track, stop here
 std::uint32_t audio_bytes_read = 0;
 std::uint32_t audio_started_ms = 0;
 std::int32_t audio_depth_min = 0;

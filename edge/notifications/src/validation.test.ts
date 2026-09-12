@@ -20,6 +20,19 @@ describe("push subscription validation", () => {
     expect(isAllowedPushEndpoint("not a URL")).toBe(false);
   });
 
+  it("accepts a Safari subscription, which omits expirationTime instead of sending null", () => {
+    expect(
+      parsePushSubscription({
+        endpoint: "https://web.push.apple.com/QP1/token",
+        keys: { p256dh: "a".repeat(87), auth: "b".repeat(22) },
+      }),
+    ).toEqual({
+      endpoint: "https://web.push.apple.com/QP1/token",
+      expirationTime: null,
+      keys: { p256dh: "a".repeat(87), auth: "b".repeat(22) },
+    });
+  });
+
   it("requires a complete subscription and explicit preferences", () => {
     expect(
       parsePushSubscription({
@@ -29,6 +42,13 @@ describe("push subscription validation", () => {
       }),
     ).toBeDefined();
     expect(parsePushSubscription({ endpoint: "https://example.com", keys: {} })).toBeUndefined();
+    expect(
+      parsePushSubscription({
+        endpoint: "https://fcm.googleapis.com/fcm/send/token",
+        expirationTime: "soon",
+        keys: { p256dh: "a".repeat(87), auth: "b".repeat(22) },
+      }),
+    ).toBeUndefined();
     expect(parsePreferences({ homeRuns: true, metsWins: false })).toEqual({ homeRuns: true, metsWins: false });
     expect(parsePreferences({ homeRuns: true })).toBeUndefined();
   });

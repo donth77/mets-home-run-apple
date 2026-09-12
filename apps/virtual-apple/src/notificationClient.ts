@@ -59,10 +59,12 @@ export async function subscriptionStatus(subscription: PushSubscription) {
 }
 
 export async function enablePushNotifications(preferences: NotificationPreferences) {
-  const registration = await registerNotificationServiceWorker();
-  const config = await api<NotificationConfig>("config");
+  // Ask first: iOS only shows the prompt while the tap that started this is
+  // still a user gesture, so nothing may be awaited ahead of it.
   const permission = await Notification.requestPermission();
   if (permission !== "granted") return { permission, subscription: undefined };
+  const registration = await registerNotificationServiceWorker();
+  const config = await api<NotificationConfig>("config");
   const subscription =
     (await currentPushSubscription(registration)) ??
     (await registration.pushManager.subscribe({
@@ -73,10 +75,16 @@ export async function enablePushNotifications(preferences: NotificationPreferenc
   return { permission, subscription };
 }
 
+/** Safari omits expirationTime from toJSON() when a subscription never expires; the API expects null. */
+export function subscriptionJson(subscription: Pick<PushSubscription, "toJSON">) {
+  const json = subscription.toJSON();
+  return { ...json, expirationTime: json.expirationTime ?? null };
+}
+
 export async function savePushPreferences(subscription: PushSubscription, preferences: NotificationPreferences) {
   await api<NotificationStatus>("subscription", {
     method: "PUT",
-    body: JSON.stringify({ subscription: subscription.toJSON(), preferences }),
+    body: JSON.stringify({ subscription: subscriptionJson(subscription), preferences }),
   });
 }
 

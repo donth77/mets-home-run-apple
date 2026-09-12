@@ -81,6 +81,27 @@ input[type=file]::file-selector-button{font:inherit;font-weight:600;padding:7px 
 .dz-text b{font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dz-text small{font-size:12.5px;color:var(--muted)}
 .dropzone.has .dz-text small{color:var(--orange-soft)}
+.trim{margin-top:12px;padding:12px 14px;border:1px solid var(--blue-line);border-radius:12px;background:rgba(0,0,0,.14)}
+.trim-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}
+.trim-head b{font-size:14px}
+.trim-head small{font-size:12.5px;color:var(--muted)}
+.trim-wave{position:relative;height:64px;margin-top:10px;border-radius:8px;overflow:hidden;background:var(--blue-deep)}
+.trim-wave canvas{position:absolute;left:0;top:0;width:100%;height:100%;display:block}
+.trim-wave .sel{position:absolute;top:0;bottom:0;background:rgba(255,89,16,.18);box-shadow:inset 2px 0 0 var(--orange),inset -2px 0 0 var(--orange);pointer-events:none}
+.trim-wave .play{position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;background:#fff;pointer-events:none}
+.trim-wave .hr{position:absolute;top:0;bottom:0;background:rgba(255,178,138,.16);border-right:2px dashed rgba(255,255,255,.6);pointer-events:none}
+.trim-plays{font-size:12.5px;color:var(--muted);margin:8px 0 0;line-height:1.45}
+.trim-plays b{color:var(--text);font-weight:600}
+.trim-wave input[type=range]{position:absolute;left:0;top:0;width:100%;height:64px;margin:0;padding:0;background:transparent;border:0;border-radius:0;-webkit-appearance:none;appearance:none;pointer-events:none;outline:0}
+.trim-wave input[type=range]::-webkit-slider-runnable-track{height:64px;background:transparent;border:0}
+.trim-wave input[type=range]::-moz-range-track{height:64px;background:transparent;border:0}
+.trim-wave input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;pointer-events:auto;width:14px;height:64px;margin-top:0;border-radius:5px;background:var(--orange);border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.35);cursor:ew-resize}
+.trim-wave input[type=range]::-moz-range-thumb{pointer-events:auto;width:14px;height:64px;border-radius:5px;background:var(--orange);border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.35);cursor:ew-resize}
+.trim-wave input[type=range]:focus-visible::-webkit-slider-thumb{outline:2px solid #fff;outline-offset:1px}
+.trim-wave input[type=range]:focus-visible::-moz-range-thumb{outline:2px solid #fff;outline-offset:1px}
+.trim-times{display:flex;justify-content:space-between;gap:10px;margin-top:8px;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.trim-times b{color:var(--text)}
+.trim-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:8px}
 .group{margin-top:16px}
 .group h4{margin:0 0 4px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
 .group .empty{font-size:13px;color:var(--muted);padding:8px 0}
@@ -229,9 +250,19 @@ a.btn{display:inline-block;font-size:15px;font-weight:600;padding:11px 16px;bord
   <span class="dz-text"><b id="track-pick-label">Tap to choose an audio file</b><small id="track-pick-hint">or drop one here</small></span>
   <input id="track-file" type="file" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.flac" aria-label="Audio file">
 </label>
+<div class="trim" id="trim" hidden>
+  <div class="trim-head"><b>Choose the part to keep</b><small id="trim-hint"></small></div>
+  <div class="trim-wave" id="trim-wave"><canvas id="trim-canvas" aria-hidden="true"></canvas><div class="sel" id="trim-sel"></div><div class="hr" id="trim-hr" hidden></div><div class="play" id="trim-play" hidden></div>
+    <input id="trim-start" type="range" min="0" max="100" step="0.5" value="0" aria-label="Start of the part to keep">
+    <input id="trim-end" type="range" min="0" max="100" step="0.5" value="100" aria-label="End of the part to keep">
+  </div>
+  <div class="trim-times"><span>Start <b id="trim-start-out">0:00</b></span><span>Keeps <b id="trim-len-out">0:00</b></span><span>End <b id="trim-end-out">0:00</b></span></div>
+  <p class="trim-plays" id="trim-plays"></p>
+  <div class="trim-row"><button id="trim-listen" class="act" type="button">▶ Play the selection</button><button id="trim-reset" class="link" type="button">Reset</button></div>
+</div>
 <div class="for-row"><label class="for-label" for="track-for">Plays for</label><select id="track-for"><option value="hr">Home runs</option><option value="win">Mets wins</option><option value="both">Home runs and Mets wins</option><optgroup id="track-for-players" label="One player's home runs"></optgroup></select></div>
 <div class="row"><button id="track-add" type="button" disabled>Add track</button></div>
-<p class="note tiny">MP3, M4A, WAV and most others. Up to 30 MB. The first 5 minutes are kept, converted here on your device to what the Apple plays. A home run plays about the first 40 seconds; a win plays the whole track.</p>
+<p class="note tiny">MP3, M4A, WAV and most others. Up to 30 MB. Drag the handles to keep up to 7 minutes of it; that part is converted here on your device to what the Apple plays. A home run plays the start of what you keep, for as long as the Apple stays up; a win can play all of it. The handles show exactly how much.</p>
 <p class="note tiny"><b>Preview</b> plays a track here, on this device. <b>Play on the Apple</b> plays it through the Apple's own speaker, at the volume set in Settings.</p>
 <div class="progress" id="track-bar" hidden><i id="track-bar-fill"></i></div>
 <p class="note" id="track-note" aria-live="polite"></p>
@@ -478,7 +509,7 @@ $("install").addEventListener("click",function(){var f=$("fw-file").files[0];if(
    PCM WAV, with the bass its small speaker cannot reproduce rolled off. The
    conversion happens here rather than on the Apple, which has no processor time
    to spare during a celebration. */
-var APPLE_RATE=22050,HIGHPASS_HZ=180,HEADROOM=0.89,MAX_SECONDS=300,MAX_SOURCE_BYTES=30*1024*1024;
+var APPLE_RATE=22050,HIGHPASS_HZ=180,HEADROOM=0.89,MAX_SECONDS=420,MIN_SECONDS=5,CUT_FADE_SECONDS=0.03,MAX_SOURCE_BYTES=30*1024*1024;
 var AUDIO_EXT=/\.(mp3|m4a|aac|wav|ogg|oga|flac|aiff?|wma|opus|webm)$/i;
 var PAGE_SIZE=10,PLAYER_PAGE_SIZE=8,trackSort="name",trackPage=1,playerPage=1,trackQuery="",trackFilter="all";try{trackSort=localStorage.getItem("apple-track-sort")||"name";trackFilter=localStorage.getItem("apple-track-filter")||"all"}catch(e){}
 var FILTERS={all:function(){return true},hr:function(t){return !!t.hr},win:function(t){return !!t.win},players:function(t,a){return usedBy(t.file,a.players||[]).length>0},unused:function(t,a){return !t.hr&&!t.win&&!usedBy(t.file,a.players||[]).length}};
@@ -496,20 +527,23 @@ function encodeWav(samples,scale){
   for(i=0;i<samples.length;i++){var v=samples[i]*scale;if(v>1)v=1;if(v<-1)v=-1;view.setInt16(44+i*2,Math.round(v*32767),true)}
   return bytes;
 }
-function convertForApple(file){
+function decodeFile(file){
   return file.arrayBuffer().then(function(raw){
     var ctx=new (window.AudioContext||window.webkitAudioContext)();
-    return ctx.decodeAudioData(raw).then(function(decoded){
-      ctx.close();
-      var seconds=Math.min(decoded.duration,MAX_SECONDS),frames=Math.max(1,Math.round(seconds*APPLE_RATE));
-      var off=new OfflineAudioContext(1,frames,APPLE_RATE),src=off.createBufferSource();src.buffer=decoded;
-      var a=off.createBiquadFilter();a.type="highpass";a.frequency.value=HIGHPASS_HZ;
-      var b=off.createBiquadFilter();b.type="highpass";b.frequency.value=HIGHPASS_HZ;
-      src.connect(a);a.connect(b);b.connect(off.destination);src.start();
-      return off.startRendering();
-    },function(){ctx.close();throw new Error("decode")});
-  }).then(function(rendered){
-    var s=rendered.getChannelData(0),peak=0,i;
+    return ctx.decodeAudioData(raw).then(function(decoded){ctx.close();return decoded},function(){ctx.close();throw new Error("decode")});
+  });
+}
+/* Renders the chosen part of a decoded file: MIN_SECONDS to MAX_SECONDS from
+   start, with a short fade at each cut so a mid-song edit does not click. */
+function convertForApple(decoded,start,end){
+  var seconds=Math.min(Math.max(end-start,MIN_SECONDS),MAX_SECONDS),frames=Math.max(1,Math.round(seconds*APPLE_RATE));
+  var off=new OfflineAudioContext(1,frames,APPLE_RATE),src=off.createBufferSource();src.buffer=decoded;
+  var a=off.createBiquadFilter();a.type="highpass";a.frequency.value=HIGHPASS_HZ;
+  var b=off.createBiquadFilter();b.type="highpass";b.frequency.value=HIGHPASS_HZ;
+  src.connect(a);a.connect(b);b.connect(off.destination);src.start(0,start,seconds);
+  return off.startRendering().then(function(rendered){
+    var s=rendered.getChannelData(0),peak=0,i,fade=Math.min(s.length>>1,Math.round(CUT_FADE_SECONDS*APPLE_RATE));
+    for(i=0;i<fade;i++){var g=i/fade;s[i]*=g;s[s.length-1-i]*=g}
     for(i=0;i<s.length;i++){var m=Math.abs(s[i]);if(m>peak)peak=m}
     return {wav:encodeWav(s,peak>0?HEADROOM/peak:1),seconds:Math.round(s.length/APPLE_RATE)};
   });
@@ -606,7 +640,7 @@ function fillPager(pager,page,pages,size,total,pick){
   pager.appendChild(el("span","count",(page-1)*size+1+"–"+Math.min(page*size,total)+" of "+total));
 }
 function renderAudio(s){
-  lastStatus=s;var a=s.audio||{},sig=JSON.stringify([a.card,a.tracks,a.players,a.playing,previewing,rosterLoaded,trackSort,trackPage,playerPage,trackQuery,trackFilter]);
+  lastStatus=s;trimPlays();var a=s.audio||{},sig=JSON.stringify([a.card,a.tracks,a.players,a.playing,previewing,rosterLoaded,trackSort,trackPage,playerPage,trackQuery,trackFilter]);
   $("audio").hidden=setupOnlyNow||tab!=="audio";
   $("audio-note").textContent=a.card?"Add your own tracks. Choose which play for a home run and which play when the Mets win, and give any player tracks of his own.":"No memory card. Put one in and restart the Apple to add tracks.";
   if(sig===trackSig)return;
@@ -714,16 +748,120 @@ $("player-add").addEventListener("click",function(){
   if(!who||!file)return;
   busy(btn);audioSet({action:"assign",file:file,id:who.id,text:who.name}).then(function(){unbusy(btn);$("player-pick").value="";refreshAssignButton()});
 });
+/* Trimming. The picked file is decoded once and drawn as a waveform; two
+   handles over it choose the part to keep. The handle positions map time to
+   pixels the way the browser places a range thumb: its centre travels from
+   half a thumb in from one edge to half a thumb in from the other. */
+var picked=null,listenCtx=null,listenSrc=null,listenFrame=0,TRIM_THUMB=14;
+function mmss(s){s=Math.max(0,Math.round(s));return Math.floor(s/60)+":"+("0"+s%60).slice(-2)}
+function trimX(t){var w=$("trim-wave").clientWidth;return picked&&picked.duration>0?TRIM_THUMB/2+(t/picked.duration)*(w-TRIM_THUMB):0}
+function wavePeaks(decoded,columns){
+  var peaks=new Float32Array(columns),per=decoded.length/columns,ch,i,k,data,top=0;
+  for(ch=0;ch<decoded.numberOfChannels;ch++){data=decoded.getChannelData(ch);
+    for(i=0;i<columns;i++){var from=Math.floor(i*per),to=Math.min(data.length,Math.floor((i+1)*per)),peak=peaks[i];
+      for(k=from;k<to;k+=4){var m=data[k];if(m<0)m=-m;if(m>peak)peak=m}peaks[i]=peak}}
+  for(i=0;i<columns;i++)if(peaks[i]>top)top=peaks[i];
+  if(top>0)for(i=0;i<columns;i++)peaks[i]/=top;
+  return peaks;
+}
+function drawWave(){
+  var wave=$("trim-wave"),canvas=$("trim-canvas"),w=wave.clientWidth,h=wave.clientHeight,dpr=window.devicePixelRatio||1;
+  if(!picked||!w||!h)return;
+  if(!picked.peaks||picked.peaks.length!==w)picked.peaks=wavePeaks(picked.decoded,w);
+  canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr);
+  var c=canvas.getContext("2d"),peaks=picked.peaks,inner=w-TRIM_THUMB,mid=h/2,i;
+  c.scale(dpr,dpr);c.clearRect(0,0,w,h);c.fillStyle="#5d7bb3";
+  for(i=0;i<w;i++){var bh=Math.max(1,peaks[i]*(h-8));c.fillRect(TRIM_THUMB/2+i*inner/w,mid-bh/2,Math.max(0.6,inner/w-0.4),bh)}
+}
+function placeTrim(){
+  if(!picked)return;var a=trimX(picked.start),b=trimX(picked.end),sel=$("trim-sel");
+  sel.style.left=a+"px";sel.style.width=Math.max(0,b-a)+"px";
+  $("trim-start").value=picked.start;$("trim-end").value=picked.end;
+  text("trim-start-out",mmss(picked.start));text("trim-end-out",mmss(picked.end));text("trim-len-out",mmss(picked.end-picked.start));
+  var whole=picked.start<=0&&picked.end>=picked.duration;
+  text("trim-hint",picked.duration>MAX_SECONDS?"Up to "+mmss(MAX_SECONDS)+" of "+mmss(picked.duration):whole?"The whole track, "+mmss(picked.duration):"of "+mmss(picked.duration));
+  trimPlays();
+}
+/* How much of the kept part a celebration plays. A home run starts the
+   track with the 2 s lead-in, lifts for up to 7 s, holds for the raised time
+   and fades over the last 3 s as the Apple comes down, all from the 50 s
+   copy the Apple keeps in memory. A win streams the whole track when that
+   setting is on; otherwise it plays the same window a home run does. */
+var HR_LEAD_IN_SECONDS=2,HR_LIFT_SECONDS=7,HR_COPY_SECONDS=50;
+function raisedSeconds(){var st=lastStatus&&lastStatus.settings,v=st&&Number(st.raisedSeconds);return v>0?v:30}
+function winWholeTrack(){var st=lastStatus&&lastStatus.settings;return !st||st.winFullTrack!==false}
+function homeRunWindowSeconds(){return Math.min(HR_COPY_SECONDS,HR_LEAD_IN_SECONDS+HR_LIFT_SECONDS+raisedSeconds())}
+function trimPlays(){
+  if(!picked||!picked.decoded||$("trim").hidden)return;
+  var choice=$("track-for").value,forWin=choice==="win"||choice==="both",forHr=choice!=="win";
+  var len=picked.end-picked.start,hr=Math.min(len,homeRunWindowSeconds()),band=$("trim-hr"),p=$("trim-plays");
+  band.hidden=!forHr||hr>=len;
+  if(!band.hidden){var a=trimX(picked.start),b=trimX(picked.start+hr);band.style.left=a+"px";band.style.width=Math.max(0,b-a)+"px"}
+  p.textContent="";
+  function say(parts){for(var i=0;i<parts.length;i++)p.appendChild(typeof parts[i]==="string"?document.createTextNode(parts[i]):el("b",null,parts[i].b))}
+  if(forHr){
+    if(hr>=len)say(["A home run plays all ",{b:mmss(len)}," of this. "]);
+    else if(HR_LEAD_IN_SECONDS+HR_LIFT_SECONDS+raisedSeconds()>HR_COPY_SECONDS)say(["A home run plays the first ",{b:mmss(hr)}," of this, as much as the Apple keeps in memory, then goes quiet while the Apple stays up for your "+raisedSeconds()+" s raised time. "]);
+    else say(["A home run plays the first ",{b:mmss(hr)}," of this and fades out as the Apple comes down. "]);
+  }
+  if(forWin){
+    if(winWholeTrack())say(["A win plays all ",{b:mmss(len)},"."]);
+    else say(["A win plays the first ",{b:mmss(hr)}," too. Turn on “Stay up for the whole track on a win” in Settings to play all of it."]);
+  }
+}
+function setTrim(start,end,movingEnd){
+  var d=picked.duration;
+  start=Math.max(0,Math.min(start,d));end=Math.max(0,Math.min(end,d));
+  if(movingEnd){if(end-start<MIN_SECONDS)start=Math.max(0,end-MIN_SECONDS);if(end-start>MAX_SECONDS)start=end-MAX_SECONDS}
+  else{if(end-start<MIN_SECONDS)end=Math.min(d,start+MIN_SECONDS);if(end-start>MAX_SECONDS)end=start+MAX_SECONDS}
+  if(end-start<MIN_SECONDS)start=Math.max(0,end-MIN_SECONDS);
+  picked.start=start;picked.end=end;stopListen();placeTrim();
+}
+function stopListen(){
+  if(listenSrc){var src=listenSrc;listenSrc=null;try{src.stop()}catch(e){}}
+  if(listenFrame){cancelAnimationFrame(listenFrame);listenFrame=0}
+  $("trim-play").hidden=true;$("trim-listen").textContent="▶ Play the selection";
+}
+$("trim-start").addEventListener("input",function(){if(picked)setTrim(parseFloat(this.value),picked.end,false)});
+$("trim-end").addEventListener("input",function(){if(picked)setTrim(picked.start,parseFloat(this.value),true)});
+$("trim-reset").addEventListener("click",function(){if(picked)setTrim(0,Math.min(picked.duration,MAX_SECONDS),false)});
+$("track-for").addEventListener("change",trimPlays);
+$("trim-listen").addEventListener("click",function(){
+  if(!picked||!picked.decoded)return;if(listenSrc){stopListen();return}
+  var AC=window.AudioContext||window.webkitAudioContext;if(!AC){toast("This browser cannot play audio here.","bad",{id:"audio"});return}
+  listenCtx=listenCtx||new AC();
+  var ctx=listenCtx,src=ctx.createBufferSource(),from=picked.start,len=picked.end-picked.start,mine=picked,at0;
+  src.buffer=picked.decoded;src.connect(ctx.destination);
+  function go(){
+    if(picked!==mine)return;
+    at0=ctx.currentTime;src.start(0,from,len);listenSrc=src;$("trim-listen").textContent="■ Stop";$("trim-play").hidden=false;
+    src.onended=function(){if(listenSrc===src)stopListen()};
+    (function tick(){if(listenSrc!==src)return;$("trim-play").style.left=trimX(Math.min(from+(ctx.currentTime-at0),picked.end))+"px";listenFrame=requestAnimationFrame(tick)})();
+  }
+  if(ctx.state==="suspended")ctx.resume().then(go,go);else go();
+});
+window.addEventListener("resize",function(){if(picked&&picked.decoded&&!$("trim").hidden){drawWave();placeTrim()}});
 function pickedFile(){return $("track-file").files&&$("track-file").files[0]}
-function resetPicker(){$("track-pick-label").textContent="Tap to choose an audio file";$("track-pick-hint").textContent="or drop one here";$("dropzone").classList.remove("has");$("track-add").disabled=true}
+function resetPicker(){stopListen();picked=null;$("trim").hidden=true;$("track-pick-label").textContent="Tap to choose an audio file";$("track-pick-hint").textContent="or drop one here";$("dropzone").classList.remove("has");$("track-add").disabled=true}
 function takeFile(f){
-  $("track-note").textContent="";
+  $("track-note").textContent="";stopListen();picked=null;$("trim").hidden=true;$("track-add").disabled=true;
   if(!f){resetPicker();return}
   var okType=(f.type&&f.type.indexOf("audio/")===0)||AUDIO_EXT.test(f.name);
   if(!okType){resetPicker();$("track-file").value="";toast("That is not an audio file.","bad",{id:"audio"});return}
   if(f.size>MAX_SOURCE_BYTES){resetPicker();$("track-file").value="";toast("That file is over 30 MB. Trim it first.","bad",{id:"audio"});return}
-  $("track-pick-label").textContent=f.name;$("track-pick-hint").textContent=Math.round(f.size/1048576*10)/10+" MB · ready to add";
-  $("dropzone").classList.add("has");$("track-add").disabled=audioBusy;
+  $("track-pick-label").textContent=f.name;$("track-pick-hint").textContent="Reading\u2026";$("dropzone").classList.add("has");
+  var mine={file:f,decoded:null,duration:0,start:0,end:0,peaks:null};picked=mine;
+  decodeFile(f).then(function(decoded){
+    if(picked!==mine)return;
+    mine.decoded=decoded;mine.duration=decoded.duration;
+    $("trim-start").max=$("trim-end").max=decoded.duration;
+    $("trim").hidden=false;drawWave();setTrim(0,Math.min(decoded.duration,MAX_SECONDS),false);
+    $("track-pick-hint").textContent=Math.round(f.size/1048576*10)/10+" MB \u00b7 "+mmss(decoded.duration);
+    $("track-add").disabled=audioBusy;
+  },function(){
+    if(picked!==mine)return;
+    resetPicker();$("track-file").value="";toast("That file could not be read as audio.","bad",{id:"audio"});
+  });
 }
 $("track-file").addEventListener("change",function(){takeFile(pickedFile())});
 (function(){var dz=$("dropzone");
@@ -732,13 +870,14 @@ $("track-file").addEventListener("change",function(){takeFile(pickedFile())});
   dz.addEventListener("drop",function(e){var f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0];if(!f)return;try{var dt=new DataTransfer();dt.items.add(f);$("track-file").files=dt.files}catch(err){}takeFile(f)});
 })();
 $("track-add").addEventListener("click",function(){
-  var f=pickedFile(),btn=$("track-add");if(!f||audioBusy)return;
-  audioBusy=true;busy(btn,"Converting…");$("track-note").textContent="";
-  convertForApple(f).then(function(out){
-    btn.textContent="Sending…";$("track-note").textContent="Kept "+out.seconds+" seconds.";
-    sendTrack(out.wav,trackFileName(f.name),true);
+  var p=picked,btn=$("track-add");if(!p||!p.decoded||audioBusy)return;
+  stopListen();audioBusy=true;busy(btn,"Converting…");$("track-note").textContent="";
+  convertForApple(p.decoded,p.start,p.end).then(function(out){
+    var whole=p.start<=0&&p.end>=p.duration;
+    btn.textContent="Sending…";$("track-note").textContent=whole?"Kept the whole track, "+mmss(out.seconds)+".":"Kept "+mmss(out.seconds)+", from "+mmss(p.start)+" to "+mmss(p.end)+".";
+    sendTrack(out.wav,trackFileName(p.file.name),true);
   }).catch(function(){
-    audioBusy=false;unbusy(btn);toast("That file could not be read as audio.","bad",{id:"audio"});
+    audioBusy=false;unbusy(btn);toast("That file could not be converted.","bad",{id:"audio"});
   });
 });
 function sendTrack(wav,name,retry){
