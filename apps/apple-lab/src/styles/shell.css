@@ -244,6 +244,25 @@ a:focus-visible,
   line-height: 1.45;
   margin: 7px 0 0 14px;
 }
+/* The source, tucked into the sidebar's bottom corner. */
+.sidebar-footer .source-link {
+  border-radius: 6px;
+  color: #728799;
+  display: inline-flex;
+  float: right;
+  margin: 6px 0 0;
+  opacity: 0.55;
+  padding: 6px;
+  transition: opacity 0.15s;
+}
+.sidebar-footer .source-link:hover,
+.sidebar-footer .source-link:focus-visible {
+  opacity: 1;
+  outline: none;
+}
+.sidebar-footer .source-link:focus-visible {
+  box-shadow: 0 0 0 2px #9dcdb1;
+}
 
 .manager-main {
   min-width: 0;
