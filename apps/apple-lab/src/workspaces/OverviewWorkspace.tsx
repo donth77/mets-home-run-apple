@@ -229,10 +229,10 @@ export function OverviewWorkspace({
                 />
                 <HealthItem
                   label="Storage"
-                  value={status.audio.card ? `${status.audio.tracks.length} tracks` : "No card"}
+                  value={status.audio.card ? `${status.audio.count} tracks` : "No card"}
                   detail={
                     status.audio.card
-                      ? `${status.audio.tracks.filter((track) => track.hr).length} home run · ${status.audio.tracks.filter((track) => track.win).length} win`
+                      ? `${status.audio.countHr} home run · ${status.audio.countWin} win`
                       : "Celebrations are silent"
                   }
                   tone={status.audio.card ? "good" : "warning"}

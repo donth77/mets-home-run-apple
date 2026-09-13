@@ -17,8 +17,8 @@ event counts, draws the screen, and controls the actuator.
 
 ## Game flow
 
-Each platform handles MLB data. The browser rebuilds
-MLB's live-feed patches. The Nano requests a smaller, field-limited feed. 
+Each platform fetches MLB data its own way: the browser rebuilds MLB's
+live-feed patches, and the Nano requests a smaller, field-limited feed.
 
 The game-state code produces two outputs:
 
@@ -42,17 +42,18 @@ games. It works on the local network and does not run the game loop.
 
 ### Apple Lab
 
-Apple Lab is a local workshop. It contains the simulator,
-historical replay, display previews, and
-tests over USB. Those tests already receive live serial data. 
+Apple Lab is the local workshop: simulator, historical replay, display
+previews, guarded USB tests, and a Wi-Fi connection to a physical Apple for
+approved test runs.
 
 ### Virtual Apple
 
 Virtual Apple is the public gameday site. It uses the same game-state and
 decision code, but has its own 3D scene. One edge function relays MLB requests.
 A scheduled worker uses the shared decision core for opt-in push alerts and
-keeps anonymous subscriptions and its event ledger in D1. It cannot discover
-or control a physical Apple.
+keeps anonymous subscriptions and its event ledger in D1. Dispatcher Durable
+Objects fan each alert out a few pushes per alarm. It cannot discover or
+control a physical Apple.
 
 ## Code map
 

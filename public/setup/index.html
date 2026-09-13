@@ -45,6 +45,11 @@ ul.plain li{padding:10px 0;border-top:1px solid var(--blue-line)}
 ul.plain li:first-child{border-top:0}
 ul.plain b{display:block;margin-bottom:2px}
 ul.plain span{color:var(--muted);font-size:15px}
+table.controls{width:100%;border-collapse:collapse;margin-top:6px;font-size:15px}
+table.controls th,table.controls td{text-align:left;vertical-align:top;padding:7px 10px 7px 0;border-top:1px solid var(--blue-line)}
+table.controls th{font-weight:600;white-space:nowrap;width:40%}
+table.controls td{color:var(--muted)}
+table.controls tr:first-child th,table.controls tr:first-child td{border-top:0}
 .fix{padding:12px 0;border-top:1px solid var(--blue-line)}
 .fix:first-child{border-top:0;padding-top:2px}
 .fix b{display:block;margin-bottom:2px}
@@ -96,13 +101,39 @@ footer{max-width:600px;margin:0 auto;padding:0 18px 40px;color:var(--muted);font
 <li><b>Raised time</b><span>How long the Apple stays up, 5 to 120 seconds.</span></li>
 <li><b>Motor</b><span>Off keeps the Apple still. Celebrations still play on the screen.</span></li>
 <li><b>Pause the Apple</b><span>Off unless you turn it on. On stops following games and celebrating until you turn it off.</span></li>
+<li><b>Stay up for the whole track on a win</b><span>On unless you turn it off. The game is over, so the Apple stays raised until the win track ends, up to seven minutes. Off, a win uses the Raised time like a home run.</span></li>
 <li><b>Screen brightness</b><span>Dims the display without turning it off.</span></li>
+<li><b>Volume</b><span>How loud celebrations play through the Apple's speaker.</span></li>
 <li><b>Sleep screen between games</b><span>Turns the screen off until the next game starts. Covers off days and the offseason.</span></li>
 <li><b>Time zone</b><span>Game times on the screen. Set from the device you used for setup; change it here if you move.</span></li>
 <li><b>Update automatically</b><span>On unless you turn it off. Installs new firmware between games, early in the morning.</span></li>
 <li><b>Password lock</b><span>Off unless you turn it on, which means anyone on your Wi-Fi can change settings. When you turn it on, the page shows the password once. Write it down.</span></li>
 </ul>
 <p class="tip">Tap <strong>Save</strong> after changing anything.</p>
+</div>
+</details>
+
+<details>
+<summary>Audio</summary>
+<div class="body">
+<p>The <strong>Audio</strong> tab of <a href="http://home-run-apple.local">home-run-apple.local</a> lets you add and manage your own tracks. The Apple keeps up to 200, and a large file takes a moment because your phone converts it before sending it.</p>
+<ul class="plain">
+<li><b>Add a track</b><span>Pick an MP3, M4A, WAV, or most other audio files, up to 30 MB. Drag the handles to keep the part you want, up to seven minutes. Choose whether it plays for home runs, Mets wins, both, or one player.</span></li>
+<li><b>What plays for how long</b><span>A home run plays the start of the selected audio, for as long as the Apple stays up. A win plays the whole thing.</span></li>
+<li><b>Library</b><span>Every track you add is listed here, with these controls.</span>
+<table class="controls">
+<tr><th scope="row">Home runs</th><td>Plays for a home run.</td></tr>
+<tr><th scope="row">Mets win</th><td>Plays for a Mets win.</td></tr>
+<tr><th scope="row">+ Play next</th><td>Puts this track first for the next home run, the next win, or one player's next home run.</td></tr>
+<tr><th scope="row">Preview</th><td>Plays the track on your device.</td></tr>
+<tr><th scope="row">Play on the Apple</th><td>Plays it through the Apple's speaker, at the Volume setting.</td></tr>
+<tr><th scope="row">Rename</th><td>Changes the name shown.</td></tr>
+<tr><th scope="row">Delete</th><td>Removes the track from the memory card.</td></tr>
+<tr><th scope="row">Search and sort</th><td>Appear once the list is longer than a page. Search matches any word in a track's name or its player's name.</td></tr>
+</table></li>
+<li><b>Player tracks</b><span>Assign tracks to a player. On a home run, plays instead of the general home run tracks.</span></li>
+<li><b>Up next</b><span>Choose exactly what plays on the next home run, the next Mets win, or a specific player's next home run. Tracks play in order, once each. When a line runs out, the Apple picks at random again.</span></li>
+</ul>
 </div>
 </details>
 

@@ -1,12 +1,10 @@
+import type { IdRange } from "./shards";
 import type {
   BrowserPushSubscription,
   NotificationPreferences,
-  PendingDelivery,
+  StoredSubscription,
   VerifiedNotificationEvent,
 } from "./types";
-
-const DELIVERY_LEASE_MS = 60_000;
-const DELIVERY_MAX_AGE_MS = 10 * 60_000;
 
 interface SubscriptionRow {
   id: string;
@@ -15,18 +13,6 @@ interface SubscriptionRow {
   auth: string;
   home_runs_since: number | null;
   mets_wins_since: number | null;
-}
-
-interface DeliveryRow extends SubscriptionRow {
-  event_key: string;
-  game_pk: number;
-  kind: VerifiedNotificationEvent["kind"];
-  subject: string;
-  title: string;
-  body: string;
-  target_url: string;
-  occurred_at: number;
-  attempts: number;
 }
 
 export interface StoredGameState {
@@ -145,131 +131,39 @@ export class NotificationStore {
   }
 
   async recordEvent(event: VerifiedNotificationEvent, nowMs: number): Promise<boolean> {
-    const preferenceColumn = event.kind === "METS_WIN" ? "mets_wins_since" : "home_runs_since";
-    const [eventResult] = await this.#db.batch([
-      this.#eventInsert(event, nowMs, false),
-      this.#db
-        .prepare(
-          `INSERT OR IGNORE INTO notification_deliveries (
-             event_key, subscription_id, status, attempts, next_attempt_at
-           )
-           SELECT ?, id, 'PENDING', 0, ?
-           FROM notification_subscriptions
-           WHERE ${preferenceColumn} IS NOT NULL AND ${preferenceColumn} <= ?`,
-        )
-        .bind(event.eventKey, nowMs, event.occurredAt),
-    ]);
-    return (eventResult.meta.changes ?? 0) > 0;
+    const result = await this.#eventInsert(event, nowMs, false).run();
+    return (result.meta.changes ?? 0) > 0;
   }
 
-  async claimDueDeliveries(nowMs: number, limit = 32): Promise<readonly PendingDelivery[]> {
-    await this.#db
+  /**
+   * Subscriptions that opted into `kind` before the event, within one id
+   * range, after a cursor, in id order. The dispatcher pages through these.
+   */
+  async subscriptionsInRange(
+    kind: VerifiedNotificationEvent["kind"],
+    occurredAt: number,
+    range: IdRange,
+    afterId: string,
+    limit: number,
+  ): Promise<readonly StoredSubscription[]> {
+    const preferenceColumn = kind === "METS_WIN" ? "mets_wins_since" : "home_runs_since";
+    const rows = await this.#db
       .prepare(
-        `UPDATE notification_deliveries
-         SET status = 'RETRY', lease_until = NULL
-         WHERE status = 'SENDING' AND lease_until < ?`,
-      )
-      .bind(nowMs)
-      .run();
-
-    await this.#db
-      .prepare(
-        `UPDATE notification_deliveries
-         SET status = 'EXPIRED', lease_until = NULL
-         WHERE status IN ('PENDING', 'RETRY')
-           AND event_key IN (SELECT event_key FROM notification_events WHERE occurred_at < ?)`,
-      )
-      .bind(nowMs - DELIVERY_MAX_AGE_MS)
-      .run();
-
-    const due = await this.#db
-      .prepare(
-        `SELECT
-           d.event_key, d.attempts,
-           e.game_pk, e.kind, e.subject, e.title, e.body, e.target_url, e.occurred_at,
-           s.id, s.endpoint, s.p256dh, s.auth, s.home_runs_since, s.mets_wins_since
-         FROM notification_deliveries d
-         JOIN notification_events e ON e.event_key = d.event_key
-         JOIN notification_subscriptions s ON s.id = d.subscription_id
-         WHERE d.status IN ('PENDING', 'RETRY') AND d.next_attempt_at <= ?
-         ORDER BY e.occurred_at, d.subscription_id
+        `SELECT id, endpoint, p256dh, auth
+         FROM notification_subscriptions
+         WHERE id >= ? AND id < ? AND id > ?
+           AND ${preferenceColumn} IS NOT NULL AND ${preferenceColumn} <= ?
+         ORDER BY id
          LIMIT ?`,
       )
-      .bind(nowMs, limit)
-      .all<DeliveryRow>();
-
-    const claimed: PendingDelivery[] = [];
-    for (const row of due.results) {
-      const result = await this.#db
-        .prepare(
-          `UPDATE notification_deliveries
-           SET status = 'SENDING', lease_until = ?, attempts = attempts + 1
-           WHERE event_key = ? AND subscription_id = ?
-             AND status IN ('PENDING', 'RETRY') AND next_attempt_at <= ?`,
-        )
-        .bind(nowMs + DELIVERY_LEASE_MS, row.event_key, row.id, nowMs)
-        .run();
-      if ((result.meta.changes ?? 0) === 0) continue;
-      claimed.push({
-        attempts: row.attempts + 1,
-        event: {
-          eventKey: row.event_key,
-          gamePk: row.game_pk,
-          kind: row.kind,
-          subject: row.subject,
-          title: row.title,
-          body: row.body,
-          targetUrl: row.target_url,
-          occurredAt: row.occurred_at,
-        },
-        subscription: {
-          id: row.id,
-          endpoint: row.endpoint,
-          expirationTime: null,
-          keys: { p256dh: row.p256dh, auth: row.auth },
-        },
-      });
-    }
-    return claimed;
-  }
-
-  async markDelivered(eventKey: string, subscriptionIdValue: string, nowMs: number, status: number): Promise<void> {
-    await this.#db
-      .prepare(
-        `UPDATE notification_deliveries
-         SET status = 'SENT', sent_at = ?, lease_until = NULL, last_status = ?
-         WHERE event_key = ? AND subscription_id = ?`,
-      )
-      .bind(nowMs, status, eventKey, subscriptionIdValue)
-      .run();
-  }
-
-  async markDeliveryFailed(
-    eventKey: string,
-    subscriptionIdValue: string,
-    nowMs: number,
-    status: number,
-    retryDelayMs: number,
-  ): Promise<void> {
-    await this.#db
-      .prepare(
-        `UPDATE notification_deliveries
-         SET status = 'RETRY', next_attempt_at = ?, lease_until = NULL, last_status = ?
-         WHERE event_key = ? AND subscription_id = ?`,
-      )
-      .bind(nowMs + retryDelayMs, status, eventKey, subscriptionIdValue)
-      .run();
-  }
-
-  async markDeliveryExpired(eventKey: string, subscriptionIdValue: string, status: number): Promise<void> {
-    await this.#db
-      .prepare(
-        `UPDATE notification_deliveries
-         SET status = 'EXPIRED', lease_until = NULL, last_status = ?
-         WHERE event_key = ? AND subscription_id = ?`,
-      )
-      .bind(status, eventKey, subscriptionIdValue)
-      .run();
+      .bind(range.from, range.to, afterId, occurredAt, limit)
+      .all<Pick<SubscriptionRow, "id" | "endpoint" | "p256dh" | "auth">>();
+    return rows.results.map((row) => ({
+      id: row.id,
+      endpoint: row.endpoint,
+      expirationTime: null,
+      keys: { p256dh: row.p256dh, auth: row.auth },
+    }));
   }
 
   async removeExpiredSubscription(subscriptionIdValue: string): Promise<void> {

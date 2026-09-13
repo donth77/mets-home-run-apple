@@ -3,20 +3,32 @@ import type { GameStateProjector } from "@apple/game-state-wasm";
 import {
   easternDate,
   fetchMetsScheduleRange,
+  LIVE_FEED_FIELDS,
   MlbRecordingClient,
   type MlbScheduleGame,
   type NormalizedFeedCapture,
 } from "@apple/mlb-live-feed";
 import { verifiedNotificationEvents } from "./events";
-import { sendPushNotification } from "./push";
+import { dispatcherSettings } from "./settings";
+import { shardName } from "./shards";
 import { NotificationStore } from "./storage";
-import type { NotificationEnv } from "./types";
+import type { NotificationEnv, VerifiedNotificationEvent } from "./types";
 
 interface WatcherDependencies {
   createGameCore: () => Promise<GameCore>;
   createGameStateProjector: () => Promise<GameStateProjector>;
   fetcher?: typeof fetch;
   loadCapture?: (game: MlbScheduleGame, now: Date) => Promise<NormalizedFeedCapture | undefined>;
+  dispatch?: (event: VerifiedNotificationEvent, nowMs: number) => Promise<void>;
+}
+
+/** Hands a new event to every dispatcher shard; each fans out to its own subscriptions. */
+export async function dispatchToShards(env: NotificationEnv, event: VerifiedNotificationEvent, nowMs: number) {
+  const { shards } = dispatcherSettings(env);
+  for (let shard = 0; shard < shards; shard += 1) {
+    const stub = env.DISPATCHER.get(env.DISPATCHER.idFromName(shardName(shard)));
+    await stub.enqueue(event, shard, shards, nowMs);
+  }
 }
 
 function isTrackable(game: MlbScheduleGame) {
@@ -45,6 +57,7 @@ async function defaultLoadCapture(
       () => now,
       (frame) => projector.project(frame),
       (facts) => projector.classifyStatus(facts),
+      { fields: LIVE_FEED_FIELDS },
     );
     return (await client.poll(game)).capture;
   } finally {
@@ -56,14 +69,11 @@ function previousEasternDate(now: Date) {
   return easternDate(new Date(now.getTime() - 24 * 60 * 60_000));
 }
 
-export async function runNotificationCycle(
-  env: NotificationEnv,
-  dependencies: WatcherDependencies,
-  now = new Date(),
-) {
+export async function runNotificationCycle(env: NotificationEnv, dependencies: WatcherDependencies, now = new Date()) {
   const nowMs = now.getTime();
   const fetcher = dependencies.fetcher ?? fetch;
   const store = new NotificationStore(env.NOTIFICATIONS_DB);
+  const dispatch = dependencies.dispatch ?? ((event, at) => dispatchToShards(env, event, at));
   const games = (await fetchMetsScheduleRange(previousEasternDate(now), easternDate(now), fetcher)).filter(isTrackable);
   let detected = 0;
 
@@ -81,7 +91,9 @@ export async function runNotificationCycle(
         await store.initializeGame(game.gamePk, events, nowMs);
       } else {
         for (const event of events) {
-          if (await store.recordEvent(event, nowMs)) detected += 1;
+          if (!(await store.recordEvent(event, nowMs))) continue;
+          detected += 1;
+          await dispatch(event, nowMs);
         }
       }
       if (capture.gameSnapshot.phase === "FINAL") await store.markGameFinal(game.gamePk, nowMs);
@@ -90,42 +102,5 @@ export async function runNotificationCycle(
     }
   }
 
-  const due = await store.claimDueDeliveries(nowMs);
-  let delivered = 0;
-  for (const delivery of due) {
-    try {
-      const result = await sendPushNotification(delivery, env, fetcher);
-      if (result.disposition === "DELIVERED") {
-        await store.markDelivered(delivery.event.eventKey, delivery.subscription.id, nowMs, result.status);
-        delivered += 1;
-      } else if (result.disposition === "EXPIRED_SUBSCRIPTION") {
-        await store.removeExpiredSubscription(delivery.subscription.id);
-      } else if (result.disposition === "RETRY") {
-        await store.markDeliveryFailed(
-          delivery.event.eventKey,
-          delivery.subscription.id,
-          nowMs,
-          result.status,
-          result.retryDelayMs ?? 60_000,
-        );
-      } else {
-        await store.markDeliveryExpired(delivery.event.eventKey, delivery.subscription.id, result.status);
-      }
-    } catch (reason) {
-      console.error(`Notification delivery failed for ${delivery.event.eventKey}.`, reason);
-      if (delivery.attempts >= 4) {
-        await store.markDeliveryExpired(delivery.event.eventKey, delivery.subscription.id, 0);
-      } else {
-        await store.markDeliveryFailed(
-          delivery.event.eventKey,
-          delivery.subscription.id,
-          nowMs,
-          0,
-          Math.min(5 * 60_000, 30_000 * 2 ** Math.max(0, delivery.attempts - 1)),
-        );
-      }
-    }
-  }
-
-  return { games: games.length, detected, delivered };
+  return { games: games.length, detected };
 }

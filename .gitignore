@@ -34,3 +34,6 @@ firmware/lib/manager/include/apple/firmware/manager_logo.hpp
 
 # Temporary bench-only embeds (e.g. a celebration clip held in flash).
 firmware/src/bench_clip.hpp
+
+# Private strings the public-boundary check scans for. Never committed.
+scripts/public-boundary.local

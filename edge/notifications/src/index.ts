@@ -19,3 +19,4 @@ export default {
 } satisfies ExportedHandler<NotificationEnv>;
 
 export { handleNotificationApi } from "./api";
+export { NotificationDispatcher } from "./dispatcher";

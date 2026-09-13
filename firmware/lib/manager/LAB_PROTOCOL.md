@@ -1,44 +1,63 @@
 # Apple Lab test protocol
 
-Apple Manager remains the device-hosted owner interface. Apple Lab is an
-optional client of these production-firmware endpoints. No client supplies
-motor direction, distance, dwell, deadlines, or arbitrary game inputs.
+How Apple Lab runs a hardware test on a physical Apple over the LAN. Server:
+`lib/manager`. Client: `apps/apple-lab/src/appleClient.ts`. Pinned by
+`test/native/lab_protocol_tests.cpp` (`pnpm test:native`).
 
-| Request | Result |
-| --- | --- |
-| `GET /api/status` | Read-only device status, canonical snapshot, maintenance availability and fixture receipt |
-| `POST /api/maintenance` | Requires this Apple's setup code in `X-Apple-Code`, even with owner lock off; returns an unpredictable 32-hex-character token |
-| Physical owner-button short press | Confirms the pending request within 30,000 ms; grants 60,000 ms for one attempt |
-| `POST /api/fixture?scenario=<id>` | Consumes `X-Apple-Maintenance`, validates idle/no fault/home estimate/motor enabled, and starts the named built-in fixture |
-| `POST /api/fixture/stop` | Accepts only the token that started the current/last fixture; cancels without authorizing another run |
-| `POST /api/replay?kind=hr\|win` | Uses the same one-use approval for existing recorded celebration tests |
+- The Apple decides all motion. A client can only start a built-in test and stop it.
+- Every test needs the setup code and one tap of the owner button on the Apple. Nothing else approves.
+- One tap, one run. A refused start uses it up too.
 
-Tokens never appear in status or logs. Expired tokens are retired by the device
-loop. Button holds retain restart/reset behavior; serial commands cannot confirm
-presence or start a production replay. A failed attempt consumes approval too.
+## Steps
 
-Status adds `maintenance: {supported, pending, armed, remainingMs}` and
-`fixture: {version: 1, scenarioId, state, frame, totalFrames}`. Fixture states are
-`IDLE`, `RUNNING`, `COMPLETED`, `CANCELLED`, and `FAILED`. `frame` is the count of
-inputs consumed while running. `snapshot` contains the shared game-state schema,
-including teams, at-bat and line score; legacy compact fields remain for Manager.
+1. `POST /api/maintenance` with the setup code in `X-Apple-Code` (required even
+   with "Require code" off). Returns a one-time 32-hex token.
+2. The Apple's screen asks for a tap. Tap the owner button within 30 seconds.
+   A hold does not count.
+3. Within 60 seconds, send the token in `X-Apple-Maintenance` with
+   `POST /api/fixture` or `POST /api/replay`. That spends the token, even if
+   the start is refused.
+4. Poll `GET /api/status`. `POST /api/fixture/stop` with the same token cancels.
 
-The fixture generator imports the existing `@apple/test-fixtures` definitions.
-Native tests validate each generated frame through the canonical projector and
-decision core, check persistence before motion intent, and compare a golden
-motion trace. Device fixtures use the standard 30,000 ms dwell, do not extend it
-to a full win track, and have a 180,000 ms total bound. Their ledger is isolated
-from autonomous game history. Network feed/release work pauses during a fixture;
-completion resets intake so the next real game frame is a bootstrap.
+## Requests
 
-Stop at idle/home ends the test. Stop during a sequence disables outputs and
-latches a motion fault; it never silently resets the engine into a movable state.
-Loss of Apple Lab does not remove device deadlines or resume/repeat a test.
-The browser retains cancellation permission after an uncertain start response,
-but cannot promise that a Stop request reached an offline device.
-Stop also retires an unconsumed matching approval, so it can safely overtake a
-delayed Start. The browser's Stop control remains available while Start awaits
-its response.
+| Request | Header | Notes |
+| --- | --- | --- |
+| `GET /api/status` | none | Status, snapshot, `maintenance` and `fixture` objects. Never the token. |
+| `POST /api/maintenance` | `X-Apple-Code` | Returns `{"ok":true,"token":"…","expiresInMs":90000}`. |
+| `POST /api/fixture?scenario=<id>` | `X-Apple-Maintenance` | Refused unless idle, at home, no fault, not updating, motor on. |
+| `POST /api/fixture/stop` | `X-Apple-Maintenance` | Takes the token that started the fixture, or one still waiting for the tap. Never starts anything. Safe to repeat. |
+| `POST /api/replay?kind=hr\|win` | `X-Apple-Maintenance` | Recorded home run or win. A win may pass the score to show: `away`, `home`, `awayRuns`, `homeRuns`, `metsHome`, `venue`, `awayName`, `homeName`. |
 
-`APPLE_LIVE:` over USB exposes the same status. Apple Lab sends only `?` to this
-production profile; commissioning firmware has separate bounded test commands.
+Errors are `{"ok":false,"error":"<code>"}`:
+
+| Code | HTTP | Meaning |
+| --- | --- | --- |
+| `CODE` | 401 | Wrong or missing setup code |
+| `LOCKED` | 429 | Five wrong codes; codes ignored for 60 seconds |
+| `BUSY` | 409 | Moving, celebrating, faulted, replaying, away from home, or updating |
+| `NO_MAINTENANCE` | 409 | Firmware too old |
+| `MAINTENANCE_REQUIRED` | 403 | No token, or token expired or already used |
+| `BAD_FIXTURE` | 409 | Unknown scenario |
+| `MOTOR_DISABLED` | 409 | Motor off in Apple Manager |
+| `BAD_KIND` | 400 | Kind is not `hr` or `win` |
+| `NO_REPLAY` | 404 | No recorded replay in this firmware |
+| `CELEBRATING` | 409 | A real celebration is running |
+
+## Status
+
+- `maintenance`: `{supported, pending, armed, remainingMs}`. Pending: waiting
+  for the tap, 30 s. Armed: tapped, waiting for the start, 60 s.
+- `fixture`: `{version: 1, scenarioId, state, frame, totalFrames}`. State is
+  `IDLE`, `RUNNING`, `COMPLETED`, `CANCELLED`, or `FAILED`.
+- `snapshot`: the shared game-state schema. Old compact fields stay for the
+  Manager page.
+
+## Scenarios
+
+`live`, `home-run`, `grand-slam`, `review-confirmed`, `review-overturned`,
+`rain-delay`, `game-delay`, `game-suspended`, `game-postponed`,
+`game-cancelled`, `mets-win`, `doubleheader`, `sleep`, `offseason`.
+
+Generated from `@apple/test-fixtures` by `pnpm fixtures:generate`;
+`pnpm check:fixtures` catches drift.

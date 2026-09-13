@@ -104,9 +104,7 @@ describe("notification event decisions", () => {
       },
     ]);
     expect(result[0]?.title).toSatisfy((title: string) =>
-      HOME_RUN_NOTIFICATION_TEMPLATES.some(
-        (template) => template.replace("{player}", "Francisco Lindor") === title,
-      ),
+      HOME_RUN_NOTIFICATION_TEMPLATES.some((template) => template.replace("{player}", "Francisco Lindor") === title),
     );
   });
 

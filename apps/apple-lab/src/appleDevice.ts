@@ -42,6 +42,11 @@ export interface AppleStatus {
     playing: string;
     batter: string;
     tracks: AppleTrack[];
+    // Totals from status. Newer firmware sends counts and keeps the list
+    // itself behind /api/audio/library; older firmware sends the list.
+    count: number;
+    countHr: number;
+    countWin: number;
   };
   update: { state: string; version: string; error: string };
   lastCelebration: { kind: string; subject: string; at: number; moved: boolean; outcome: string } | null;
@@ -160,6 +165,9 @@ export function parseAppleStatus(value: unknown): AppleStatus {
     Number.isFinite(root.positionMm) &&
     root.positionMm >= 0;
   const tracks = Array.isArray(audio.tracks) ? audio.tracks.map(record) : [];
+  const count = number(audio.count, tracks.length);
+  const countHr = number(audio.countHr, tracks.filter((track) => flag(track.hr)).length);
+  const countWin = number(audio.countWin, tracks.filter((track) => flag(track.win)).length);
   return {
     mode: text(root.mode, "UNKNOWN"),
     firmwareVersion: text(root.firmwareVersion, "?"),
@@ -184,6 +192,9 @@ export function parseAppleStatus(value: unknown): AppleStatus {
         hr: flag(track.hr),
         win: flag(track.win),
       })),
+      count,
+      countHr,
+      countWin,
     },
     update: { state: text(update.state, "IDLE"), version: text(update.version), error: text(update.error) },
     lastCelebration:

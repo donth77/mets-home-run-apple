@@ -121,3 +121,15 @@ endif()
 add_test(NAME apple_lab_protocol_tests COMMAND apple_lab_protocol_tests
   ${CMAKE_SOURCE_DIR}/test/native/fixtures/lab-protocol.trace
   ${CMAKE_SOURCE_DIR}/test/native/fixtures/status-snapshot.json)
+
+add_executable(apple_next_tracks_tests next_tracks_tests.cpp)
+target_link_libraries(apple_next_tracks_tests PRIVATE apple_next_tracks)
+target_compile_features(apple_next_tracks_tests PRIVATE cxx_std_17)
+
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+  target_compile_options(apple_next_tracks_tests PRIVATE -Wall -Wextra -Wpedantic -Werror)
+elseif(MSVC)
+  target_compile_options(apple_next_tracks_tests PRIVATE /W4 /WX)
+endif()
+
+add_test(NAME apple_next_tracks_tests COMMAND apple_next_tracks_tests)

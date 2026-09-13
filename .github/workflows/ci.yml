@@ -46,6 +46,8 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
+        env:
+          PUBLIC_BOUNDARY_MARKERS: ${{ secrets.PUBLIC_BOUNDARY_MARKERS }}
       - run: pnpm build
       - name: Decide whether the site needs publishing
         id: site

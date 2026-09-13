@@ -13,12 +13,29 @@ function numericConstant(contents, name) {
   return Number(match[1].replaceAll(/[_'\\s]/g, ""));
 }
 
-const [coreTypes, protocolCore, actuator, mlbConstants] = await Promise.all([
+function stringConstant(contents, name) {
+  const match = contents.match(new RegExp(`\\b${name}(?:\\[\\])?\\s*=\\s*((?:\\s*"[^"]*"\\s*\\+?)+);`));
+  if (!match) throw new Error(`Could not find string constant ${name}.`);
+  return [...match[1].matchAll(/"([^"]*)"/g)].map(([, part]) => part).join("");
+}
+
+const [coreTypes, protocolCore, actuator, mlbConstants, nanoFeed] = await Promise.all([
   source("firmware/lib/core/include/apple/core/types.hpp"),
   source("packages/protocol/src/core.ts"),
   source("packages/apple-3d/src/actuatorPhysics.ts"),
   source("packages/mlb-live-feed/src/constants.ts"),
+  source("firmware/lib/mlb_feed/src/feed.cpp"),
 ]);
+
+// The browser normalizer reads more of the feed than the Nano extractor, so
+// its field list must contain every name the Nano asks for.
+const browserFields = new Set(stringConstant(mlbConstants, "LIVE_FEED_FIELDS").split(","));
+const missingFields = stringConstant(nanoFeed, "kLiveFeedFields")
+  .split(",")
+  .filter((name) => !browserFields.has(name));
+if (missingFields.length > 0) {
+  throw new Error(`LIVE_FEED_FIELDS is missing Nano feed fields: ${missingFields.join(", ")}`);
+}
 
 const checks = [
   ["Mets team ID", numericConstant(coreTypes, "kMetsTeamId"), numericConstant(mlbConstants, "METS_TEAM_ID")],

@@ -36,6 +36,7 @@
 #include "apple/game_state/projector.hpp"
 #include "apple/mlb_feed/feed.hpp"
 #include "apple/mlb_feed/schedule.hpp"
+#include "apple/firmware/next_tracks.hpp"
 #include "apple/motion/timed_actuator.hpp"
 #include "../fixtures/mlb/fixtures.hpp"
 
@@ -114,7 +115,7 @@ constexpr char kProfileName[] = "apple_live";
 #ifdef APPLE_UPDATE_CRASH_TEST
 constexpr char kFirmwareVersion[] = "0.2.2-crashtest";
 #else
-constexpr char kFirmwareVersion[] = "0.4.1";
+constexpr char kFirmwareVersion[] = "0.4.2";
 #endif
 constexpr char kHostname[] = "home-run-apple";
 constexpr char kEasternTz[] = "EST5EDT,M3.2.0,M11.1.0";
@@ -146,7 +147,7 @@ constexpr std::uint32_t kSdClockHz = 20'000'000;
 // 740 ms queue was tried while playback still shared that core and did not
 // help, because the generator cannot refill it in the gaps between frames.
 constexpr int kI2sDmaBuffers = 32;
-constexpr std::uint8_t kMaxTracks = 50;        // about 80 bytes each; the page paginates
+constexpr std::uint8_t kMaxTracks = 200;       // about 80 bytes each; the page paginates and searches
 constexpr std::uint8_t kMaxPlayerTracks = 32;
 // A win plays its whole track and holds the Apple up for as long as seven
 // minutes (kWinMaxDwellMs), so a track may be that long: 7 min at 22,050 Hz
@@ -648,6 +649,11 @@ struct TrackEntry {
 };
 TrackEntry tracks[kMaxTracks];
 std::uint8_t track_count = 0;
+// Goes up whenever the library, the player tracks, or the up-next lines
+// change. Status carries the number; the page fetches the lists themselves
+// only when it moves, so a full card is not sent every few seconds.
+std::uint32_t audio_rev = 1;
+void note_audio_change() { ++audio_rev; }
 
 // A track chosen for one particular hitter, played instead of the general
 // pool when they go deep.
@@ -659,21 +665,10 @@ struct PlayerTrack {
 PlayerTrack player_tracks[kMaxPlayerTracks];
 std::uint8_t player_track_count = 0;
 
-// Up next: tracks the owner lined up to play before the random pick takes
-// over again. One queue for the next win, one for the next home run by
-// anyone, and one per player. A queued track plays once and leaves its queue.
-// Kept on the card with the other assignments, so a song queued for a
-// walk-off survives the Apple's own restarts.
-constexpr std::uint8_t kMaxNextTracks = 24;
-constexpr std::uint8_t kMaxNextPerQueue = 5;
-struct NextTrack {
-  bool win = false;
-  std::int32_t player_id = 0;
-  char player[40] = "";  // empty: the next home run by anyone
-  char file[32] = "";
-};
-NextTrack next_tracks[kMaxNextTracks];
-std::uint8_t next_track_count = 0;
+// Up next: what the owner lined up to play before the random pick takes
+// over again. The rules live in lib/manager (next_tracks.hpp) so the native
+// tests can walk them; this file only feeds it what it needs.
+apple::firmware::NextTracks next_tracks;
 // A queue changed while the card was busy with a celebration; write it once
 // the card is free again.
 bool manifest_save_wanted = false;
@@ -1030,31 +1025,24 @@ void fill_status(JsonDocument& doc) {
   audio["playing"] = audio_playing;
   audio["batter"] = current_batter;
   audio["maxTracks"] = kMaxTracks;
-  JsonArray track_list = audio["tracks"].to<JsonArray>();
+  // What is already in memory for the next celebration, so the page can mark
+  // a queued track as ready to play.
+  audio["readyHr"] = resident_home_run.name;
+  audio["readyWin"] = resident_win.name;
+  audio["maxNext"] = apple::firmware::kMaxNextPerLine;
+  audio["maxNextAll"] = apple::firmware::kMaxNextTracks;
+  // The lists themselves come from /api/audio/library. The counts are for
+  // the Lab's overview, which only needs the totals.
+  audio["rev"] = audio_rev;
+  std::uint8_t hr_count = 0;
+  std::uint8_t win_count = 0;
   for (std::uint8_t i = 0; i < track_count; ++i) {
-    JsonObject node = track_list.add<JsonObject>();
-    node["file"] = tracks[i].file;
-    node["title"] = tracks[i].title;
-    node["bytes"] = tracks[i].bytes;
-    node["added"] = tracks[i].added;
-    node["hr"] = tracks[i].home_run;
-    node["win"] = tracks[i].win;
+    if (tracks[i].home_run) ++hr_count;
+    if (tracks[i].win) ++win_count;
   }
-  JsonArray player_list = audio["players"].to<JsonArray>();
-  for (std::uint8_t i = 0; i < player_track_count; ++i) {
-    JsonObject node = player_list.add<JsonObject>();
-    node["id"] = player_tracks[i].id;
-    node["name"] = player_tracks[i].name;
-    node["file"] = player_tracks[i].file;
-  }
-  JsonArray next_list = audio["next"].to<JsonArray>();
-  for (std::uint8_t i = 0; i < next_track_count; ++i) {
-    JsonObject node = next_list.add<JsonObject>();
-    node["win"] = next_tracks[i].win;
-    node["id"] = next_tracks[i].player_id;
-    node["name"] = next_tracks[i].player;
-    node["file"] = next_tracks[i].file;
-  }
+  audio["count"] = track_count;
+  audio["countHr"] = hr_count;
+  audio["countWin"] = win_count;
   JsonObject rel = doc["update"].to<JsonObject>();
   rel["state"] = release_state_name(release.state);
   rel["version"] = release.pick.found ? release.pick.version.c_str() : "";
@@ -1147,8 +1135,48 @@ void fill_status(JsonDocument& doc) {
   doc["in2"] = settings.motor && applied_drive == Drive::Retract ? 1 : 0;
 }
 
+// The track library, the player tracks, and the up-next lines, written one
+// entry at a time so a full card never needs a large document in memory.
+void write_audio_library(Print& out) {
+  JsonDocument item(&json_allocator);
+  auto emit = [&](std::uint8_t index) {
+    if (index != 0) out.print(',');
+    serializeJson(item, out);
+    item.clear();
+  };
+  out.print("{\"rev\":");
+  out.print(audio_rev);
+  out.print(",\"tracks\":[");
+  for (std::uint8_t i = 0; i < track_count; ++i) {
+    item["file"] = tracks[i].file;
+    item["title"] = tracks[i].title;
+    item["bytes"] = tracks[i].bytes;
+    item["added"] = tracks[i].added;
+    item["hr"] = tracks[i].home_run;
+    item["win"] = tracks[i].win;
+    emit(i);
+  }
+  out.print("],\"players\":[");
+  for (std::uint8_t i = 0; i < player_track_count; ++i) {
+    item["id"] = player_tracks[i].id;
+    item["name"] = player_tracks[i].name;
+    item["file"] = player_tracks[i].file;
+    emit(i);
+  }
+  out.print("],\"next\":[");
+  for (std::uint8_t i = 0; i < next_tracks.size(); ++i) {
+    const apple::firmware::NextTrack& entry = next_tracks.at(i);
+    item["win"] = entry.win;
+    item["id"] = entry.player_id;
+    item["name"] = entry.player;
+    item["file"] = entry.file;
+    emit(i);
+  }
+  out.print("]}");
+}
+
 void publish_status() {
-  JsonDocument doc;
+  JsonDocument doc(&json_allocator);
   fill_status(doc);
   Serial.print("APPLE_LIVE:");
   serializeJson(doc, Serial);
@@ -1581,56 +1609,6 @@ const char* track_for_player(const char* batter) {
   return picks[esp_random() % count];
 }
 
-// Queue membership: the win queue, or a home run queue keyed by the player's
-// name as the game feed reports it (empty for the next home run by anyone).
-bool next_matches(const NextTrack& next, bool win, const char* player) {
-  if (next.win != win) return false;
-  if (win) return true;
-  return strcasecmp(next.player, player == nullptr ? "" : player) == 0;
-}
-
-// The first track queued for this kind of celebration, or none.
-const char* next_track(bool win, const char* player) {
-  for (std::uint8_t i = 0; i < next_track_count; ++i) {
-    if (next_matches(next_tracks[i], win, player)) return next_tracks[i].file;
-  }
-  return nullptr;
-}
-
-std::uint8_t next_count(bool win, const char* player) {
-  std::uint8_t count = 0;
-  for (std::uint8_t i = 0; i < next_track_count; ++i) {
-    if (next_matches(next_tracks[i], win, player)) ++count;
-  }
-  return count;
-}
-
-void forget_next(std::uint8_t index) {
-  for (std::uint8_t i = index; i + 1 < next_track_count; ++i) next_tracks[i] = next_tracks[i + 1];
-  --next_track_count;
-}
-
-// Drops the first queued entry of this kind that names the file: the track
-// has had its turn, or the owner changed their mind.
-bool consume_next(bool win, const char* player, const char* file) {
-  if (file == nullptr || file[0] == '\0') return false;
-  for (std::uint8_t i = 0; i < next_track_count; ++i) {
-    if (next_matches(next_tracks[i], win, player) && strcasecmp(next_tracks[i].file, file) == 0) {
-      forget_next(i);
-      return true;
-    }
-  }
-  return false;
-}
-
-// Everything queued for one kind of celebration, or for one player.
-void clear_next(bool win, const char* player) {
-  for (std::uint8_t i = 0; i < next_track_count;) {
-    if (next_matches(next_tracks[i], win, player)) forget_next(i);
-    else ++i;
-  }
-}
-
 // Whether a track is still one the owner wants for this kind of celebration.
 bool in_pool(const char* file, bool win) {
   if (file == nullptr || file[0] == '\0') return false;
@@ -1662,8 +1640,7 @@ void refresh_resident_tracks() {
   if (!audio_card_ready) return;
   // A pool pick only replaces another pool pick, so a track already held is
   // not fetched again.
-  const char* wanted = next_track(false, current_batter);
-  if (wanted == nullptr) wanted = next_track(false, "");
+  const char* wanted = next_tracks.head_for_batter(current_batter);
   if (wanted == nullptr) wanted = track_for_player(current_batter);
   if (wanted == nullptr && !in_pool(resident_home_run.name, false)) {
     wanted = random_track(false);
@@ -1673,7 +1650,7 @@ void refresh_resident_tracks() {
   }
   // A win happens once a game, so the slot is filled when empty and left
   // alone, unless the owner queued something for it.
-  const char* win = next_track(true, "");
+  const char* win = next_tracks.head(true, "");
   if (win == nullptr && !in_pool(resident_win.name, true)) win = random_track(true);
   if (win != nullptr && strcmp(win, resident_win.name) != 0) load_resident(resident_win, win);
 }
@@ -1689,8 +1666,9 @@ TrackEntry* find_track(const char* file) {
 // Apple carries the owner's choices with it.
 void save_audio_manifest() {
   CardLock lock;
+  note_audio_change();
   if (!audio_card_ready) return;
-  JsonDocument doc;
+  JsonDocument doc(&json_allocator);
   doc["v"] = 1;
   doc["volume"] = settings.volume;
   JsonArray list = doc["tracks"].to<JsonArray>();
@@ -1708,14 +1686,7 @@ void save_audio_manifest() {
     node["name"] = player_tracks[i].name;
     node["file"] = player_tracks[i].file;
   }
-  JsonArray next = doc["next"].to<JsonArray>();
-  for (std::uint8_t i = 0; i < next_track_count; ++i) {
-    JsonObject node = next.add<JsonObject>();
-    node["win"] = next_tracks[i].win;
-    node["id"] = next_tracks[i].player_id;
-    node["name"] = next_tracks[i].player;
-    node["file"] = next_tracks[i].file;
-  }
+  next_tracks.write(doc["next"].to<JsonArray>());
   File file = SD.open(kAudioManifestPath, FILE_WRITE);
   if (!file) {
     publish_trace("AUDIO", "could not write the track list");
@@ -1730,11 +1701,12 @@ void save_audio_manifest() {
 void load_audio_manifest() {
   CardLock lock;
   player_track_count = 0;
-  next_track_count = 0;
+  next_tracks.clear_all();
+  note_audio_change();
   if (!audio_card_ready) return;
   File file = SD.open(kAudioManifestPath, FILE_READ);
   if (!file) return;
-  JsonDocument doc;
+  JsonDocument doc(&json_allocator);
   const DeserializationError failed = deserializeJson(doc, file);
   file.close();
   if (failed) {
@@ -1760,25 +1732,14 @@ void load_audio_manifest() {
     copy_text(slot.name, sizeof(slot.name), name);
     copy_text(slot.file, sizeof(slot.file), file_name);
   }
-  for (JsonObjectConst node : doc["next"].as<JsonArrayConst>()) {
-    if (next_track_count >= kMaxNextTracks) break;
-    const char* file_name = node["file"] | "";
-    const bool win = node["win"] | false;
-    const char* name = win ? "" : (node["name"] | "");
-    if (file_name[0] == '\0' || find_track(file_name) == nullptr) continue;  // queued track deleted
-    if (next_count(win, name) >= kMaxNextPerQueue) continue;
-    NextTrack& slot = next_tracks[next_track_count++];
-    slot.win = win;
-    slot.player_id = win ? 0 : (node["id"] | 0);
-    copy_text(slot.player, sizeof(slot.player), name);
-    copy_text(slot.file, sizeof(slot.file), file_name);
-  }
+  next_tracks.read(doc["next"].as<JsonArrayConst>(), [](const char* file) { return find_track(file) != nullptr; });
 }
 
 // Reads the card's root, then lays the owner's assignments over the result.
 void scan_tracks() {
   CardLock lock;
   track_count = 0;
+  note_audio_change();
   if (!audio_card_ready) return;
   File dir = SD.open("/");
   if (!dir) return;
@@ -2166,32 +2127,41 @@ void forget_player(PlayerTrack* slot) {
 
 // Up next edits touch only memory, so they are allowed during a game and
 // even mid-celebration, when the owner most wants them; the card is written
-// once it is free.
+// once it is free. The page names an entry by its place in its line, with the
+// file as a check, because the same track can sit in a line twice.
 String change_next(const apple::firmware::AudioChange& change) {
+  using apple::firmware::NextChange;
   const bool win = change.win == 1;
   const char* player = win ? "" : change.text.c_str();
   if (change.action == "clear") {
-    clear_next(win, player);
+    next_tracks.clear(win, player);
     return String();
   }
   TrackEntry* entry = find_track(change.file.c_str());
   if (entry == nullptr) return "NO_TRACK";
-  if (change.action == "unqueue") return consume_next(win, player, entry->file) ? String() : "NO_TRACK";
-  if (next_track_count >= kMaxNextTracks || next_count(win, player) >= kMaxNextPerQueue) return "QUEUE_FULL";
-  NextTrack& slot = next_tracks[next_track_count++];
-  slot.win = win;
-  slot.player_id = win ? 0 : static_cast<std::int32_t>(change.number);
-  copy_text(slot.player, sizeof(slot.player), player);
-  copy_text(slot.file, sizeof(slot.file), entry->file);
+  NextChange result = NextChange::NoTrack;
+  if (change.action == "unqueue") {
+    result = next_tracks.remove(win, player, change.index, entry->file);
+  } else if (change.action == "move") {
+    result = next_tracks.move(win, player, change.index, entry->file, change.position);
+  } else {
+    // "Play next" from the library asks for the front of the line; a plain
+    // add joins the end.
+    result = next_tracks.add(win, static_cast<std::int32_t>(change.number), player, entry->file, change.position);
+  }
+  if (result == NextChange::LineFull) return "LINE_FULL";
+  if (result == NextChange::StoreFull) return "QUEUE_FULL";
+  if (result == NextChange::NoTrack) return "NO_TRACK";
   return String();
 }
 
 String change_audio(const apple::firmware::AudioChange& change) {
   if (!audio_card_ready) return "NO_CARD";
   const String& action = change.action;
-  if (action == "queue" || action == "unqueue" || action == "clear") {
+  if (action == "queue" || action == "unqueue" || action == "move" || action == "clear") {
     const String failed = change_next(change);
     if (failed.length() != 0) return failed;
+    note_audio_change();
     resident_refresh_wanted = true;
     if (celebration_active) manifest_save_wanted = true;
     else save_audio_manifest();
@@ -2295,7 +2265,7 @@ String change_audio(const apple::firmware::AudioChange& change) {
     }
     if (!removed) return "NO_PLAYER";
     // Taking a player off the list takes his queue with him.
-    if (change.file.length() == 0) clear_next(false, change.text.c_str());
+    if (change.file.length() == 0) next_tracks.clear(false, change.text.c_str());
     resident_refresh_wanted = true;
     save_audio_manifest();
     return String();
@@ -2354,7 +2324,7 @@ void begin_celebration(const apple::core::CoreEvent& event) {
   if (celebration_is_win && settings.win_full_track && audio_card_ready && !active_fixture) {
     // The game is over, so stay up for the whole track: stream it off the
     // card and stretch the raised dwell to match, less the lift itself.
-    const char* file = next_track(true, "");
+    const char* file = next_tracks.head(true, "");
     if (file == nullptr) file = random_track(true);
     TrackEntry* entry = file != nullptr ? find_track(file) : nullptr;
     if (entry != nullptr && entry->bytes > 44) {
@@ -2394,13 +2364,15 @@ void begin_celebration(const apple::core::CoreEvent& event) {
   // the whole celebration, so the shorter list is written afterwards.
   const char* played_file = celebration_is_win ? (audio_request_stream ? win_stream_file : resident_win.name)
                                                : resident_home_run.name;
-  if (audio_task_should_play) {
+  // Replays and Lab scenarios may play a queued track as a preview, but only
+  // a real celebration uses up the owner's choice.
+  if (audio_task_should_play && !replay_active) {
     const bool consumed = celebration_is_win
-                              ? consume_next(true, "", played_file)
-                              : consume_next(false, current_batter, played_file) ||
-                                    consume_next(false, event.subject.c_str(), played_file) ||
-                                    consume_next(false, "", played_file);
+                              ? next_tracks.consume(true, "", played_file)
+                              : next_tracks.consume_home_run(current_batter, played_file) ||
+                                    next_tracks.consume_home_run(event.subject.c_str(), played_file);
     if (consumed) {
+      note_audio_change();
       manifest_save_wanted = true;
       resident_refresh_wanted = true;
     }
@@ -2750,6 +2722,7 @@ void start_wifi() {
   });
   manager.set_fixture_hooks(start_lab_fixture, stop_lab_fixture);
   manager.set_events_hook(fill_events);
+  manager.set_library_hook(write_audio_library);
   manager.set_replay_hook([](const apple::firmware::ManagerServer::ReplayRequest& request) -> String {
     if (celebration_active) return "CELEBRATING";
     if (!engine || engine->fault_latched() || manager.update_in_progress()) return "BUSY";

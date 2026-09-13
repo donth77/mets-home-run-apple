@@ -14,6 +14,7 @@ lib/manager/src/time_zones.cpp so the page sees the real list. A join succeeds
 after a few status polls; settings are kept in memory.
 """
 import argparse
+import zlib
 import http.server
 import json
 import pathlib
@@ -51,6 +52,15 @@ def zone_id(name):
     return None
 
 
+def ready_track(audio, win):
+    """What the fake Apple holds in memory: the head of the line, else a pool track."""
+    for n in audio.get("next", []):
+        if n["win"] == win and (win or not n["name"]):
+            return n["file"]
+    key = "win" if win else "hr"
+    return next((t["file"] for t in audio["tracks"] if t.get(key)), "")
+
+
 def make_handler(state):
     def release_status():
         rel = state["release"]
@@ -67,6 +77,23 @@ def make_handler(state):
         return {"state": rel["state"], "version": rel["version"] if rel["state"] in ("AVAILABLE", "DOWNLOADING") else "",
                 "prerelease": rel["prerelease"], "size": 1515957 if rel["state"] == "AVAILABLE" else 0,
                 "checkedAt": rel["checkedAt"], "nextCheckIn": 86000, "error": rel["error"], "windowOpen": False}
+
+    def audio_rev():
+        # Any change to the lists moves the number, like the Apple's counter.
+        audio = state["audio"]
+        return zlib.crc32(json.dumps([audio["tracks"], audio["players"], audio.get("next", [])], sort_keys=True).encode())
+
+    def audio_library():
+        audio = state["audio"]
+        return {"rev": audio_rev(), "tracks": audio["tracks"], "players": audio["players"], "next": audio.get("next", [])}
+
+    def audio_summary():
+        audio = state["audio"]
+        out = {k: v for k, v in audio.items() if k not in ("tracks", "players", "next")}
+        out.update(rev=audio_rev(), count=len(audio["tracks"]), countHr=sum(1 for t in audio["tracks"] if t["hr"]),
+                   countWin=sum(1 for t in audio["tracks"] if t["win"]), readyHr=ready_track(audio, False),
+                   readyWin=ready_track(audio, True), maxNext=20, maxNextAll=100)
+        return out
 
     def status():
         state["polls"] += 1
@@ -100,7 +127,7 @@ def make_handler(state):
                          "checkedAgoMs": 240000, "nextInMs": 360000, "refreshMs": 600000, "games": 8},
             "settings": dict(settings, timeZoneLabel=zone_label(settings["timeZone"]),
                              setupKey="" if settings["requireCode"] else "00000000"),
-            "audio": state["audio"],
+            "audio": audio_summary(),
             "update": release_status(),
             "lastCelebration": {"kind": "HR", "subject": "Juan Soto", "at": 1788392040, "moved": True, "track": "Takeover"},
             "sequence": "IDLE", "fault": False, "positionMm": 0,
@@ -129,6 +156,8 @@ def make_handler(state):
                     self.send_response(503)
                     self.end_headers()
                     return None
+            if self.path.startswith("/api/audio/library"):
+                return self.send_json(audio_library())
             if self.path.startswith("/api/audio/file"):
                 import math, struct
                 q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
@@ -226,7 +255,7 @@ def make_handler(state):
                 if action == "stop":
                     audio["playing"] = ""
                     return self.send_json({"ok": True})
-                if action in ("queue", "unqueue", "clear"):
+                if action in ("queue", "unqueue", "move", "clear"):
                     win = args.get("win", [""])[0] in ("on", "1", "true")
                     name = "" if win else args.get("text", [""])[0]
                     who = 0 if win else int(args.get("id", ["0"])[0] or 0)
@@ -236,17 +265,36 @@ def make_handler(state):
                         audio["next"] = [n for n in queue if not same(n)]
                     elif track is None:
                         return self.send_json({"ok": False, "error": "NO_TRACK"}, 400)
-                    elif action == "unqueue":
-                        for i, n in enumerate(queue):
-                            if same(n) and n["file"] == target:
-                                del queue[i]
-                                break
-                        else:
+                    elif action in ("unqueue", "move"):
+                        slots = [i for i, n in enumerate(queue) if same(n)]
+                        line = [queue[i] for i in slots]
+                        src = next((k for k, n in enumerate(line) if n["file"] == target), None)
+                        wanted = int(args.get("from", ["-1"])[0] or -1)
+                        if 0 <= wanted < len(line) and line[wanted]["file"] == target:
+                            src = wanted
+                        if src is None:
                             return self.send_json({"ok": False, "error": "NO_TRACK"}, 400)
+                        if action == "unqueue":
+                            del queue[slots[src]]
+                        else:
+                            to = max(0, min(len(line) - 1, int(args.get("at", ["0"])[0] or 0)))
+                            line.insert(to, line.pop(src))
+                            for k, i in enumerate(slots):
+                                queue[i] = line[k]
                     else:
-                        if sum(1 for n in queue if same(n)) >= 5:
+                        if sum(1 for n in queue if same(n)) >= 20:
+                            return self.send_json({"ok": False, "error": "LINE_FULL"}, 400)
+                        if len(queue) >= 100:
                             return self.send_json({"ok": False, "error": "QUEUE_FULL"}, 400)
-                        queue.append({"win": win, "id": who, "name": name, "file": target})
+                        entry = {"win": win, "id": who, "name": name, "file": target}
+                        at = args.get("at", [None])[0]
+                        if at is None:
+                            queue.append(entry)
+                        else:
+                            # Insert at that place within the line, keeping other lines' slots.
+                            slots = [i for i, n in enumerate(queue) if same(n)]
+                            pos = max(0, min(len(slots), int(at)))
+                            queue.insert(slots[pos] if pos < len(slots) else len(queue), entry)
                     return self.send_json({"ok": True})
                 if action in ("test", "delete", "rename", "pool") and track is None:
                     return self.send_json({"ok": False, "error": "NO_TRACK"}, 400)
@@ -312,6 +360,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--setup", action="store_true", help="start with no Wi-Fi saved, setup network open")
     ap.add_argument("--port", type=int, default=8765)
+    ap.add_argument("--tracks", type=int, default=0, help="pad the library to this many tracks, to try a big list")
     args = ap.parse_args()
     state = {
         "joined": not args.setup,
@@ -321,7 +370,7 @@ def main():
         "settings": {"raisedSeconds": 30, "motor": True, "follow": True, "sleepDisplay": False,
                      "requireCode": False, "timeZone": "America/New_York", "timeZoneChosen": False,
                      "brightness": 100, "volume": 80, "winFullTrack": True, "autoUpdate": True, "beta": False, "tokenSet": False},
-        "audio": {"card": True, "playing": "", "batter": "Francisco Lindor", "maxTracks": 20, "next": [],
+        "audio": {"card": True, "playing": "", "batter": "Francisco Lindor", "maxTracks": 200, "next": [],
                   "tracks": [
                       {"file": "/hr1.wav", "title": "hr1.wav", "bytes": 1_600_000, "added": 1_788_200_000, "hr": True, "win": False},
                       {"file": "/hr2.wav", "title": "Takeover", "bytes": 1_900_000, "added": 1_788_250_000, "hr": True, "win": False},
@@ -341,6 +390,16 @@ def main():
                               {"id": 1, "name": "Old Timer", "file": "/win1.wav"}]},
         "release": {"state": "IDLE", "version": "", "prerelease": False, "checkedAt": 0, "error": "", "found": False, "ticks": 0},
     }
+    names = ["Meet the Mets", "Takin' Care of Business", "Lazy Mary", "Narco", "Enter Sandman", "Piano Man",
+             "Empire State of Mind", "New York State of Mind", "Sweet Caroline", "Seven Nation Army", "Crowd roar",
+             "Air horn", "Organ charge", "Bugle call", "Fireworks", "Church bells", "Train whistle", "Cowbell",
+             "Foghorn", "Trumpet fanfare"]
+    n = len(state["audio"]["tracks"])
+    while n < args.tracks:
+        n += 1
+        state["audio"]["tracks"].append({"file": f"/big-{n:03d}.wav", "title": f"{names[n % len(names)]} {n}",
+                                         "bytes": 400000 + n * 9000, "added": 1788400000 + n * 3600,
+                                         "hr": n % 3 == 0, "win": n % 5 == 0})
     print(f"Apple Manager mock on http://127.0.0.1:{args.port}/  ({len(ZONES)} time zones, "
           f"{'setup' if args.setup else 'connected'} state, password 00000000 when the lock is on)")
     http.server.ThreadingHTTPServer(("127.0.0.1", args.port), make_handler(state)).serve_forever()

@@ -16,8 +16,14 @@ import { assertMlbTimecode, formatMlbTimecode } from "./timecode";
 import { fetchJson } from "./transport";
 import type { FeedPayloadKind, MlbPollResult, NormalizedFeedCapture } from "./types";
 
+export interface MlbRecordingClientOptions {
+  /** MLB `fields=` list for full-feed requests; see LIVE_FEED_FIELDS. Unset fetches the whole feed. */
+  fields?: string;
+}
+
 export class MlbRecordingClient {
   readonly #fetcher: typeof fetch;
+  readonly #fields: string | undefined;
   readonly #now: () => Date;
   readonly #projectFrame: CanonicalGameProjector;
   readonly #classifyStatus: GameStatusClassifier;
@@ -33,11 +39,19 @@ export class MlbRecordingClient {
     now: () => Date = () => new Date(),
     projectFrame: CanonicalGameProjector = projectCanonicalGameFrame,
     classifyStatus: GameStatusClassifier = classifyGameStatus,
+    options: MlbRecordingClientOptions = {},
   ) {
     this.#fetcher = fetcher;
+    this.#fields = options.fields;
     this.#now = now;
     this.#projectFrame = projectFrame;
     this.#classifyStatus = classifyStatus;
+  }
+
+  #fullFeedUrl(gamePk: number) {
+    const url = new URL(`/api/v1.1/game/${gamePk}/feed/live`, MLB_STATS_API_ORIGIN);
+    if (this.#fields) url.searchParams.set("fields", this.#fields);
+    return url.toString();
   }
 
   reset() {
@@ -176,19 +190,14 @@ export class MlbRecordingClient {
 
   async poll(game: Pick<MlbScheduleGame, "gamePk" | "gameNumber">, signal?: AbortSignal): Promise<MlbPollResult> {
     if (!this.#baseline) {
-      return this.#bootstrap(game, `${MLB_STATS_API_ORIGIN}/api/v1.1/game/${game.gamePk}/feed/live`, signal);
+      return this.#bootstrap(game, this.#fullFeedUrl(game.gamePk), signal);
     }
 
     const diffUrl = new URL(`/api/v1.1/game/${game.gamePk}/feed/live/diffPatch`, MLB_STATS_API_ORIGIN);
     diffUrl.searchParams.set("startTimecode", this.#upstreamCursor);
     const endTimecode = formatMlbTimecode(this.#now());
     if (endTimecode > this.#upstreamCursor) diffUrl.searchParams.set("endTimecode", endTimecode);
-    return this.#advance(
-      game,
-      diffUrl.toString(),
-      `${MLB_STATS_API_ORIGIN}/api/v1.1/game/${game.gamePk}/feed/live`,
-      signal,
-    );
+    return this.#advance(game, diffUrl.toString(), this.#fullFeedUrl(game.gamePk), signal);
   }
 
   async loadTimecode(
@@ -197,7 +206,7 @@ export class MlbRecordingClient {
     signal?: AbortSignal,
   ): Promise<MlbPollResult> {
     assertMlbTimecode(timecode);
-    const fullUrl = new URL(`/api/v1.1/game/${game.gamePk}/feed/live`, MLB_STATS_API_ORIGIN);
+    const fullUrl = new URL(this.#fullFeedUrl(game.gamePk));
     fullUrl.searchParams.set("timecode", timecode);
     if (!this.#baseline) return this.#bootstrap(game, fullUrl.toString(), signal);
     if (timecode < this.#upstreamCursor) {

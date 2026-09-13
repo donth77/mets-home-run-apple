@@ -44,9 +44,11 @@ or wiring change.
   firmware updates from a page served by the Nano.
 - Native tests and browser WebAssembly builds run the same game rules and
   display renderer.
+- Apple Manager stores uploaded tracks on the microSD card, and the Apple plays
+  them for home runs and wins.
+- Apple Lab connects over Wi-Fi to watch the Apple and run approved tests.
 
-Production audio and lighting, autonomous current/end-stop sensing, and the
-Apple Lab local-network telemetry connection are not finished.
+Lighting and autonomous current or end-stop sensing are not finished.
 
 ## Safety rules
 
@@ -130,7 +132,7 @@ Useful serial keys:
 | `x` | Stop motion and reset the sequence |
 | `s` | Refresh the schedule |
 | `p` | Poll the live feed now |
-| `r` | Replay the built-in recorded game |
+| `a` | Remount the microSD card |
 | `w` | Forget Wi-Fi and reopen setup |
 | `i` | Show the local address and setup code |
 | `u` | Check GitHub for a firmware release now |
@@ -140,29 +142,26 @@ celebration receipts.
 
 ## Firmware updates
 
-Releases live on GitHub. Tag a commit `firmware-vX.Y.Z` that matches
-`kFirmwareVersion` in `src/apple_live.cpp`; the release workflow builds, signs
-with the `FIRMWARE_SIGNING_KEY` secret, checks the signature, and publishes
-`home-run-apple-X.Y.Z.bin` with its checksum as "Home Run Apple firmware
-X.Y.Z". A version with a suffix such as `0.3.0-rc.1` becomes a pre-release.
+To release, tag a commit `firmware-vX.Y.Z` that matches `kFirmwareVersion` in
+`src/apple_live.cpp`. The release workflow builds, signs with the
+`FIRMWARE_SIGNING_KEY` secret, and publishes `home-run-apple-X.Y.Z.bin` with
+its checksum. A suffix such as `0.3.0-rc.1` makes a pre-release.
 
-The Apple checks GitHub for itself: about ninety seconds after joining Wi-Fi,
-then once a day. With **Update automatically** on (the default) a newer release
-installs between games in the early morning, 3:00 to 5:59 in the owner's time
-zone, never while a game is in progress or the Apple is celebrating. Apple
-Manager shows the result under Update and offers **Install now**; picking a
-downloaded file there still works. Either way the Apple restarts and is back in
-about a minute.
+How an Apple updates itself:
 
-Every image must carry the project's signature, which the Apple checks before
-committing it to the spare slot. A new image that crashes twice before it proves
-itself (a successful schedule fetch, or five minutes) rolls back on its own.
-GitHub is reached over TLS pinned to the roots in
-`include/apple/firmware/update_roots.hpp`; the weekly contract check watches
-those chains.
-
-An Apple takes pre-releases only when a maintainer opts it in with `beta=on`
-through the settings API.
+- Checks GitHub about 90 seconds after joining Wi-Fi, then once a day.
+- With **Update automatically** on (the default), installs between games from
+  3:00 to 5:59 in the owner's time zone. Never during a game or celebration.
+- Apple Manager shows the result under Update and offers **Install now**.
+  Uploading a downloaded file there still works.
+- Restarts and is back in about a minute.
+- Refuses any image without the project's signature.
+- Rolls back if a new image crashes twice before a successful schedule fetch or
+  five minutes of uptime.
+- Pins GitHub's TLS roots from `include/apple/firmware/update_roots.hpp`. The
+  weekly MLB API contract check watches those chains.
+- Takes pre-releases only after a maintainer sets `beta=on` through the
+  settings API.
 
 ## Code map
 
@@ -175,7 +174,7 @@ through the settings API.
 | `lib/motion/` | Timed actuator model |
 | `lib/device_screens/` | Scoreboard and status screens |
 | `lib/home_run_loop/` | Home run and Mets win animations |
-| `lib/manager/` | Nano-hosted setup, settings, and update page |
+| `lib/manager/` | Nano-hosted setup, settings, and update page; the [Apple Lab test protocol](lib/manager/LAB_PROTOCOL.md) it serves |
 | `fixtures/mlb/` | Recorded MLB responses used by tests and replay |
 | `test/native/` | Hardware-free C++ tests |
 | `tools/` | Bench, fixture, recovery, and release scripts |

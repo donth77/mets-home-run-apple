@@ -51,9 +51,15 @@ Virtual Apple has no connection to physical hardware.
 ## Notifications
 
 Notifications start off. After installing Virtual Apple, a user can enable home
-run and Mets win alerts independently. A scheduled Cloudflare Worker checks the
-game once a minute and uses the shared decision core before sending anything.
-Subscriptions and event deduplication live in D1; no account is required.
+run and Mets win alerts independently. No account is required.
+
+A scheduled Cloudflare Worker checks the game once a minute, using the trimmed
+MLB feed and the shared decision core. Subscriptions and the event ledger live
+in D1. When an event is new, the worker hands it to four dispatcher Durable
+Objects. Each owns a slice of the subscriptions, sends a few pushes per alarm,
+and re-arms itself until its slice is done, so fan-out stays inside the free
+plan's per-invocation limits at any subscriber count. The objects hold only a
+cursor and pending retries; deleting them loses no data.
 
 ## Sound
 
@@ -81,34 +87,34 @@ Production builds do not expose this bar, even when the URL contains the flag.
 
 ## Deploying
 
-metsapple.com is a direct-upload Cloudflare Pages project (`virtual-mets-apple`).
-Push delivery uses the `virtual-mets-apple-notifications` Worker and D1 database.
-Pushing to GitHub alone changes nothing on the site. The "Public checks"
-workflow publishes it: on every push to `main` that touches the site (this
-app, `packages/`, `public/`, or the workspace files) it runs the lint,
-typecheck, tests, and build, then uploads that same build with wrangler. Two
-repository settings make that possible:
+metsapple.com is the Cloudflare Pages project `virtual-mets-apple`. Push alerts
+use the `virtual-mets-apple-notifications` Worker and its D1 database.
 
-- `CLOUDFLARE_API_TOKEN`, an Actions secret holding a Cloudflare API token
-  with **Pages, Workers, and D1: Edit** on the account.
-- `CLOUDFLARE_ACCOUNT_ID`, an Actions variable with the account id shown by
-  `wrangler whoami`.
+Pushing to GitHub alone changes nothing. The "Public checks" workflow publishes
+on every push to `main` that touches this app, `packages/`, `public/`, or the
+workspace files: it lints, typechecks, tests, builds, and uploads that build
+with wrangler. It needs two repository settings:
 
-Without them the deploy job prints a warning and skips, and the checks still
-pass. "Run workflow" on the Actions page with **deploy_site** ticked publishes
-even when nothing under the site changed. After every publish the job fetches
-`/`, `/setup/`, and the MLB relay and fails if the relay does not answer JSON.
+| Setting | Kind | Value |
+| --- | --- | --- |
+| `CLOUDFLARE_API_TOKEN` | Actions secret | Cloudflare API token with **Pages, Workers, and D1: Edit** |
+| `CLOUDFLARE_ACCOUNT_ID` | Actions variable | Account id from `wrangler whoami` |
 
-To publish by hand, build and then run wrangler **from this directory**, so
-the Pages Function under `functions/` ships with the site:
+Without them the deploy step warns and skips; the checks still pass. **Run
+workflow** with **deploy_site** ticked publishes even with no site changes.
+After each publish the job fetches `/`, `/setup/`, and the MLB relay, and fails
+if the relay does not answer JSON.
+
+To publish by hand, build and run wrangler from this directory so the Pages
+Function under `functions/` ships too:
 
 ```sh
 pnpm --filter @apple/virtual-apple build
 cd apps/virtual-apple && wrangler pages deploy dist --project-name virtual-mets-apple --branch main
 ```
 
-Every deployment stays in the Pages project, so a bad one can be rolled back
-from the Cloudflare dashboard.
+Every deployment stays in the Pages project; roll back from the Cloudflare
+dashboard.
 
 ## Code map
 

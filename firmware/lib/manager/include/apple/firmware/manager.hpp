@@ -68,10 +68,12 @@ struct SettingsUpdate {
 
 /// One change to the track library from the page.
 struct AudioChange {
-  String action;    ///< "delete", "rename", "pool", "assign", "unassign", "test", "queue", "unqueue", "clear"
+  String action;    ///< "delete", "rename", "pool", "assign", "unassign", "test", "queue", "unqueue", "move", "clear"
   String file;      ///< the track on the card, "/hr1.wav"
   String text;      ///< new title, or the player's name
   long number{0};   ///< the player's MLB id
+  long position{-1}; ///< "move"/"queue": the place in its up-next line, from 0 (queue: end when absent)
+  long index{-1};    ///< "move"/"unqueue": the entry's current place in its line, from 0
   int home_run{-1}; ///< -1 unchanged, else in or out of the home run pool
   int win{-1};      ///< -1 unchanged, else in or out of the win pool
 };
@@ -143,6 +145,11 @@ class ManagerServer {
   void set_replay_hook(ReplayFn replay) { replay_ = std::move(replay); }
   /// Recent traces for the Lab: what the Apple did while nobody was watching.
   void set_events_hook(StatusFn events) { events_ = std::move(events); }
+  /// Writes the track library, the player tracks, and the up-next lines as
+  /// one JSON object straight to the client, so the status poll stays small
+  /// and a full card never needs a large document in memory.
+  using LibraryFn = std::function<void(Print& out)>;
+  void set_library_hook(LibraryFn library) { library_ = std::move(library); }
   void set_maintenance_gate(ActionFn gate) { maintenance_gate_ = std::move(gate); }
   bool confirm_maintenance() { return maintenance_.confirm(millis()); }
   void clear_maintenance() { maintenance_.clear(); }
@@ -188,6 +195,9 @@ class ManagerServer {
  private:
   void handle_root();
   void handle_status();
+  // Serializes into PSRAM and streams to the client, so a full track
+  // library and up-next list never need internal RAM twice over.
+  void send_json(JsonDocument& doc);
   void handle_networks();
   void handle_join();
   void handle_forget();
@@ -212,6 +222,8 @@ class ManagerServer {
   ActionFn release_install_;
   ReplayFn replay_;
   StatusFn events_;
+  LibraryFn library_;
+  void handle_library();
   FixtureFn fixture_run_;
   ActionFn fixture_stop_;
   String fixture_stop_token_;

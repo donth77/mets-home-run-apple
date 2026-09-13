@@ -4,6 +4,7 @@ export {
   METS_TEAM_ID,
   MINIMUM_POLL_WAIT_MS,
   MLB_STATS_API_ORIGIN,
+  LIVE_FEED_FIELDS,
 } from "./constants";
 export { MlbFeedError } from "./errors";
 export { classifyGameStatus, gameStatusFacts, RAIN_DELAY_LABEL } from "./feedNormalization";

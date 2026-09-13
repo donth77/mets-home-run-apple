@@ -11,9 +11,24 @@ binding = "NOTIFICATIONS_DB"
 database_name = "virtual-mets-apple-notifications"
 database_id = "fc5d8319-caae-4905-aee7-c1f75f5b39a5"
 
+# Fan-out dispatchers. Free plan: SQLite-backed classes only.
+[[durable_objects.bindings]]
+name = "DISPATCHER"
+class_name = "NotificationDispatcher"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["NotificationDispatcher"]
+
 [vars]
 VAPID_PUBLIC_KEY = "BFjuz83euqgKBHfMoSoAu9um7nXKFlGKPgbh4xrGtZ80krXV4tJ0j8aIfE397l6OqHytKD7V22c5iPXROkcRXe8"
 VAPID_SUBJECT = "https://metsapple.com/"
+# Fan-out tuning. Pushes per hop is bounded by the 10 ms free-plan CPU budget
+# (about 1 ms per push). The daily hop cap keeps one shard inside the free
+# Durable Object request allowance; past it, home-run fan-out is shed.
+DISPATCHER_SHARDS = "4"
+PUSHES_PER_HOP = "6"
+DISPATCHER_DAILY_HOP_CAP = "20000"
 
 [observability.logs]
 enabled = true

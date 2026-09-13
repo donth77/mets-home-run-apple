@@ -7,6 +7,7 @@
 #include <ESPmDNS.h>
 #include <Preferences.h>
 #include <WiFi.h>
+#include <esp_heap_caps.h>
 #include <esp_system.h>
 #include <esp_task_wdt.h>
 
@@ -90,6 +91,7 @@ void ManagerServer::begin(StatusFn status, JoinFn join, ForgetFn forget, Setting
   server_.on("/api/update/install", HTTP_POST, [this] { handle_release_action(release_install_); });
   server_.on("/api/replay", HTTP_POST, [this] { handle_replay(); });
   server_.on("/api/events", HTTP_GET, [this] { handle_events(); });
+  server_.on("/api/audio/library", HTTP_GET, [this] { handle_library(); });
   server_.on("/api/maintenance", HTTP_POST, [this] { handle_maintenance(); });
   server_.on("/api/fixture", HTTP_POST, [this] { handle_fixture(); });
   server_.on("/api/fixture/stop", HTTP_POST, [this] { handle_fixture_stop(); });
@@ -204,22 +206,114 @@ void ManagerServer::handle_root() {
   server_.send_P(200, "text/html", kManagerPage);
 }
 
-void ManagerServer::handle_status() {
-  JsonDocument doc;
-  if (status_) status_(doc);
-  String body;
-  serializeJson(doc, body);
+namespace {
+
+// Status answers grow with the track library and the up-next lines. Both the
+// document and its text go to PSRAM when the board has it, leaving internal
+// RAM for Wi-Fi and TLS.
+struct SpiRamJsonAllocator final : ArduinoJson::Allocator {
+  void* allocate(size_t size) override {
+    void* memory = psramFound() ? heap_caps_malloc(size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT) : nullptr;
+    return memory != nullptr ? memory : malloc(size);
+  }
+  void deallocate(void* pointer) override { free(pointer); }
+  void* reallocate(void* pointer, size_t size) override {
+    if (psramFound()) return heap_caps_realloc(pointer, size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    return realloc(pointer, size);
+  }
+};
+SpiRamJsonAllocator json_allocator;
+
+// Gathers what the library writer prints and hands it to the client in
+// chunks, so only this much of the answer exists at any one time. The buffer
+// lives in PSRAM when there is some; without one, every write goes straight
+// out as its own chunk.
+class ChunkSink final : public Print {
+ public:
+  explicit ChunkSink(WebServer& server)
+      : server_(server), buffer_(static_cast<char*>(json_allocator.allocate(kSize))) {}
+  ~ChunkSink() {
+    drain();
+    json_allocator.deallocate(buffer_);
+  }
+  size_t write(uint8_t byte) override { return write(&byte, 1); }
+  size_t write(const uint8_t* data, size_t length) override {
+    if (buffer_ == nullptr) {
+      server_.sendContent(reinterpret_cast<const char*>(data), length);
+      return length;
+    }
+    size_t done = 0;
+    while (done < length) {
+      const size_t take = std::min(kSize - used_, length - done);
+      memcpy(buffer_ + used_, data + done, take);
+      used_ += take;
+      done += take;
+      if (used_ == kSize) drain();
+    }
+    return length;
+  }
+  void drain() {
+    if (buffer_ == nullptr || used_ == 0) return;
+    server_.sendContent(buffer_, used_);
+    used_ = 0;
+  }
+
+ private:
+  static constexpr size_t kSize = 1024;
+  WebServer& server_;
+  char* buffer_;
+  size_t used_ = 0;
+};
+
+}  // namespace
+
+void ManagerServer::send_json(JsonDocument& doc) {
+  const std::size_t length = measureJson(doc);
+  char* body = static_cast<char*>(json_allocator.allocate(length + 1));
+  if (body == nullptr) {
+    server_.send(500, "application/json", "{\"error\":\"NO_MEMORY\"}");
+    return;
+  }
+  serializeJson(doc, body, length + 1);
   server_.sendHeader("Cache-Control", "no-store");
-  server_.send(200, "application/json", body);
+  server_.setContentLength(length);
+  server_.send(200, "application/json", "");
+  WiFiClient client = server_.client();
+  std::size_t sent = 0;
+  while (sent < length && client.connected()) {
+    const std::size_t wrote = client.write(reinterpret_cast<const std::uint8_t*>(body) + sent, length - sent);
+    if (wrote == 0) break;
+    sent += wrote;
+  }
+  json_allocator.deallocate(body);
+}
+
+void ManagerServer::handle_status() {
+  JsonDocument doc(&json_allocator);
+  if (status_) status_(doc);
+  send_json(doc);
 }
 
 void ManagerServer::handle_events() {
-  JsonDocument doc;
+  JsonDocument doc(&json_allocator);
   if (events_) events_(doc);
-  String body;
-  serializeJson(doc, body);
+  send_json(doc);
+}
+
+// Chunked, because the length is not known until the last track is written.
+void ManagerServer::handle_library() {
+  if (!library_) {
+    server_.send(404, "application/json", "{\"ok\":false,\"error\":\"NO_AUDIO\"}");
+    return;
+  }
   server_.sendHeader("Cache-Control", "no-store");
-  server_.send(200, "application/json", body);
+  server_.setContentLength(CONTENT_LENGTH_UNKNOWN);
+  server_.send(200, "application/json", "");
+  {
+    ChunkSink sink(server_);
+    library_(sink);
+  }
+  server_.sendContent("");  // the empty chunk ends the answer
 }
 
 void ManagerServer::handle_networks() {
@@ -412,6 +506,8 @@ void ManagerServer::handle_audio_set() {
   change.file = server_.arg("file");
   change.text = server_.arg("text");
   if (server_.hasArg("id")) change.number = server_.arg("id").toInt();
+  if (server_.hasArg("at")) change.position = server_.arg("at").toInt();
+  if (server_.hasArg("from")) change.index = server_.arg("from").toInt();
   if (server_.hasArg("hr")) change.home_run = on_off(server_.arg("hr"));
   if (server_.hasArg("win")) change.win = on_off(server_.arg("win"));
   const String failed = audio_change_(change);

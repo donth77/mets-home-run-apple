@@ -1,4 +1,5 @@
 import type { CoreCelebration } from "@apple/game-core-wasm";
+import type { NotificationDispatcher } from "./dispatcher";
 
 export interface NotificationPreferences {
   homeRuns: boolean;
@@ -37,7 +38,11 @@ export interface PendingDelivery {
 
 export interface NotificationEnv {
   NOTIFICATIONS_DB: D1Database;
+  DISPATCHER: DurableObjectNamespace<NotificationDispatcher>;
   VAPID_PUBLIC_KEY: string;
   VAPID_PRIVATE_KEY: string;
   VAPID_SUBJECT: string;
+  DISPATCHER_SHARDS?: string;
+  PUSHES_PER_HOP?: string;
+  DISPATCHER_DAILY_HOP_CAP?: string;
 }
