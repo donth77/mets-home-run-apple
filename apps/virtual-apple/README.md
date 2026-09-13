@@ -36,16 +36,6 @@ The browser checks the Mets schedule, follows the active MLB feed, and sends
 normalized updates through the shared C++ game-state and decision code. That
 code decides whether an event is new. The React app decides how to present it.
 
-Production requests go through a small same-origin Cloudflare relay. Local Vite
-development exposes the same `/api/mlb` route through a proxy. The relay has no
-database and contains no game rules. The browser can fall back to MLB directly
-if the relay is unavailable.
-
-On first load, earlier plays normally establish state without triggering a
-celebration. There is one exception: a Mets home run or win completed in the
-previous five minutes can replay once per page session. This gives late
-visitors the full sequence without turning old games into new events.
-
 Virtual Apple has no connection to physical hardware.
 
 ## Notifications
@@ -53,23 +43,11 @@ Virtual Apple has no connection to physical hardware.
 Notifications start off. After installing Virtual Apple, a user can enable home
 run and Mets win alerts independently. No account is required.
 
-A scheduled Cloudflare Worker checks the game once a minute, using the trimmed
-MLB feed and the shared decision core. Subscriptions and the event ledger live
-in D1. When an event is new, the worker hands it to four dispatcher Durable
-Objects. Each owns a slice of the subscriptions, sends a few pushes per alarm,
-and re-arms itself until its slice is done, so fan-out stays inside the free
-plan's per-invocation limits at any subscriber count. The objects hold only a
-cursor and pending retries; deleting them loses no data.
-
 ## Sound
 
 Radio and celebration sound are separate controls. Radio uses the official
 Mets stream published by Audacy. A deployment can point to another authorized,
 browser-playable stream:
-
-```bash
-VITE_METS_AUDIO_STREAM_URL=https://audio-provider.example/authorized-stream
-```
 
 Browsers require a user action before playing audio, so celebration sound starts
 off.
@@ -84,37 +62,6 @@ address:
 
 A demo fixture replaces the live presentation until **Live data** is selected.
 Production builds do not expose this bar, even when the URL contains the flag.
-
-## Deploying
-
-metsapple.com is the Cloudflare Pages project `virtual-mets-apple`. Push alerts
-use the `virtual-mets-apple-notifications` Worker and its D1 database.
-
-Pushing to GitHub alone changes nothing. The "Public checks" workflow publishes
-on every push to `main` that touches this app, `packages/`, `public/`, or the
-workspace files: it lints, typechecks, tests, builds, and uploads that build
-with wrangler. It needs two repository settings:
-
-| Setting | Kind | Value |
-| --- | --- | --- |
-| `CLOUDFLARE_API_TOKEN` | Actions secret | Cloudflare API token with **Pages, Workers, and D1: Edit** |
-| `CLOUDFLARE_ACCOUNT_ID` | Actions variable | Account id from `wrangler whoami` |
-
-Without them the deploy step warns and skips; the checks still pass. **Run
-workflow** with **deploy_site** ticked publishes even with no site changes.
-After each publish the job fetches `/`, `/setup/`, and the MLB relay, and fails
-if the relay does not answer JSON.
-
-To publish by hand, build and run wrangler from this directory so the Pages
-Function under `functions/` ships too:
-
-```sh
-pnpm --filter @apple/virtual-apple build
-cd apps/virtual-apple && wrangler pages deploy dist --project-name virtual-mets-apple --branch main
-```
-
-Every deployment stays in the Pages project; roll back from the Cloudflare
-dashboard.
 
 ## Code map
 

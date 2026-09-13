@@ -294,7 +294,7 @@ a.btn{display:inline-block;font-size:15px;font-weight:600;padding:11px 16px;bord
 </section>
 <section id="audio-next" data-for="audio" hidden>
 <h2>Up next</h2>
-<p class="note">Line up tracks for the next home run, the next Mets win, or a specific player’s next home run. They play in order, once each. When a line runs out, the Apple picks at random again. Add to the end of a line here, or tap <b>Play next</b> on any track in the library to put it first.</p>
+<p class="note">Queue tracks for the next home run, the next Mets win, or a specific player’s next home run. When a queue runs out, the Apple picks at random again. Add to the end here, or tap <b>Play next</b> on any track in the library to put it first.</p>
 <div class="upnext" id="upnext"></div>
 <nav class="pager" id="upnext-pager" hidden aria-label="Player lines"></nav>
 <p class="vh" id="queue-live" aria-live="polite"></p>
@@ -764,9 +764,9 @@ function audioMessage(code,err,action){
     NOT_MONO:"That file did not convert cleanly.",NOT_PCM:"That file did not convert cleanly.",NOT_16_BIT:"That file did not convert cleanly.",
     BAD_NAME:"That file name will not work.",WRITE_FAILED:"The memory card would not take it.",NO_CARD:"No memory card in the Apple.",
     CELEBRATING:"Not now: a celebration is playing.",GAME_IN_PROGRESS:"Not during a game.",PLAYERS_FULL:"That is as many player tracks as the Apple holds.",
-    LINE_FULL:"That line is full. It holds up to "+NEXT_MAX+" tracks.",QUEUE_FULL:"The Apple\u2019s up-next lists are full, "+NEXT_TOTAL+" tracks in all. Clear some first.",
+    LINE_FULL:"Queue is full. It holds up to "+NEXT_MAX+" tracks.",QUEUE_FULL:"The Apple\u2019s up-next lists are full, "+NEXT_TOTAL+" tracks in all. Clear some first.",
     CODE:"The password is needed.",LOCKED:"Too many wrong passwords. Wait a minute."};
-  if(err==="NO_TRACK"&&(action==="unqueue"||action==="move"||action==="clear"))return "That track is no longer in that line. The list has been refreshed.";
+  if(err==="NO_TRACK"&&(action==="unqueue"||action==="move"||action==="clear"))return "That track is no longer in that queue. The list has been refreshed.";
   if(err==="NO_TRACK"&&action==="queue")return "That track is no longer on the Apple. The list has been refreshed.";
   if(err&&map[err])return map[err];
   if(code===401)return map.CODE;if(code===409)return map.CELEBRATING;if(code===503)return map.NO_CARD;
@@ -836,15 +836,15 @@ function trackRow(t,a){
     function lineUp(params,what,lineLabel){libOpen=null;libPlayers=false;focusAfter={libBtn:libKey};
       audioSet(assign({action:"queue",file:t.file,at:0},params)).then(function(ok){if(ok)toast(title+" plays next for "+what+".","ok",{id:"audio"})})}
     var nextNow=a.next||[],hrFull=nextNow.filter(function(n){return !n.win&&!n.name}).length>=NEXT_MAX,winFull=nextNow.filter(function(n){return n.win}).length>=NEXT_MAX;
-    var b1=el("button","act","Home run");b1.type="button";b1.disabled=hrFull;if(hrFull)b1.title="That line is full";b1.addEventListener("click",function(){lineUp({},"a home run","Next home run")});
-    var b2=el("button","act","Mets win");b2.type="button";b2.disabled=winFull;if(winFull)b2.title="That line is full";b2.addEventListener("click",function(){lineUp({win:"on"},"a Mets win","Next Mets win")});
+    var b1=el("button","act","Home run");b1.type="button";b1.disabled=hrFull;if(hrFull)b1.title="That queue is full";b1.addEventListener("click",function(){lineUp({},"a home run","Next home run")});
+    var b2=el("button","act","Mets win");b2.type="button";b2.disabled=winFull;if(winFull)b2.title="That queue is full";b2.addEventListener("click",function(){lineUp({win:"on"},"a Mets win","Next Mets win")});
     var b3=el("button","act","Home run by\u2026");b3.type="button";b3.setAttribute("aria-expanded",libPlayers?"true":"false");
     b3.addEventListener("click",function(){libPlayers=!libPlayers;chooserQuery="";focusAfter=libPlayers?{chooser:libKey}:{libThird:libKey};trackSig="";renderAudio(lastStatus)});
     var cancel=el("button","link","Cancel");cancel.type="button";cancel.addEventListener("click",function(){libOpen=null;libPlayers=false;focusAfter={libBtn:libKey};trackSig="";renderAudio(lastStatus)});
     menu.appendChild(b1);menu.appendChild(b2);menu.appendChild(b3);menu.appendChild(cancel);row.appendChild(menu);
     if(libPlayers){
       var pc=chooser({key:libKey,label:"Search players for "+title,listLabel:"Players",placeholder:"Type a player\u2019s name",
-        options:nextPlayers(a).map(function(p){var full=(a.next||[]).filter(function(n){return !n.win&&n.name===p.name}).length>=NEXT_MAX;return {value:p,text:p.name,meta:full?"line full":""}}),
+        options:nextPlayers(a).map(function(p){var full=(a.next||[]).filter(function(n){return !n.win&&n.name===p.name}).length>=NEXT_MAX;return {value:p,text:p.name,meta:full?"queue full":""}}),
         emptyText:"No players to choose from yet. The roster list needs internet.",
         onPick:function(opt){lineUp({id:opt.value.id||0,text:opt.value.name},"a home run by "+opt.value.name,"Next home run by "+opt.value.name)},
         onClose:function(){libPlayers=false;focusAfter={libThird:libKey};trackSig="";renderAudio(lastStatus)}});
@@ -923,7 +923,7 @@ function renderAudio(s){
   all.forEach(function(t){var o=el("option",null,trackTitle(t));o.value=t.file;chooser.appendChild(o)});
   renderUpNext(a,all);renderPlayers(a,all);refreshAssignButton();applyFocusAfter();
 }
-/* Players the owner can line a song up for: the roster, plus anyone who
+/* Players the owner can queue a song up for: the roster, plus anyone who
    already has tracks or something queued, so the list works offline too. */
 function nextPlayers(a){
   var seen={},list=[];
@@ -1069,7 +1069,7 @@ function renderUpNext(a,tracks){
     who.appendChild(el("small",null,items.length?(collapsed?(items.length===1?"1 track":items.length+" tracks")+" \u00b7 "+firstTitle+" first":(items.length===1?"1 track lined up":items.length+" tracks lined up, in this order")+" \u00b7 then back to random \u00b7 up to "+NEXT_MAX):emptyText));
     head.appendChild(who);
     if(collapsible){
-      var toggle=el("button","line-toggle");toggle.type="button";toggle.setAttribute("aria-expanded",collapsed?"false":"true");toggle.setAttribute("aria-label",(collapsed?"Show":"Hide")+" the line for "+label.replace(/^Next home run by /,""));
+      var toggle=el("button","line-toggle");toggle.type="button";toggle.setAttribute("aria-expanded",collapsed?"false":"true");toggle.setAttribute("aria-label",(collapsed?"Show":"Hide")+" the queue for "+label.replace(/^Next home run by /,""));
       toggle.appendChild(el("span","chev","\u25b8"));toggle.appendChild(document.createTextNode(collapsed?"Show":"Hide"));
       toggle.addEventListener("click",function(){openLines[key]=!openLines[key];focusAfter={toggle:key};trackSig="";renderAudio(lastStatus)});
       head.appendChild(toggle);

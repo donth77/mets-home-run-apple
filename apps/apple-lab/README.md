@@ -82,13 +82,6 @@ controls. Follow the on-screen steps in order before connecting motor power.
 Production firmware over USB is read-only: status, scoreboard, and diagnostics.
 Tests go over Wi-Fi. With both attached, Wi-Fi wins.
 
-## Fixtures
-
-`pnpm fixtures:generate` builds the Apple's built-in scenarios from
-`@apple/test-fixtures`; `pnpm check:fixtures` catches drift. Native tests run
-all 14 with a recording actuator against a golden trace. Nothing here contacts
-MLB or moves hardware.
-
 ## Lab and Manager
 
 Apple Manager is the owner page served by the Nano; it configures the Apple.

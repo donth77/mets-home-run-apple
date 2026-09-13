@@ -50,10 +50,8 @@ approved test runs.
 
 Virtual Apple is the public gameday site. It uses the same game-state and
 decision code, but has its own 3D scene. One edge function relays MLB requests.
-A scheduled worker uses the shared decision core for opt-in push alerts and
-keeps anonymous subscriptions and its event ledger in D1. Dispatcher Durable
-Objects fan each alert out a few pushes per alarm. It cannot discover or
-control a physical Apple.
+A scheduled worker uses the shared decision core to send opt-in push alerts.
+It cannot discover or control a physical Apple.
 
 ## Code map
 

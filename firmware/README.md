@@ -142,26 +142,16 @@ celebration receipts.
 
 ## Firmware updates
 
-To release, tag a commit `firmware-vX.Y.Z` that matches `kFirmwareVersion` in
-`src/apple_live.cpp`. The release workflow builds, signs with the
-`FIRMWARE_SIGNING_KEY` secret, and publishes `home-run-apple-X.Y.Z.bin` with
-its checksum. A suffix such as `0.3.0-rc.1` makes a pre-release.
+The Apple updates itself from the project's GitHub releases:
 
-How an Apple updates itself:
-
-- Checks GitHub about 90 seconds after joining Wi-Fi, then once a day.
+- Checks about 90 seconds after joining Wi-Fi, then once a day.
 - With **Update automatically** on (the default), installs between games from
   3:00 to 5:59 in the owner's time zone. Never during a game or celebration.
 - Apple Manager shows the result under Update and offers **Install now**.
   Uploading a downloaded file there still works.
 - Restarts and is back in about a minute.
-- Refuses any image without the project's signature.
-- Rolls back if a new image crashes twice before a successful schedule fetch or
-  five minutes of uptime.
-- Pins GitHub's TLS roots from `include/apple/firmware/update_roots.hpp`. The
-  weekly MLB API contract check watches those chains.
-- Takes pre-releases only after a maintainer sets `beta=on` through the
-  settings API.
+- Refuses any image without the project's signature, and rolls back if a new
+  image crashes twice before it proves itself.
 
 ## Code map
 

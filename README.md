@@ -55,7 +55,7 @@ pnpm dev:virtual
 Virtual Apple opens at <http://localhost:4174>. Add `?demo=1` to use the local
 demo controls.
 
-## Check 
+## Check
 
 ```bash
 pnpm lint
@@ -82,7 +82,7 @@ rebuild them for every change.
 
 ## Inspiration
 
-In March 2025, a tweet about a Wi-Fi enabled Home Run Apple.
+In March 2025 a tweet asked for a Wi-Fi enabled Home Run Apple.
 [r/NewYorkMets discussion](https://www.reddit.com/r/NewYorkMets/comments/1jixetv/are_we_pro_or_anti_wifi_enabled_apple_for_2025/).
 
 <p align="center">
