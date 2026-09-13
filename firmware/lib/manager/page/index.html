@@ -273,7 +273,7 @@ a.btn{display:inline-block;font-size:15px;font-weight:600;padding:11px 16px;bord
 <div class="tile"><span id="feed-label">Game feed</span><strong id="feed">…</strong><small id="feed-2"></small></div>
 <div class="tile"><span>Lift</span><strong id="lift">…</strong><small id="lift-2"></small></div>
 <div class="tile"><span>Last celebration</span><strong id="last">…</strong><small id="last-2"></small></div>
-<div class="tile"><span>Up next</span><strong id="next">…</strong><small id="next-2"></small></div>
+<div class="tile"><span>Queued</span><strong id="next">…</strong><small id="next-2"></small></div>
 <div class="tile"><span>Firmware</span><strong id="fw">…</strong><small id="fw-2"></small></div>
 </div>
 <div class="row"><button id="change" class="quiet" type="button">Change Wi-Fi</button><button id="forget" class="quiet" type="button">Forget Wi-Fi</button><button id="restart" type="button" class="quiet">Restart the Apple</button></div>
@@ -450,8 +450,15 @@ function render(s){
     function title(f){var t=tl.filter(function(x){return x.file===f})[0];return t?trackTitle(t):f.replace(/^\//,"")}
     var hr=nx.filter(function(n){return !n.win&&!n.name})[0],win=nx.filter(function(n){return n.win})[0],byPlayer={},order=[];
     nx.forEach(function(n){if(!n.win&&n.name&&!byPlayer[n.name]){byPlayer[n.name]=n;order.push(n.name)}});
-    text("next",hr?title(hr.file):"Random pick");
-    text("next-2",(hr?"next home run":"home run")+" \u00b7 win: "+(win?title(win.file):"random")+order.slice(0,2).map(function(name){return " \u00b7 "+name.split(" ").slice(-1)[0]+": "+title(byPlayer[name].file)}).join("")+(order.length>2?" \u00b7 +"+(order.length-2)+" more":""));
+    // One entry per queue that has something in it, showing what plays
+    // first there. Empty queues are not listed; the Apple picks at random.
+    var parts=[];
+    if(hr)parts.push("Home run: "+title(hr.file));
+    if(win)parts.push("Mets win: "+title(win.file));
+    order.forEach(function(name){parts.push(name.split(" ").slice(-1)[0]+": "+title(byPlayer[name].file))});
+    var shown=parts.slice(0,3),more=parts.length-shown.length;
+    text("next",nx.length?nx.length+(nx.length===1?" track queued":" tracks queued"):"Nothing queued");
+    text("next-2",nx.length?shown.join(" \u00b7 ")+(more?" \u00b7 +"+more+" more":""):"Every celebration is a random pick.");
   })();
   var lc=s.lastCelebration;if(lc&&lc.at){text("last",(lc.kind==="WIN"?"Mets win":"Home run")+(lc.subject?", "+lc.subject:""));text("last-2",when(new Date(lc.at*1000).toISOString())+" · "+({ROSE:"the Apple rose",RUNNING:"running now",SCREEN_ONLY:"screen only, motor off",STOPPED:"stopped before it rose",FAULT:"stopped by a motor fault",INTERRUPTED:"cut short by a restart"}[lc.outcome]||(lc.moved?"the Apple rose":"screen only"))+(lc.track?" \u00b7 "+lc.track:""))}else{text("last","None yet");text("last-2","")}
   text("fw",s.firmwareVersion||"");if(s.firmwareVersion)installedVersion=s.firmwareVersion;text("fw-installed",s.firmwareVersion||"");renderUpdate(s);text("fw-2",(s.hostname||"home-run-apple")+".local");
@@ -567,8 +574,9 @@ function renderUpdate(s){lastStatus=s;var u=s.update||{},st=u.state||"IDLE",box=
   if(st==="CHECKING")msg="Checking…";
   else if(st==="DOWNLOADING")msg="Downloading "+(u.version||"the update")+"… The Apple restarts when it is done.";
   else if(st==="AVAILABLE")msg=(u.version||"A new version")+(u.prerelease?" (pre-release)":"")+" is ready. "+(s.settings&&s.settings.autoUpdate===false?"Automatic updates are off.":"It installs between games, early in the morning.");
-  else if(st==="UP_TO_DATE")msg="Up to date"+(u.checkedAt?", checked "+when(u.checkedAt):"")+".";
-  else if(st==="FAILED")msg=updateError(u.error)+(u.checkedAt?" Last good check "+when(u.checkedAt)+".":"");
+  // checkedAt is epoch seconds from the Apple; Date wants milliseconds.
+  else if(st==="UP_TO_DATE")msg="Up to date"+(u.checkedAt?", checked "+when(u.checkedAt*1000):"")+".";
+  else if(st==="FAILED")msg=updateError(u.error)+(u.checkedAt?" Last good check "+when(u.checkedAt*1000)+".":"");
   else msg="Not checked yet.";
   box.innerHTML="";box.appendChild(document.createTextNode("Installed "));var b=document.createElement("strong");b.id="fw-installed";b.textContent=v;box.appendChild(b);box.appendChild(document.createTextNode(". "+msg));
   $("install-latest").hidden=st!=="AVAILABLE";$("tab-update-dot").hidden=st!=="AVAILABLE";
