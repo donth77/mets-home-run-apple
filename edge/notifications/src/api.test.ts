@@ -8,6 +8,7 @@ function context(
   method = "GET",
   body?: unknown,
   origin = "https://metsapple.com",
+  testPush = false,
 ): NotificationApiContext {
   return {
     request: new Request(`https://metsapple.com/api/notifications/${path}`, {
@@ -18,19 +19,95 @@ function context(
         Origin: origin,
       },
     }),
-    env: { NOTIFICATIONS_DB: database, VAPID_PUBLIC_KEY: "public-key" },
+    env: {
+      NOTIFICATIONS_DB: database,
+      VAPID_PUBLIC_KEY: "public-key",
+      VAPID_PRIVATE_KEY: "private-key",
+      VAPID_SUBJECT: "https://metsapple.com/",
+      ...(testPush ? { NOTIFICATIONS_TEST_PUSH: "on" } : {}),
+    },
   };
 }
 
+const endpoint = "https://fcm.googleapis.com/fcm/send/abc";
+
 function store(): NotificationApiStore {
   return {
-    preferences: vi.fn().mockResolvedValue({ homeRuns: true, metsWins: false }),
+    status: vi.fn().mockResolvedValue({
+      preferences: { homeRuns: true, metsWins: false },
+      lastPush: { at: 1_700, eventKey: "823575:hr:1", outcome: "DELIVERED", status: 201 },
+    }),
+    subscription: vi.fn().mockResolvedValue({
+      id: "sub-1",
+      endpoint,
+      expirationTime: null,
+      keys: { p256dh: "p", auth: "a" },
+    }),
     saveSubscription: vi.fn().mockResolvedValue(undefined),
     removeSubscription: vi.fn().mockResolvedValue(undefined),
+    removeExpiredSubscription: vi.fn().mockResolvedValue(undefined),
+    recordLastPush: vi.fn().mockResolvedValue(undefined),
   };
 }
 
 describe("notification API", () => {
+  it("reports the last push beside the preferences", async () => {
+    const response = await handleNotificationApi(context("status", "POST", { endpoint }), 123, () => store());
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      enabled: true,
+      preferences: { homeRuns: true, metsWins: false },
+      lastPush: { at: 1_700, eventKey: "823575:hr:1", outcome: "DELIVERED", status: 201 },
+    });
+  });
+
+  it("sends a test push to one device and remembers the outcome", async () => {
+    const backing = store();
+    const send = vi.fn().mockResolvedValue({ status: 201, disposition: "DELIVERED" });
+    const response = await handleNotificationApi(
+      context("test", "POST", { endpoint }, undefined, true),
+      5_000,
+      () => backing,
+      send,
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      sent: true,
+      lastPush: { at: 5_000, eventKey: "test:5000", outcome: "DELIVERED", status: 201 },
+    });
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send.mock.calls[0][0].subscription.endpoint).toBe(endpoint);
+    expect(backing.recordLastPush).toHaveBeenCalledWith("sub-1", {
+      at: 5_000,
+      eventKey: "test:5000",
+      outcome: "DELIVERED",
+      status: 201,
+    });
+  });
+
+  it("refuses a test push for a device that never enabled notifications", async () => {
+    const backing = store();
+    (backing.subscription as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    const send = vi.fn();
+    const response = await handleNotificationApi(
+      context("test", "POST", { endpoint }, undefined, true),
+      5_000,
+      () => backing,
+      send,
+    );
+    expect(response.status).toBe(404);
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("does not answer the test push route unless it is switched on", async () => {
+    const backing = store();
+    const send = vi.fn();
+    const response = await handleNotificationApi(context("test", "POST", { endpoint }), 5_000, () => backing, send);
+    expect(response.status).toBe(404);
+    expect(send).not.toHaveBeenCalled();
+    expect(backing.subscription).not.toHaveBeenCalled();
+  });
+
   it("publishes only the VAPID public key", async () => {
     const response = await handleNotificationApi(context("config"));
     await expect(response.json()).resolves.toEqual({ vapidPublicKey: "public-key" });

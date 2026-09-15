@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { drainHop, emptyShardState, enqueueJob, MAX_ATTEMPTS, type DrainDependencies, type ShardState } from "./drain";
 import type { PushDeliveryResult } from "./push";
 import { ID_ALPHABET, shardRanges } from "./shards";
-import type { StoredSubscription, VerifiedNotificationEvent } from "./types";
+import type { LastPush, StoredSubscription, VerifiedNotificationEvent } from "./types";
 
 const T0 = Date.parse("2026-09-12T20:00:00Z");
 const TTL = 10 * 60_000;
@@ -45,6 +45,7 @@ function fakeDependencies(
 ) {
   const sent: string[] = [];
   const removed: string[] = [];
+  const recorded: { id: string; push: LastPush }[] = [];
   const logs: Record<string, unknown>[] = [];
   const dependencies: DrainDependencies = {
     // Mirrors the D1 query: opted in before the event, within the range, after the cursor, id order.
@@ -68,9 +69,12 @@ function fakeDependencies(
     async removeSubscription(id) {
       removed.push(id);
     },
+    async recordPush(id, push) {
+      recorded.push({ id, push });
+    },
     log: (entry) => logs.push(entry),
   };
-  return { dependencies, sent, removed, logs };
+  return { dependencies, sent, removed, recorded, logs };
 }
 
 async function drainUntilIdle(state: ShardState, dependencies: DrainDependencies, start = T0, maxHops = 100) {
@@ -115,6 +119,25 @@ describe("drainHop", () => {
     expect(new Set(sent).size).toBe(sent.length);
     expect(state.jobs).toEqual({});
     expect(logs.at(-1)).toMatchObject({ type: "fanout-complete", shard: 1, sent: expected.length, failed: 0 });
+  });
+
+  it("remembers each device's last push outcome, whatever the push service said", async () => {
+    const rows = subscriptions(3);
+    const state = emptyShardState(0, 1);
+    enqueueJob(state, event(), T0, TTL);
+    const answers: Record<string, PushDeliveryResult> = {
+      [rows[0].id]: { status: 201, disposition: "DELIVERED" },
+      [rows[1].id]: { status: 410, disposition: "EXPIRED_SUBSCRIPTION" },
+      [rows[2].id]: { status: 503, disposition: "RETRY", retryDelayMs: 30_000 },
+    };
+    const { dependencies, recorded } = fakeDependencies(rows, (id) => answers[id]);
+
+    await drainHop(state, dependencies, options, T0);
+    expect(recorded).toEqual([
+      { id: rows[0].id, push: { at: T0, eventKey: "823496:hr-1", outcome: "DELIVERED", status: 201 } },
+      { id: rows[1].id, push: { at: T0, eventKey: "823496:hr-1", outcome: "EXPIRED_SUBSCRIPTION", status: 410 } },
+      { id: rows[2].id, push: { at: T0, eventKey: "823496:hr-1", outcome: "RETRY", status: 503 } },
+    ]);
   });
 
   it("skips subscriptions that opted in after the event", async () => {

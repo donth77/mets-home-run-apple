@@ -3,6 +3,7 @@ import { easternDate, fetchMetsSchedule, MlbRecordingClient, type MlbScheduleGam
 import type { GameSnapshot } from "@apple/protocol";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { LiveCelebrationLatch } from "./liveCelebrationLatch";
+import type { CoreResult } from "@apple/game-core-wasm";
 import {
   coreSequenceNeedsTicking,
   type LiveCelebration,
@@ -11,7 +12,7 @@ import {
 } from "./liveGameCoreController";
 import { MINI_APPLE_HEARTBEAT_EVENT } from "./miniAppleHeartbeat";
 import { mlbApiFetch } from "./mlbApiFetch";
-import { buildRecentCelebrationReplay } from "./recentCelebrationReplay";
+import { buildRecentCelebrationReplay, RECENT_CELEBRATION_REPLAY_WINDOW_MS } from "./recentCelebrationReplay";
 
 export type { LiveCelebration } from "./liveGameCoreController";
 
@@ -34,6 +35,8 @@ export interface LiveMetsGameState {
   checkedAt?: string;
   error?: string;
   reportPosition(positionMm: number): void;
+  /** The core's motion sequence, for the on-page diagnostics readout. */
+  sequenceState?: CoreResult["sequenceState"];
 }
 
 export function selectTrackableMetsGame(games: readonly MlbScheduleGame[]) {
@@ -105,12 +108,15 @@ function isAbortError(reason: unknown) {
   return typeof reason === "object" && reason !== null && "name" in reason && reason.name === "AbortError";
 }
 
+const MINI_WINDOW_HEARTBEAT_GRACE_MS = 3_000;
+
 export function useLiveMetsGame(enabled = true): LiveMetsGameState {
   const [status, setStatus] = useState<LiveMetsGameStatus>("CHECKING");
   const [game, setGame] = useState<MlbScheduleGame>();
   const [snapshot, setSnapshot] = useState<GameSnapshot>();
   const [celebration, setCelebration] = useState<LiveCelebration>();
   const [targetPositionMm, setTargetPositionMm] = useState(0);
+  const [sequenceState, setSequenceState] = useState<CoreResult["sequenceState"]>();
   const [checkedAt, setCheckedAt] = useState<string>();
   const [error, setError] = useState<string>();
   const coreRef = useRef<LiveGameCoreController | undefined>(undefined);
@@ -123,6 +129,7 @@ export function useLiveMetsGame(enabled = true): LiveMetsGameState {
     const latched = celebrationLatchRef.current.accept(presentation, fallbackSnapshot);
     if (latched.celebration) presentedEventKeysRef.current.add(latched.celebration.eventKey);
     setCelebration(latched.celebration);
+    setSequenceState(latched.decision?.sequenceState);
     setTargetPositionMm(latched.targetPositionMm);
     if (latched.snapshot) setSnapshot(latched.snapshot);
     afterCorePresentationRef.current?.(latched);
@@ -146,6 +153,11 @@ export function useLiveMetsGame(enabled = true): LiveMetsGameState {
     let tickTimer: number | undefined;
     let resumeTracking: (() => void) | undefined;
     let serviceTrackingClock: (() => void) | undefined;
+    let pauseTracking: (() => void) | undefined;
+    // The Mini Apple window keeps the clock alive with a heartbeat; while one
+    // is arriving, the main page being hidden must not pause anything.
+    let lastMiniHeartbeatAt = 0;
+    const miniWindowActive = () => Date.now() - lastMiniHeartbeatAt < MINI_WINDOW_HEARTBEAT_GRACE_MS;
     let scheduledDiscoveryRecovery = false;
     const inspectedFinalGamePks = new Set<number>();
 
@@ -159,6 +171,7 @@ export function useLiveMetsGame(enabled = true): LiveMetsGameState {
       tickTimer = undefined;
       resumeTracking = undefined;
       serviceTrackingClock = undefined;
+      pauseTracking = undefined;
       coreRef.current?.dispose();
       coreRef.current = undefined;
       gameStateProjectorRef.current?.dispose();
@@ -232,7 +245,7 @@ export function useLiveMetsGame(enabled = true): LiveMetsGameState {
           }
         };
         const syncCoreTicking = (presentation: LiveCorePresentation) => {
-          if (!coreSequenceNeedsTicking(presentation.decision?.sequenceState)) {
+          if (!coreSequenceNeedsTicking(presentation.decision?.sequenceState) || pausedByHide) {
             stopCoreTicking();
             return;
           }
@@ -245,6 +258,10 @@ export function useLiveMetsGame(enabled = true): LiveMetsGameState {
         let pendingDiscoveryDelayMs: number | undefined;
         let pollInFlight = false;
         let nextFeedPollAt = 0;
+        // A hidden page neither polls nor ticks: a celebration must not play
+        // out where nobody can see it, with the Apple never drawn rising.
+        let pausedByHide = false;
+        let hiddenSince = 0;
 
         const queuePendingDiscoveryIfSettled = (presentation: LiveCorePresentation) => {
           if (
@@ -261,6 +278,10 @@ export function useLiveMetsGame(enabled = true): LiveMetsGameState {
 
         const queuePoll = (delayMs: number) => {
           if (feedTimer !== undefined) window.clearTimeout(feedTimer);
+          if (pausedByHide) {
+            nextFeedPollAt = 0;
+            return;
+          }
           nextFeedPollAt = Date.now() + delayMs;
           feedTimer = window.setTimeout(() => {
             feedTimer = undefined;
@@ -345,8 +366,38 @@ export function useLiveMetsGame(enabled = true): LiveMetsGameState {
             pollInFlight = false;
           }
         };
+        pauseTracking = () => {
+          if (disposed || token !== runToken || pausedByHide || miniWindowActive()) return;
+          pausedByHide = true;
+          hiddenSince = Date.now();
+          if (feedTimer !== undefined) window.clearTimeout(feedTimer);
+          feedTimer = undefined;
+          nextFeedPollAt = 0;
+          stopCoreTicking();
+        };
         resumeTracking = () => {
-          if (disposed || token !== runToken || pollInFlight) return;
+          if (disposed || token !== runToken) return;
+          if (pausedByHide) {
+            pausedByHide = false;
+            // Away long enough that anything missed is stale: start over as a
+            // fresh open would, so only a recent event replays.
+            if (Date.now() - hiddenSince >= RECENT_CELEBRATION_REPLAY_WINDOW_MS) {
+              void startTracking(selectedGame);
+              return;
+            }
+            // Settle the core's clock now; a celebration that was under way
+            // picks up from here, on screen.
+            if (coreRef.current) {
+              try {
+                const presentation = coreRef.current.tick(performance.now());
+                acceptCorePresentation(presentation);
+                syncCoreTicking(presentation);
+              } catch {
+                // The next poll reports any core failure the usual way.
+              }
+            }
+          }
+          if (pollInFlight) return;
           if (feedTimer !== undefined) window.clearTimeout(feedTimer);
           feedTimer = undefined;
           nextFeedPollAt = 0;
@@ -418,8 +469,10 @@ export function useLiveMetsGame(enabled = true): LiveMetsGameState {
     };
     const resumeWhenVisible = () => {
       if (document.visibilityState === "visible") resume();
+      else pauseTracking?.();
     };
     const serviceMiniWindow = () => {
+      lastMiniHeartbeatAt = Date.now();
       serviceTrackingClock?.();
       if (scheduleTimer === undefined || scheduleDueAt === 0 || Date.now() < scheduleDueAt) return;
       window.clearTimeout(scheduleTimer);
@@ -459,5 +512,7 @@ export function useLiveMetsGame(enabled = true): LiveMetsGameState {
     checkedAt,
     error,
     reportPosition,
+    /** The core's motion sequence, for the on-page diagnostics readout. */
+    sequenceState,
   };
 }

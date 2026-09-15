@@ -48,6 +48,9 @@ export function App() {
   const playback = useFixturePlayback("sleep");
   const seasonPhase = useMlbSeasonPhase();
   const live = useLiveMetsGame(seasonPhase.status !== "CHECKING" && !seasonPhase.isOffseason);
+  // ?diag shows what the core and the actuator are doing, for a phone that
+  // misbehaves where no devtools can reach.
+  const diagnostics = useMemo(() => new URLSearchParams(window.location.search).has("diag"), []);
   const reducedMotion = useReducedMotion();
   const desktopViewModes = useDesktopViewModes();
   const [sceneReady, setSceneReady] = useState(false);
@@ -445,6 +448,20 @@ export function App() {
             {!desktopViewModes && <PwaInstallPrompt />}
             <NotificationSettings />
           </>
+        )}
+        {diagnostics && (
+          <pre className="diag-overlay">
+            {[
+              `status ${live.status}`,
+              `sequence ${live.sequenceState ?? "-"}`,
+              `target ${live.targetPositionMm} mm · apple ${liveActuator.positionMm.toFixed(1)} mm`,
+              `celebration ${live.celebration ? `${live.celebration.kind} ${live.celebration.subject}` : "-"}`,
+              `visible ${document.visibilityState} · ${new Date().toLocaleTimeString()}`,
+              live.error ? `error ${live.error}` : "",
+            ]
+              .filter(Boolean)
+              .join("\n")}
+          </pre>
         )}
 
         {!miniAppleWindow.isOpen && (

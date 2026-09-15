@@ -75,6 +75,14 @@
   background: #ff7540;
 }
 
+.notification-settings__last {
+  color: #9fb4c4;
+  font-size: 0.68rem;
+  grid-column: 1 / -1;
+  line-height: 1.35;
+  margin: 0;
+}
+
 .pwa-install button svg,
 .notification-settings > button svg {
   height: 18px;

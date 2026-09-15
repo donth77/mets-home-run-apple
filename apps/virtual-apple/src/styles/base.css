@@ -109,6 +109,24 @@ a:focus-visible {
   gap: 12px;
 }
 
+/* The ?diag readout: small, fixed, and out of the way of every control. */
+.diag-overlay {
+  background: rgba(3, 12, 24, 0.85);
+  border: 1px solid rgba(188, 215, 237, 0.35);
+  border-radius: 8px;
+  color: #edf5fb;
+  font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  left: 12px;
+  margin: 0;
+  padding: 8px 10px;
+  pointer-events: none;
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%);
+  white-space: pre;
+  z-index: 50;
+}
+
 .virtual-header__right {
   align-items: end;
   display: grid;

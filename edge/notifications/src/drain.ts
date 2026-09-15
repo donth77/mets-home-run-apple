@@ -1,7 +1,7 @@
 import type { PushDeliveryResult } from "./push";
 import type { DispatcherSettings } from "./settings";
 import { type IdRange, shardRanges } from "./shards";
-import type { PendingDelivery, StoredSubscription, VerifiedNotificationEvent } from "./types";
+import type { LastPush, PendingDelivery, StoredSubscription, VerifiedNotificationEvent } from "./types";
 
 // One dispatcher shard's fan-out, written as plain functions over a state
 // object so it runs the same in tests and inside the Durable Object.
@@ -55,6 +55,8 @@ export interface DrainDependencies {
   ): Promise<readonly StoredSubscription[]>;
   send(delivery: PendingDelivery): Promise<PushDeliveryResult>;
   removeSubscription(id: string): Promise<void>;
+  /** Remembers the outcome per device, so a missing push can be traced from the app. */
+  recordPush?(subscriptionId: string, push: LastPush): Promise<void>;
   log?(entry: Record<string, unknown>): void;
 }
 
@@ -152,6 +154,17 @@ export async function drainHop(
     const owner = state.jobs[delivery.event.eventKey];
     if (!owner) continue;
     const attempts = delivery.attempts + 1;
+    if (dependencies.recordPush) {
+      const push: LastPush =
+        result.status === "fulfilled"
+          ? { at: nowMs, eventKey: delivery.event.eventKey, outcome: result.value.disposition, status: result.value.status }
+          : { at: nowMs, eventKey: delivery.event.eventKey, outcome: "RETRY", status: 0 };
+      try {
+        await dependencies.recordPush(delivery.subscription.id, push);
+      } catch (reason) {
+        log({ type: "record-push-failed", shard: state.shard, eventKey: delivery.event.eventKey, reason: String(reason) });
+      }
+    }
     if (result.status === "fulfilled" && result.value.disposition === "DELIVERED") {
       owner.sent += 1;
     } else if (result.status === "fulfilled" && result.value.disposition === "EXPIRED_SUBSCRIPTION") {

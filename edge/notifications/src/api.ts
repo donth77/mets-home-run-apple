@@ -1,18 +1,30 @@
+import { type PushDeliveryResult, sendPushNotification } from "./push";
 import { NotificationStore } from "./storage";
-import type { NotificationEnv } from "./types";
+import type { LastPush, NotificationEnv, NotificationPreferences, PendingDelivery, StoredSubscription } from "./types";
 import { isAllowedPushEndpoint, parsePreferences, parsePushSubscription } from "./validation";
 
-type NotificationApiEnv = Pick<NotificationEnv, "NOTIFICATIONS_DB" | "VAPID_PUBLIC_KEY">;
+type NotificationApiEnv = Pick<
+  NotificationEnv,
+  "NOTIFICATIONS_DB" | "VAPID_PUBLIC_KEY" | "VAPID_PRIVATE_KEY" | "VAPID_SUBJECT" | "NOTIFICATIONS_TEST_PUSH"
+>;
 
 export interface NotificationApiStore {
-  preferences(endpoint: string): Promise<ReturnType<typeof parsePreferences>>;
+  status(endpoint: string): Promise<{ preferences: NotificationPreferences; lastPush: LastPush | null } | undefined>;
+  subscription(endpoint: string): Promise<StoredSubscription | undefined>;
   saveSubscription(
     subscription: NonNullable<ReturnType<typeof parsePushSubscription>>,
     preferences: NonNullable<ReturnType<typeof parsePreferences>>,
     nowMs: number,
   ): Promise<void>;
   removeSubscription(endpoint: string): Promise<void>;
+  removeExpiredSubscription(id: string): Promise<void>;
+  recordLastPush(id: string, push: LastPush): Promise<void>;
 }
+
+export type NotificationApiSend = (
+  delivery: PendingDelivery,
+  env: Pick<NotificationEnv, "VAPID_PRIVATE_KEY" | "VAPID_PUBLIC_KEY" | "VAPID_SUBJECT">,
+) => Promise<PushDeliveryResult>;
 
 export interface NotificationApiContext {
   request: Request;
@@ -52,6 +64,7 @@ export async function handleNotificationApi(
   context: NotificationApiContext,
   nowMs = Date.now(),
   createStore: (database: D1Database) => NotificationApiStore = (database) => new NotificationStore(database),
+  sendPush: NotificationApiSend = sendPushNotification,
 ): Promise<Response> {
   const url = new URL(context.request.url);
   const route = url.pathname.replace(/^\/api\/notifications\/?/, "");
@@ -61,7 +74,11 @@ export async function handleNotificationApi(
     return json({ vapidPublicKey: context.env.VAPID_PUBLIC_KEY });
   }
 
-  if (!["status", "subscription"].includes(route)) return json({ error: "Route not found." }, 404);
+  // The test push exists for debugging sessions only; production does not answer it.
+  const testPushOn = context.env.NOTIFICATIONS_TEST_PUSH === "on";
+  if (!["status", "subscription", ...(testPushOn ? ["test"] : [])].includes(route)) {
+    return json({ error: "Route not found." }, 404);
+  }
   if (!sameOrigin(context.request)) return json({ error: "Request origin is not allowed." }, 403);
   if (!context.env.NOTIFICATIONS_DB) return json({ error: "Notifications are temporarily unavailable." }, 503);
 
@@ -71,8 +88,42 @@ export async function handleNotificationApi(
 
   if (route === "status" && context.request.method === "POST") {
     if (!isAllowedPushEndpoint(body.endpoint)) return json({ error: "Invalid push endpoint." }, 400);
-    const preferences = await store.preferences(body.endpoint);
-    return json({ enabled: preferences !== undefined, preferences: preferences ?? null });
+    const status = await store.status(body.endpoint);
+    return json({
+      enabled: status !== undefined,
+      preferences: status?.preferences ?? null,
+      lastPush: status?.lastPush ?? null,
+    });
+  }
+
+  // A real push to this one device, through the push service, so the whole
+  // path can be checked from the phone without waiting for a home run.
+  if (route === "test" && context.request.method === "POST") {
+    if (!isAllowedPushEndpoint(body.endpoint)) return json({ error: "Invalid push endpoint." }, 400);
+    const subscription = await store.subscription(body.endpoint);
+    if (!subscription) return json({ error: "Notifications are not enabled on this device." }, 404);
+    const eventKey = `test:${nowMs}`;
+    const result = await sendPush(
+      {
+        event: {
+          eventKey,
+          gamePk: 0,
+          kind: "HOME_RUN",
+          subject: "Test",
+          title: "Virtual Apple test",
+          body: "Notifications reach this device. The next Mets home run will too.",
+          targetUrl: "/",
+          occurredAt: nowMs,
+        },
+        subscription,
+        attempts: 0,
+      },
+      context.env,
+    );
+    const push = { at: nowMs, eventKey, outcome: result.disposition, status: result.status };
+    await store.recordLastPush(subscription.id, push);
+    if (result.disposition === "EXPIRED_SUBSCRIPTION") await store.removeExpiredSubscription(subscription.id);
+    return json({ sent: result.disposition === "DELIVERED", lastPush: push });
   }
 
   if (route === "subscription" && context.request.method === "PUT") {

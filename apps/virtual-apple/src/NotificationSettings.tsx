@@ -9,7 +9,9 @@ import {
   registerNotificationServiceWorker,
   savePushPreferences,
   showLocalTestNotification,
+  sendServerTestPush,
   subscriptionStatus,
+  type LastPush,
 } from "./notificationClient";
 import { isStandalonePwa } from "./PwaInstallPrompt";
 
@@ -17,11 +19,35 @@ const DEFAULT_PREFERENCES: NotificationPreferences = { homeRuns: true, metsWins:
 
 type NotificationState = "CHECKING" | "DISABLED" | "ENABLING" | "ENABLED" | "DENIED";
 
+function describeOutcome(outcome: LastPush["outcome"]) {
+  switch (outcome) {
+    case "DELIVERED":
+      return "The push service accepted it.";
+    case "EXPIRED_SUBSCRIPTION":
+      return "This device's subscription has expired. Turn notifications off and on again.";
+    case "PERMANENT_FAILURE":
+      return "The push service refused it.";
+    default:
+      return "The push service asked us to retry.";
+  }
+}
+
+function describeLastPush(lastPush: LastPush | null) {
+  if (!lastPush) return "No push sent to this device yet.";
+  const when = new Date(lastPush.at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  const what = lastPush.eventKey.startsWith("test:") ? "Test push" : "Last push";
+  return `${what} ${when}: ${describeOutcome(lastPush.outcome)}`;
+}
+
 export function NotificationSettings() {
   const [state, setState] = useState<NotificationState>("CHECKING");
   const [subscription, setSubscription] = useState<PushSubscription>();
   const [preferences, setPreferences] = useState(DEFAULT_PREFERENCES);
   const [message, setMessage] = useState("");
+  const [lastPush, setLastPush] = useState<LastPush | null>(null);
+  // The server-side test push is a debugging tool: a dev build, or a page
+  // opened with ?diag=1 while the server has the route switched on.
+  const debugging = import.meta.env.DEV || new URLSearchParams(window.location.search).has("diag");
   const available = isStandalonePwa() && pushNotificationsSupported();
 
   useEffect(() => {
@@ -48,6 +74,7 @@ export function NotificationSettings() {
         }
         setSubscription(active);
         if (status.preferences) setPreferences(status.preferences);
+        setLastPush(status.lastPush ?? null);
         setState("ENABLED");
       } catch {
         if (!disposed) setState("DISABLED");
@@ -102,6 +129,22 @@ export function NotificationSettings() {
     } catch (reason) {
       setPreferences(previous);
       setMessage(reason instanceof Error ? reason.message : "That setting could not be saved.");
+    }
+  }
+
+  async function testPush() {
+    if (!subscription) return;
+    setMessage("Sending a test through the push service…");
+    try {
+      const result = await sendServerTestPush(subscription);
+      setLastPush(result.lastPush);
+      setMessage(
+        result.sent
+          ? "Sent. It should appear on this device within a few seconds."
+          : `The push service answered ${result.lastPush.status}. ${describeOutcome(result.lastPush.outcome)}`,
+      );
+    } catch (reason) {
+      setMessage(reason instanceof Error ? reason.message : "The test push could not be sent.");
     }
   }
 
@@ -161,6 +204,14 @@ export function NotificationSettings() {
         )
       )}
 
+      {state === "ENABLED" && debugging && (
+        <button className="notification-settings__test" type="button" onClick={() => void testPush()}>
+          Send test push
+        </button>
+      )}
+      {state === "ENABLED" && (
+        <p className="notification-settings__last">{describeLastPush(lastPush)}</p>
+      )}
       {import.meta.env.DEV && (
         <button className="notification-settings__test" type="button" onClick={() => void testLocally()}>
           Send test notification

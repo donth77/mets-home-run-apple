@@ -40,6 +40,7 @@ export class NotificationDispatcher extends DurableObject<NotificationEnv> {
             store.subscriptionsInRange(kind, occurredAt, range, afterId, limit),
           send: (delivery) => sendPushNotification(delivery, this.env),
           removeSubscription: (id) => store.removeExpiredSubscription(id),
+          recordPush: (id, push) => store.recordLastPush(id, push),
           log: (entry) => console.log(JSON.stringify(entry)),
         },
         dispatcherSettings(this.env),

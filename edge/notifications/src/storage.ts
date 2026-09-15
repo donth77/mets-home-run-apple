@@ -1,10 +1,5 @@
 import type { IdRange } from "./shards";
-import type {
-  BrowserPushSubscription,
-  NotificationPreferences,
-  StoredSubscription,
-  VerifiedNotificationEvent,
-} from "./types";
+import type { BrowserPushSubscription, LastPush, NotificationPreferences, StoredSubscription, VerifiedNotificationEvent } from "./types";
 
 interface SubscriptionRow {
   id: string;
@@ -13,6 +8,10 @@ interface SubscriptionRow {
   auth: string;
   home_runs_since: number | null;
   mets_wins_since: number | null;
+  last_push_at: number | null;
+  last_push_key: string | null;
+  last_push_outcome: string | null;
+  last_push_status: number | null;
 }
 
 export interface StoredGameState {
@@ -79,12 +78,68 @@ export class NotificationStore {
   }
 
   async preferences(endpoint: string): Promise<NotificationPreferences | undefined> {
+    return (await this.status(endpoint))?.preferences;
+  }
+
+  /** Preferences plus the last push the dispatcher attempted for this device. */
+  async status(
+    endpoint: string,
+  ): Promise<{ preferences: NotificationPreferences; lastPush: LastPush | null } | undefined> {
     const id = await subscriptionId(endpoint);
     const row = await this.#db
-      .prepare("SELECT home_runs_since, mets_wins_since FROM notification_subscriptions WHERE id = ?")
+      .prepare(
+        `SELECT home_runs_since, mets_wins_since, last_push_at, last_push_key, last_push_outcome, last_push_status
+         FROM notification_subscriptions WHERE id = ?`,
+      )
       .bind(id)
-      .first<Pick<SubscriptionRow, "home_runs_since" | "mets_wins_since">>();
-    return row ? { homeRuns: row.home_runs_since !== null, metsWins: row.mets_wins_since !== null } : undefined;
+      .first<
+        Pick<
+          SubscriptionRow,
+          | "home_runs_since"
+          | "mets_wins_since"
+          | "last_push_at"
+          | "last_push_key"
+          | "last_push_outcome"
+          | "last_push_status"
+        >
+      >();
+    if (!row) return undefined;
+    const lastPush: LastPush | null =
+      row.last_push_at !== null && row.last_push_key !== null && row.last_push_outcome !== null
+        ? {
+            at: row.last_push_at,
+            eventKey: row.last_push_key,
+            outcome: row.last_push_outcome as LastPush["outcome"],
+            status: row.last_push_status ?? 0,
+          }
+        : null;
+    return {
+      preferences: { homeRuns: row.home_runs_since !== null, metsWins: row.mets_wins_since !== null },
+      lastPush,
+    };
+  }
+
+  /** The stored subscription for one endpoint, for a test push to that device. */
+  async subscription(endpoint: string): Promise<StoredSubscription | undefined> {
+    const id = await subscriptionId(endpoint);
+    const row = await this.#db
+      .prepare("SELECT id, endpoint, p256dh, auth FROM notification_subscriptions WHERE id = ?")
+      .bind(id)
+      .first<Pick<SubscriptionRow, "id" | "endpoint" | "p256dh" | "auth">>();
+    return row
+      ? { id: row.id, endpoint: row.endpoint, expirationTime: null, keys: { p256dh: row.p256dh, auth: row.auth } }
+      : undefined;
+  }
+
+  async recordLastPush(subscriptionIdValue: string, push: LastPush): Promise<void> {
+    await this.#db
+      .prepare(
+        `UPDATE notification_subscriptions
+         SET last_push_at = ?, last_push_key = ?, last_push_outcome = ?, last_push_status = ?
+         WHERE id = ?`,
+      )
+      .bind(push.at, push.eventKey, push.outcome, push.status, subscriptionIdValue)
+      .run();
   }
 
   async removeSubscription(endpoint: string): Promise<void> {

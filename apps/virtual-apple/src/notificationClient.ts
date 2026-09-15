@@ -7,9 +7,18 @@ interface NotificationConfig {
   vapidPublicKey: string;
 }
 
-interface NotificationStatus {
+/** What the server last did for this device, so a missing push can be traced from the phone. */
+export interface LastPush {
+  at: number;
+  eventKey: string;
+  outcome: "DELIVERED" | "EXPIRED_SUBSCRIPTION" | "PERMANENT_FAILURE" | "RETRY";
+  status: number;
+}
+
+export interface NotificationStatus {
   enabled: boolean;
   preferences: NotificationPreferences | null;
+  lastPush?: LastPush | null;
 }
 
 const SERVICE_WORKER_URL = "/virtual-apple-sw.js";
@@ -85,6 +94,14 @@ export async function savePushPreferences(subscription: PushSubscription, prefer
   await api<NotificationStatus>("subscription", {
     method: "PUT",
     body: JSON.stringify({ subscription: subscriptionJson(subscription), preferences }),
+  });
+}
+
+/** Asks the server to send one real push to this device, through the push service. */
+export async function sendServerTestPush(subscription: PushSubscription) {
+  return api<{ sent: boolean; lastPush: LastPush }>("test", {
+    method: "POST",
+    body: JSON.stringify({ endpoint: subscription.endpoint }),
   });
 }
 
