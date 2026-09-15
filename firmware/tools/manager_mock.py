@@ -130,6 +130,7 @@ def make_handler(state):
             "audio": audio_summary(),
             "update": release_status(),
             "lastCelebration": {"kind": "HR", "subject": "Juan Soto", "at": 1788392040, "moved": True, "track": "Takeover"},
+            "screen": {"state": "GAME" if connected else "SETUP", "title": "", "status": "", "note": ""},
             "sequence": "IDLE", "fault": False, "positionMm": 0,
         }
 

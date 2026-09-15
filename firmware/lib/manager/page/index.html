@@ -197,6 +197,8 @@ body.queue-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
 .qitem button:hover{color:var(--text)}
 .qitem button.x:hover{color:var(--bad)}
 .qitem button:disabled{opacity:.35;cursor:default}
+/* On a phone the grip does the reordering; the arrows would push the row past the card. */
+@media (max-width:520px){.qitem button.mv{display:none}}
 .upnext .songs{margin-top:2px}
 .vh{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 .chooser{flex-basis:100%;width:100%;margin-top:4px}
@@ -409,16 +411,25 @@ function zoneHint(typing){var mine=zoneFor(browserZone),el=$("tz-hint");el.class
 function loadZones(){fetch("/api/timezones").then(function(r){return r.json()}).then(function(list){zones=list;if(lastSettings)fillSettings(lastSettings)}).catch(function(){})}
 function render(s){
   var w=s.wifi||{},b,host,sc=s.schedule,everyMin=sc&&sc.refreshMs?Math.round(sc.refreshMs/60000):10,everyText=everyMin>=60?"every hour":"every "+everyMin+" minutes";
-  text("mode",mode(s.mode));
+  var screen=(s.screen&&s.screen.state)||"",offseason=screen==="OFFSEASON"||s.mode==="OFFSEASON";
+  // Firmware before 0.4.6 reported the last final as its mode until the next
+  // game's first update; the screen state says what the Apple is really showing.
+  text("mode",offseason?"Offseason":screen==="UPCOMING"&&s.mode==="FINAL"?mode("UPCOMING"):mode(s.mode));
   var sig=w.rssi>=-60?"Strong signal":w.rssi>=-70?"Good signal":w.rssi>=-80?"Fair signal":"Weak signal";
   if(w.state==="CONNECTING"){spin("wifi","Joining "+(w.ssid||""));text("wifi-2","");text("wifi-3","")}
   else if(w.state==="CONNECTED"){text("wifi",w.ssid||"Connected","ok");text("wifi-2",sig+" ("+w.rssi+" dBm)");text("wifi-3","http://"+w.ip)}
   else if(w.state==="FAILED"){text("wifi","Could not join "+(w.ssid||""),"bad");text("wifi-2","Check the password");text("wifi-3","")}
   else if(w.state==="LOST"){text("wifi","Lost "+(w.ssid||""),"bad");text("wifi-2","Trying again");text("wifi-3","")}
   else{text("wifi","Not set up");text("wifi-2",w.setupNetwork?"Setup network open":"");text("wifi-3","")}
-  var g=s.game,snap=s.snapshot,live=snap&&(snap.phase==="LIVE"||snap.phase==="REVIEW"||snap.phase==="DELAYED"),finalNow=snap&&snap.phase==="FINAL",offseason=s.mode==="OFFSEASON";
-  // The tile is named for what it shows: the game in progress, the next one,
-  // tonight's final, or the offseason.
+  var g=s.game,snap=s.snapshot;
+  // A scoreboard from another game never counts: firmware before 0.4.6 kept
+  // last night's final in status until the next game's first update.
+  if(snap&&g&&snap.gamePk&&g.gamePk&&snap.gamePk!==g.gamePk)snap=null;
+  var live=snap&&(snap.phase==="LIVE"||snap.phase==="REVIEW"||snap.phase==="DELAYED"),finalNow=snap&&snap.phase==="FINAL";
+  // The tile mirrors what the Apple's own screen shows: the game in progress,
+  // tonight's final, the next game, or the offseason.
+  if(screen==="FINAL"&&snap){live=false;finalNow=true}
+  else if(screen==="UPCOMING"||screen==="WAITING"||screen==="OFFSEASON"){live=false;finalNow=false}
   text("game-label",live?"Live game":finalNow?"Final":offseason?"Offseason":g?"Next game":"Game");
   if(snap&&(live||finalNow)){
     var awayName=(snap.away&&snap.away.abbreviation)||(g&&g.away)||"AWAY",homeName=(snap.home&&snap.home.abbreviation)||(g&&g.home)||"HOME";
@@ -428,7 +439,7 @@ function render(s){
     var halfName={TOP:"Top",BOTTOM:"Bottom",MIDDLE:"Middle",END:"End"}[snap.half]||"",inningLine=snap.inning?(halfName+" "+snap.inning+(typeof snap.outs==="number"?" · "+snap.outs+(snap.outs===1?" out":" outs"):"")):(snap.label||"In progress");
     text("game-2",(finalNow?"Final":inningLine)+(g&&g.gameNumber===2?" · Game 2":""));
   }
-  else if(offseason){text("game","Offseason");text("game-2",g?"Opening day "+when(g.scheduled):"Checks the schedule "+everyText)}
+  else if(offseason){var today=new Date(),season=today.getMonth()>=9?today.getFullYear()+1:today.getFullYear();text("game","Offseason");text("game-2",g?"Opening day "+when(g.scheduled):"Back for the "+season+" season")}
   else{
     text("game",g?(g.away+" at "+g.home):(w.state==="CONNECTED"?"No Mets game this week":"Set up Wi-Fi first"));
     text("game-2",g?(when(g.scheduled)+(g.gameNumber===2?" · Game 2":"")):(w.state==="CONNECTED"?"Checks the schedule "+everyText:""));
@@ -446,7 +457,7 @@ function render(s){
     text("feed-label","Schedule");
     var ago=sc.checkedAgoMs>=0?Math.round(sc.checkedAgoMs/60000):-1;
     if(sc.lastError){text("feed","Problem","bad");text("feed-2",sc.lastError+weak+" · retrying")}
-    else if(sc.ok){text("feed",g?"Up to date":"No Mets game this week","ok");text("feed-2","Checked "+(ago<1?"just now":ago+" min ago")+" · "+everyText+(sc.failed?" · "+sc.failed+(sc.failed===1?" retry":" retries")+" since power-on":""))}
+    else if(sc.ok){text("feed",g?"Up to date":offseason?"Nothing scheduled":"No Mets game this week","ok");text("feed-2","Checked "+(ago<1?"just now":ago+" min ago")+" · "+everyText+(sc.failed?" · "+sc.failed+(sc.failed===1?" retry":" retries")+" since power-on":""))}
     else{text("feed",w.state==="CONNECTED"?"Waiting for the schedule":"Needs Wi-Fi");text("feed-2","")}
   }
   var seq=(s.sequence||"IDLE"),liftWord={IDLE:"Home",LEAD_IN:"Getting ready",REVIEW_HOLD:"Waiting on a review",EXTENDING:"Rising",RAISED:"Raised",RETRACTING:"Lowering",FAULT:"Stopped"}[seq]||seq;
@@ -1105,9 +1116,9 @@ function renderUpNext(a,tracks){
       item.appendChild(el("span","n",(i+1)+"."));
       item.appendChild(el("span","t",name));
       if(i===0&&ready&&n.file===ready){var rdy=el("i","rdy","ready");rdy.setAttribute("aria-label","ready to play");item.appendChild(rdy)}
-      var up=el("button",null,"\u2191");up.type="button";up.title="Move up";up.setAttribute("aria-label","Move "+name+" up");up.disabled=i===0;
+      var up=el("button","mv","\u2191");up.type="button";up.title="Move up";up.setAttribute("aria-label","Move "+name+" up");up.disabled=i===0;
       up.addEventListener("click",function(){up.disabled=true;focusAfter={line:key,index:i-1,btn:"up"};send("move",n.file,{from:i,at:i-1}).then(function(ok){if(ok)announce(name+" is now "+i+" of "+items.length+" in "+label);else up.disabled=false})});
-      var down=el("button",null,"\u2193");down.type="button";down.title="Move down";down.setAttribute("aria-label","Move "+name+" down");down.disabled=i===items.length-1;
+      var down=el("button","mv","\u2193");down.type="button";down.title="Move down";down.setAttribute("aria-label","Move "+name+" down");down.disabled=i===items.length-1;
       down.addEventListener("click",function(){down.disabled=true;focusAfter={line:key,index:i+1,btn:"down"};send("move",n.file,{from:i,at:i+1}).then(function(ok){if(ok)announce(name+" is now "+(i+2)+" of "+items.length+" in "+label);else down.disabled=false})});
       var x=el("button","x","\u00d7");x.type="button";x.title="Remove";x.setAttribute("aria-label","Remove "+name+" from "+label);
       x.addEventListener("click",function(){x.disabled=true;focusAfter={line:key,index:i,btn:"x"};send("unqueue",n.file,{from:i}).then(function(ok){if(ok)announce("Removed "+name+" from "+label);else x.disabled=false})});

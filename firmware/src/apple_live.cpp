@@ -115,7 +115,7 @@ constexpr char kProfileName[] = "apple_live";
 #ifdef APPLE_UPDATE_CRASH_TEST
 constexpr char kFirmwareVersion[] = "0.2.2-crashtest";
 #else
-constexpr char kFirmwareVersion[] = "0.4.5";
+constexpr char kFirmwareVersion[] = "0.4.6";
 #endif
 constexpr char kHostname[] = "home-run-apple";
 constexpr char kEasternTz[] = "EST5EDT,M3.2.0,M11.1.0";
@@ -3005,6 +3005,10 @@ void follow(const std::optional<ScheduleGame>& chosen) {
   if (!changed) return;
   game = chosen;
   tracker.reset();
+  // The old game's scoreboard would otherwise outlive it: status would keep
+  // reporting last night's final beside the next game, and the info screen
+  // would hand back to it. The next game's first frame builds a fresh one.
+  projector = apple::game_state::Projector{};
   reset_final_tracking();
   poll_failure_streak = 0;
   last_error[0] = '\0';
