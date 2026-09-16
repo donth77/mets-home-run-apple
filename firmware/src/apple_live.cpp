@@ -115,7 +115,7 @@ constexpr char kProfileName[] = "apple_live";
 #ifdef APPLE_UPDATE_CRASH_TEST
 constexpr char kFirmwareVersion[] = "0.2.2-crashtest";
 #else
-constexpr char kFirmwareVersion[] = "0.4.7";
+constexpr char kFirmwareVersion[] = "0.4.8";
 #endif
 constexpr char kHostname[] = "home-run-apple";
 constexpr char kEasternTz[] = "EST5EDT,M3.2.0,M11.1.0";
@@ -647,7 +647,7 @@ struct TrackEntry {
   bool home_run = false;
   bool win = false;
 };
-TrackEntry tracks[kMaxTracks];
+TrackEntry* tracks = nullptr;  // kMaxTracks entries, allocated at boot
 std::uint8_t track_count = 0;
 // Goes up whenever the library, the player tracks, or the up-next lines
 // change. Status carries the number; the page fetches the lists themselves
@@ -668,7 +668,7 @@ std::uint8_t player_track_count = 0;
 // Up next: what the owner lined up to play before the random pick takes
 // over again. The rules live in lib/manager (next_tracks.hpp) so the native
 // tests can walk them; this file only feeds it what it needs.
-apple::firmware::NextTracks next_tracks;
+apple::firmware::NextTracks* next_tracks = nullptr;  // allocated at boot
 // A queue changed while the card was busy with a celebration; write it once
 // the card is free again.
 bool manifest_save_wanted = false;
@@ -827,6 +827,19 @@ ReplayScore replay_score;
 // The last traces, kept for the Lab and the Manager: what the Apple did while
 // nobody was watching, starting with why it booted. Entries logged before the
 // clock synced carry no epoch; readers place them from the uptime instead.
+// The array form of make_in_psram, for the catalogue and the trace ring: 28 KB
+// of tables that no interrupt touches, and that a TLS handshake wants the
+// internal RAM back from.
+template <typename T>
+T* make_array_in_psram(std::size_t count) {
+  void* memory = psramFound() ? heap_caps_malloc(sizeof(T) * count, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT) : nullptr;
+  if (memory == nullptr) memory = malloc(sizeof(T) * count);
+  if (memory == nullptr) return nullptr;
+  T* slots = static_cast<T*>(memory);
+  for (std::size_t i = 0; i < count; ++i) new (&slots[i]) T();
+  return slots;
+}
+
 struct TraceEntry {
   std::uint32_t seq;
   std::int64_t at_epoch;
@@ -835,11 +848,12 @@ struct TraceEntry {
   char detail[80];
 };
 constexpr std::size_t kTraceLogSize = 96;
-TraceEntry trace_log[kTraceLogSize];
+TraceEntry* trace_log = nullptr;  // kTraceLogSize entries, allocated at boot
 std::uint32_t trace_seq = 0;
 
 void publish_trace(const char* code, const char* detail) {
   Serial.printf("APPLE_LIVE:{\"type\":\"trace\",\"code\":\"%s\",\"detail\":\"%s\"}\n", code, detail);
+  if (trace_log == nullptr) return;  // before the ring is allocated, the serial line above is the record
   TraceEntry& entry = trace_log[trace_seq % kTraceLogSize];
   entry.seq = ++trace_seq;
   entry.at_epoch = clock_valid() ? wall_epoch() : 0;
@@ -1164,8 +1178,8 @@ void write_audio_library(Print& out) {
     emit(i);
   }
   out.print("],\"next\":[");
-  for (std::uint8_t i = 0; i < next_tracks.size(); ++i) {
-    const apple::firmware::NextTrack& entry = next_tracks.at(i);
+  for (std::uint8_t i = 0; i < next_tracks->size(); ++i) {
+    const apple::firmware::NextTrack& entry = next_tracks->at(i);
     item["win"] = entry.win;
     item["id"] = entry.player_id;
     item["name"] = entry.player;
@@ -1640,7 +1654,7 @@ void refresh_resident_tracks() {
   if (!audio_card_ready) return;
   // A pool pick only replaces another pool pick, so a track already held is
   // not fetched again.
-  const char* wanted = next_tracks.head_for_batter(current_batter);
+  const char* wanted = next_tracks->head_for_batter(current_batter);
   if (wanted == nullptr) wanted = track_for_player(current_batter);
   if (wanted == nullptr && !in_pool(resident_home_run.name, false)) {
     wanted = random_track(false);
@@ -1650,7 +1664,7 @@ void refresh_resident_tracks() {
   }
   // A win happens once a game, so the slot is filled when empty and left
   // alone, unless the owner queued something for it.
-  const char* win = next_tracks.head(true, "");
+  const char* win = next_tracks->head(true, "");
   if (win == nullptr && !in_pool(resident_win.name, true)) win = random_track(true);
   if (win != nullptr && strcmp(win, resident_win.name) != 0) load_resident(resident_win, win);
 }
@@ -1686,7 +1700,7 @@ void save_audio_manifest() {
     node["name"] = player_tracks[i].name;
     node["file"] = player_tracks[i].file;
   }
-  next_tracks.write(doc["next"].to<JsonArray>());
+  next_tracks->write(doc["next"].to<JsonArray>());
   File file = SD.open(kAudioManifestPath, FILE_WRITE);
   if (!file) {
     publish_trace("AUDIO", "could not write the track list");
@@ -1701,7 +1715,7 @@ void save_audio_manifest() {
 void load_audio_manifest() {
   CardLock lock;
   player_track_count = 0;
-  next_tracks.clear_all();
+  next_tracks->clear_all();
   note_audio_change();
   if (!audio_card_ready) return;
   File file = SD.open(kAudioManifestPath, FILE_READ);
@@ -1732,7 +1746,7 @@ void load_audio_manifest() {
     copy_text(slot.name, sizeof(slot.name), name);
     copy_text(slot.file, sizeof(slot.file), file_name);
   }
-  next_tracks.read(doc["next"].as<JsonArrayConst>(), [](const char* file) { return find_track(file) != nullptr; });
+  next_tracks->read(doc["next"].as<JsonArrayConst>(), [](const char* file) { return find_track(file) != nullptr; });
 }
 
 // Reads the card's root, then lays the owner's assignments over the result.
@@ -1740,7 +1754,7 @@ void scan_tracks() {
   CardLock lock;
   track_count = 0;
   note_audio_change();
-  if (!audio_card_ready) return;
+  if (!audio_card_ready || tracks == nullptr) return;
   File dir = SD.open("/");
   if (!dir) return;
   for (File entry = dir.openNextFile(); entry; entry = dir.openNextFile()) {
@@ -2134,20 +2148,20 @@ String change_next(const apple::firmware::AudioChange& change) {
   const bool win = change.win == 1;
   const char* player = win ? "" : change.text.c_str();
   if (change.action == "clear") {
-    next_tracks.clear(win, player);
+    next_tracks->clear(win, player);
     return String();
   }
   TrackEntry* entry = find_track(change.file.c_str());
   if (entry == nullptr) return "NO_TRACK";
   NextChange result = NextChange::NoTrack;
   if (change.action == "unqueue") {
-    result = next_tracks.remove(win, player, change.index, entry->file);
+    result = next_tracks->remove(win, player, change.index, entry->file);
   } else if (change.action == "move") {
-    result = next_tracks.move(win, player, change.index, entry->file, change.position);
+    result = next_tracks->move(win, player, change.index, entry->file, change.position);
   } else {
     // "Play next" from the library asks for the front of the line; a plain
     // add joins the end.
-    result = next_tracks.add(win, static_cast<std::int32_t>(change.number), player, entry->file, change.position);
+    result = next_tracks->add(win, static_cast<std::int32_t>(change.number), player, entry->file, change.position);
   }
   if (result == NextChange::LineFull) return "LINE_FULL";
   if (result == NextChange::StoreFull) return "QUEUE_FULL";
@@ -2265,7 +2279,7 @@ String change_audio(const apple::firmware::AudioChange& change) {
     }
     if (!removed) return "NO_PLAYER";
     // Taking a player off the list takes his queue with him.
-    if (change.file.length() == 0) next_tracks.clear(false, change.text.c_str());
+    if (change.file.length() == 0) next_tracks->clear(false, change.text.c_str());
     resident_refresh_wanted = true;
     save_audio_manifest();
     return String();
@@ -2324,7 +2338,7 @@ void begin_celebration(const apple::core::CoreEvent& event) {
   if (celebration_is_win && settings.win_full_track && audio_card_ready && !active_fixture) {
     // The game is over, so stay up for the whole track: stream it off the
     // card and stretch the raised dwell to match, less the lift itself.
-    const char* file = next_tracks.head(true, "");
+    const char* file = next_tracks->head(true, "");
     if (file == nullptr) file = random_track(true);
     TrackEntry* entry = file != nullptr ? find_track(file) : nullptr;
     if (entry != nullptr && entry->bytes > 44) {
@@ -2368,9 +2382,9 @@ void begin_celebration(const apple::core::CoreEvent& event) {
   // a real celebration uses up the owner's choice.
   if (audio_task_should_play && !replay_active) {
     const bool consumed = celebration_is_win
-                              ? next_tracks.consume(true, "", played_file)
-                              : next_tracks.consume_home_run(current_batter, played_file) ||
-                                    next_tracks.consume_home_run(event.subject.c_str(), played_file);
+                              ? next_tracks->consume(true, "", played_file)
+                              : next_tracks->consume_home_run(current_batter, played_file) ||
+                                    next_tracks->consume_home_run(event.subject.c_str(), played_file);
     if (consumed) {
       note_audio_change();
       manifest_save_wanted = true;
@@ -4080,6 +4094,9 @@ void setup() {
                   apple::firmware::running_partition_label());
     publish_trace("BOOT", detail);
   }
+  trace_log = make_array_in_psram<TraceEntry>(kTraceLogSize);
+  next_tracks = make_in_psram<apple::firmware::NextTracks>();
+  tracks = make_array_in_psram<TrackEntry>(kMaxTracks);
   scan_lock = make_in_psram<apple::firmware::ScanLockedPanel>(panel);
   home_run_loop = make_in_psram<apple::display::HomeRunLoop>();
   mets_win_loop = make_in_psram<apple::display::MetsWinLoop>();
