@@ -136,10 +136,12 @@ input[type=file]::file-selector-button{font:inherit;font-weight:600;padding:7px 
 .preview audio{width:100%;height:36px}
 .player{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:12px 0;border-top:1px solid var(--blue-line)}
 .player:first-child{border-top:0}
-.player-who{flex:1;min-width:160px}
-.player-who b{display:block;font-size:15.5px}
+/* The name always owns its row; tracks and the chooser stack under it, so a player with one track lays out like one with five. */
+.player-who{flex:1 1 100%;min-width:0}
+.player-who b{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;font-size:15.5px;line-height:1.3}
 .player-who small{color:var(--muted);font-size:12.5px}
-.tag{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.04em;padding:2px 8px;border-radius:999px;background:rgba(255,168,168,.15);color:var(--bad);margin-left:8px;vertical-align:middle}
+/* Sits beside the name on one line, centred on it, and drops under it cleanly when the name is long. */
+.tag{display:inline-flex;align-items:center;font-size:10.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;line-height:1;padding:4px 8px;border-radius:999px;background:rgba(255,168,168,.15);color:var(--bad);white-space:nowrap}
 .songs{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .song{display:inline-flex;align-items:center;gap:6px;font-size:13px;padding:5px 6px 5px 11px;border-radius:999px;background:rgba(255,255,255,.07);color:var(--text)}
 .song button{margin:0;padding:0 5px;background:none;border:0;color:var(--muted);font-size:16px;line-height:1;cursor:pointer}
@@ -166,6 +168,8 @@ input[type=file]::file-selector-button{font:inherit;font-weight:600;padding:7px 
 .pager .count{font-size:12.5px;color:var(--muted);margin:0 6px}
 .pager .gap{color:var(--muted);min-width:14px;text-align:center}
 .player-remove{margin-left:auto}
+/* In Player tracks the chips and chooser own their row, so Remove player always sits alone underneath, right-aligned, whatever the count. */
+#player-list .songs{flex:1 1 100%}
 .player-add{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px}
 .upnext .player{padding:12px 0;border-top:1px solid var(--blue-line)}
 .upnext .player:first-child{border-top:0}
@@ -301,7 +305,7 @@ a.btn{display:inline-block;font-size:15px;font-weight:600;padding:11px 16px;bord
 </section>
 <section id="audio-next" data-for="audio" hidden>
 <h2>Up next</h2>
-<p class="note">Queue tracks for the next home run, the next Mets win, or a specific player’s next home run. When a queue runs out, the Apple picks at random again. Add to the end here, or tap <b>Play next</b> on any track in the library to put it first.</p>
+<p class="note">Queue tracks for the next home run, Mets win, or a player’s home run. They play in order, once each, then the Apple picks at random again. <b>Play next</b> in the library puts a track first.</p>
 <div class="upnext" id="upnext"></div>
 <nav class="pager" id="upnext-pager" hidden aria-label="Player lines"></nav>
 <p class="vh" id="queue-live" aria-live="polite"></p>
@@ -327,14 +331,14 @@ a.btn{display:inline-block;font-size:15px;font-weight:600;padding:11px 16px;bord
 <div class="for-row" id="track-name" hidden><label class="for-label" for="track-title">Name <span id="track-title-hint"></span></label><input id="track-title" type="text" maxlength="39" autocomplete="off" autocapitalize="words" spellcheck="false" placeholder="What to call this track"></div>
 <div class="for-row"><label class="for-label" for="track-for">Plays for</label><select id="track-for"><option value="hr">Home runs</option><option value="win">Mets wins</option><option value="both">Home runs and Mets wins</option><optgroup id="track-for-players" label="One player's home runs"></optgroup></select></div>
 <div class="row"><button id="track-add" type="button" disabled>Add track</button></div>
-<p class="note tiny">MP3, M4A, WAV and most others. Up to 30 MB. Drag the handles to keep up to 7 minutes of it. A home run plays the start of what you keep, for as long as the Apple stays up; a win can play all of it.</p>
-<p class="note tiny"><b>Preview</b> plays a track here, on this device. <b>Play on the Apple</b> plays it through the Apple's own speaker, at the volume set in Settings.</p>
+<p class="note tiny">MP3, M4A, WAV and most others. Up to 30 MB. Drag the handles to keep up to 7 minutes of it. A home run plays the start of what you keep, for as long as the Apple stays up. A win plays the entire track.</p>
 <div class="progress" id="track-bar" hidden><i id="track-bar-fill"></i></div>
 <p class="note" id="track-note" aria-live="polite"></p>
 </section>
 <section id="audio-library" data-for="audio" hidden>
 <h2>Library</h2>
 <p class="note">Choose which tracks play for a home run and which play when the Mets win.</p>
+<p class="note tiny"><b>Preview</b> plays a track here, on this device. <b>Play on the Apple</b> plays it through the Apple's own speaker, at the volume set in Settings.</p>
 <div class="list-tools" id="list-tools" hidden>
   <label class="sort" for="track-sort"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M7 4v16m0 0l-3-3m3 3l3-3M17 20V4m0 0l-3 3m3-3l3 3"/></svg><select id="track-sort" aria-label="Sort tracks"><option value="name">Name, A to Z</option><option value="name-desc">Name, Z to A</option><option value="newest">Newest first</option><option value="longest">Longest first</option><option value="inuse">In use first</option></select></label>
   <input id="track-search" type="search" placeholder="Search tracks" aria-label="Search tracks" autocomplete="off" hidden>
@@ -351,7 +355,7 @@ a.btn{display:inline-block;font-size:15px;font-weight:600;padding:11px 16px;bord
 </section>
 <section id="audio-players" data-for="audio" hidden>
 <h2>Player tracks</h2>
-<p class="note">Give a player tracks of his own. When he hits a home run, one of his tracks plays instead of the general home run tracks. Players without their own tracks use the general ones.</p>
+<p class="note">Assign a player tracks. When they hit a home run, one of their tracks plays instead of the general home run tracks. Players without their own tracks use the general ones.</p>
 <div id="player-list"></div>
 <nav class="pager" id="player-pager" hidden aria-label="Player pages"></nav>
 <div class="player-add">
@@ -938,7 +942,7 @@ function renderAudio(s){
     if(!hr&&(trackFilter==="all"||trackFilter==="hr"))sum.appendChild(el("div","empty","Nothing plays for a home run yet. Turn on Home runs for a track below."));
     if(!win&&(trackFilter==="all"||trackFilter==="win"))sum.appendChild(el("div","empty","Nothing plays for a win yet. Turn on Mets win for a track below."));
     if(q&&!tracks.length)sum.appendChild(el("div","empty","No tracks match “"+trackQuery.trim()+"”."));
-    else if(filtering&&!tracks.length&&trackFilter!=="hr"&&trackFilter!=="win")sum.appendChild(el("div","empty",{players:"No player has a track of his own yet.",unused:"Every track is in use."}[trackFilter]));
+    else if(filtering&&!tracks.length&&trackFilter!=="hr"&&trackFilter!=="win")sum.appendChild(el("div","empty",{players:"No player has a track of their own yet.",unused:"Every track is in use."}[trackFilter]));
     shown.forEach(function(t){sum.appendChild(trackRow(t,a))});
     groups.appendChild(sum);
   }

@@ -19,24 +19,20 @@ const DEFAULT_PREFERENCES: NotificationPreferences = { homeRuns: true, metsWins:
 
 type NotificationState = "CHECKING" | "DISABLED" | "ENABLING" | "ENABLED" | "DENIED";
 
-function describeOutcome(outcome: LastPush["outcome"]) {
-  switch (outcome) {
-    case "DELIVERED":
-      return "The push service accepted it.";
-    case "EXPIRED_SUBSCRIPTION":
-      return "This device's subscription has expired. Turn notifications off and on again.";
-    case "PERMANENT_FAILURE":
-      return "The push service refused it.";
-    default:
-      return "The push service asked us to retry.";
-  }
-}
-
 function describeLastPush(lastPush: LastPush | null) {
-  if (!lastPush) return "No push sent to this device yet.";
+  if (!lastPush) return "No notifications have been sent to this device yet.";
   const when = new Date(lastPush.at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-  const what = lastPush.eventKey.startsWith("test:") ? "Test push" : "Last push";
-  return `${what} ${when}: ${describeOutcome(lastPush.outcome)}`;
+  const what = lastPush.eventKey.startsWith("test:") ? "test notification" : "notification";
+  switch (lastPush.outcome) {
+    case "DELIVERED":
+      return `Last ${what} sent ${when}.`;
+    case "EXPIRED_SUBSCRIPTION":
+      return `The ${what} from ${when} could not be delivered. Turn notifications off and on again on this device.`;
+    case "PERMANENT_FAILURE":
+      return `The ${what} from ${when} could not be delivered.`;
+    default:
+      return `The ${what} from ${when} is still being retried.`;
+  }
 }
 
 export function NotificationSettings() {
@@ -134,17 +130,19 @@ export function NotificationSettings() {
 
   async function testPush() {
     if (!subscription) return;
-    setMessage("Sending a test through the push service…");
+    setMessage("Sending a test notification…");
     try {
       const result = await sendServerTestPush(subscription);
       setLastPush(result.lastPush);
       setMessage(
         result.sent
           ? "Sent. It should appear on this device within a few seconds."
-          : `The push service answered ${result.lastPush.status}. ${describeOutcome(result.lastPush.outcome)}`,
+          : result.lastPush.outcome === "EXPIRED_SUBSCRIPTION"
+            ? "The test notification could not be delivered. Turn notifications off and on again on this device."
+            : "The test notification could not be delivered.",
       );
     } catch (reason) {
-      setMessage(reason instanceof Error ? reason.message : "The test push could not be sent.");
+      setMessage(reason instanceof Error ? reason.message : "The test notification could not be sent.");
     }
   }
 
@@ -206,7 +204,7 @@ export function NotificationSettings() {
 
       {state === "ENABLED" && debugging && (
         <button className="notification-settings__test" type="button" onClick={() => void testPush()}>
-          Send test push
+          Send test notification
         </button>
       )}
       {state === "ENABLED" && (
@@ -214,7 +212,7 @@ export function NotificationSettings() {
       )}
       {import.meta.env.DEV && (
         <button className="notification-settings__test" type="button" onClick={() => void testLocally()}>
-          Send test notification
+          Show a sample notification
         </button>
       )}
       {message && (
