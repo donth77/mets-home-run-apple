@@ -39,6 +39,18 @@ describe("push subscription client", () => {
     });
   });
 
+  it("says the API is missing when a server answers with a page instead of JSON", async () => {
+    const html = new Response("<!doctype html><title>Virtual Apple</title>", {
+      status: 200,
+      headers: { "Content-Type": "text/html" },
+    });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(html));
+
+    await expect(savePushPreferences(safariSubscription, { homeRuns: true, metsWins: true })).rejects.toThrow(
+      /no notification API|temporarily unavailable/,
+    );
+  });
+
   it("asks for permission before anything is awaited, so the iOS prompt stays inside the tap", async () => {
     const order: string[] = [];
     vi.stubGlobal("Notification", {

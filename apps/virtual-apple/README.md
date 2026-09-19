@@ -16,6 +16,15 @@ pnpm dev:virtual
 
 Open <http://localhost:4174>.
 
+The notification API is a Cloudflare Pages Function, so it is not part of the
+dev server. To try notifications from localhost, borrow the deployed one:
+
+```bash
+NOTIFICATIONS_PROXY_TARGET=https://www.metsapple.com pnpm dev:virtual
+```
+
+That browser then receives real pushes until it turns them off.
+
 ## What it does
 
 - Shows the score, inning, count, runners, and current Mets batter or pitcher
@@ -40,8 +49,14 @@ Virtual Apple has no connection to physical hardware.
 
 ## Notifications
 
-Notifications start off. After installing Virtual Apple, a user can enable home
-run and Mets win alerts independently. No account is required.
+Notifications start off. On a desktop browser the bell in the toolbar under the
+radio card turns home run and Mets win alerts on or off together, with no
+install needed. On a phone, the alerts card appears after installing Virtual
+Apple and offers the two alert types separately. No account is required.
+
+Brave users need "Use Google services for push messaging" turned on under
+Settings, Privacy and security. Brave ships with it off, and without it the
+browser cannot register for push at all.
 
 ## Sound
 

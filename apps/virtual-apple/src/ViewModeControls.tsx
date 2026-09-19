@@ -1,10 +1,13 @@
 import { PictureInPicture } from "lucide-react";
+import { NotificationBell } from "./NotificationBell";
 import { SceneSoundToggle } from "./SceneSoundToggle";
+import type { NotificationSubscription } from "./useNotificationSubscription";
 
 interface ViewModeControlsProps {
   desktopViewModes: boolean;
   focusMode: boolean;
   miniWindowSupported: boolean;
+  notifications: NotificationSubscription;
   onOpenMiniWindow: () => Promise<unknown>;
   onToggleFocusMode: () => void;
   sound: {
@@ -19,6 +22,7 @@ export function ViewModeControls({
   desktopViewModes,
   focusMode,
   miniWindowSupported,
+  notifications,
   onOpenMiniWindow,
   onToggleFocusMode,
   sound,
@@ -45,6 +49,7 @@ export function ViewModeControls({
     <fieldset className="virtual-view-controls">
       <legend className="visually-hidden">View options</legend>
       <SceneSoundToggle {...sound} />
+      {desktopViewModes && <NotificationBell notifications={notifications} />}
       {desktopViewModes && (
         <button
           type="button"

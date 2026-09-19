@@ -1,5 +1,6 @@
 .virtual-view-controls {
   align-items: center;
+  position: relative;
   backdrop-filter: blur(12px);
   background: rgba(5, 16, 29, 0.88);
   border: 1px solid rgba(188, 215, 237, 0.28);
@@ -53,6 +54,33 @@
 .virtual-view-controls .view-mode-button[aria-pressed="true"] {
   background: rgba(20, 60, 96, 0.94);
   border-color: #f2672c;
+}
+
+/* What went wrong with the bell, shown under the toolbar for a few seconds. */
+.view-mode-note {
+  background: rgba(5, 16, 29, 0.94);
+  border: 1px solid rgba(255, 123, 61, 0.62);
+  border-radius: 10px;
+  color: #edf5fb;
+  font-size: 0.74rem;
+  line-height: 1.35;
+  max-width: 260px;
+  padding: 8px 10px;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 1;
+}
+
+/* The notification bell while blocked in the browser, or still checking. */
+.virtual-view-controls .view-mode-button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.virtual-view-controls .view-mode-button:disabled:hover {
+  background: transparent;
+  border-color: transparent;
 }
 
 .view-mode-button {

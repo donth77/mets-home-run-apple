@@ -3,6 +3,7 @@
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NotificationSettings } from "./NotificationSettings";
+import { useNotificationSubscription } from "./useNotificationSubscription";
 import {
   currentPushSubscription,
   disablePushNotifications,
@@ -31,7 +32,14 @@ const subscription = {
   unsubscribe: vi.fn(),
 } as unknown as PushSubscription;
 
+/** The card as the app mounts it: fed by one subscription state held above it. */
+function Card() {
+  const notifications = useNotificationSubscription(true);
+  return <NotificationSettings notifications={notifications} />;
+}
+
 beforeEach(() => {
+  window.localStorage.clear();
   window.matchMedia = vi.fn().mockImplementation((query: string) => ({
     addEventListener: vi.fn(),
     matches: query === "(display-mode: standalone)",
@@ -64,7 +72,7 @@ afterEach(() => {
 
 describe("installed PWA notification settings", () => {
   it("starts off and enables both alert types after a user click", async () => {
-    const { getByRole } = render(<NotificationSettings />);
+    const { getByRole } = render(<Card />);
     const enable = await waitFor(() => getByRole("button", { name: "Enable notifications" }));
 
     fireEvent.click(enable);
@@ -80,7 +88,7 @@ describe("installed PWA notification settings", () => {
       enabled: true,
       preferences: { homeRuns: true, metsWins: false },
     });
-    const { getByRole } = render(<NotificationSettings />);
+    const { getByRole } = render(<Card />);
     const wins = await waitFor(() => getByRole("checkbox", { name: "Mets wins" }));
 
     expect((wins as HTMLInputElement).checked).toBe(false);
@@ -93,7 +101,7 @@ describe("installed PWA notification settings", () => {
 
   it("removes the browser subscription when alerts are turned off", async () => {
     vi.mocked(currentPushSubscription).mockResolvedValue(subscription);
-    const { getByRole } = render(<NotificationSettings />);
+    const { getByRole } = render(<Card />);
     const off = await waitFor(() => getByRole("button", { name: "Turn off" }));
 
     fireEvent.click(off);
@@ -111,7 +119,7 @@ describe("installed PWA notification settings", () => {
       removeEventListener: vi.fn(),
     }));
 
-    const { queryByText } = render(<NotificationSettings />);
+    const { queryByText } = render(<Card />);
 
     expect(queryByText("Mets alerts")).toBeNull();
   });

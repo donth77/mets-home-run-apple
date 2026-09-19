@@ -91,6 +91,17 @@ a:focus-visible {
   width: 100%;
 }
 
+/* While the stage changes windows it is hidden until drawn at its new size,
+   then fades in, so the old picture is never shown stretched to fit. */
+.shared-apple-stage-host > .apple-stage {
+  transition: opacity 180ms ease-out;
+}
+
+.shared-apple-stage-host--settling > .apple-stage {
+  opacity: 0;
+  transition: none;
+}
+
 .virtual-header {
   align-items: flex-start;
   display: flex;

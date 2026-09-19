@@ -7,8 +7,42 @@ export function createSharedAppleStageHost(ownerDocument: Document) {
   return host;
 }
 
+const SETTLING_CLASS = "shared-apple-stage-host--settling";
+export const STAGE_SETTLE_TIMEOUT_MS = 600;
+
+/**
+ * Moves the stage between the main window and the Mini Apple window.
+ *
+ * The canvas keeps its last picture at the old size until the renderer
+ * notices the new slot, a few frames to a few hundred milliseconds later,
+ * and the browser stretches or squeezes that picture to fit in the
+ * meantime. So the stage is veiled from the move until the canvas has taken
+ * its new size and drawn once, then fades back in.
+ */
 export function moveSharedAppleStage(host: HTMLElement, target: HTMLElement | null) {
-  if (target && host.parentElement !== target) target.append(host);
+  if (!target || host.parentElement === target) return;
+  target.append(host);
+  settleSharedAppleStage(host);
+}
+
+function settleSharedAppleStage(host: HTMLElement) {
+  const view = host.ownerDocument.defaultView ?? window;
+  const canvas = host.querySelector("canvas");
+  if (!canvas) return; // still loading, or no renderer: nothing to hide
+  host.classList.add(SETTLING_CLASS);
+  let settled = false;
+  const observer = new MutationObserver(() => reveal());
+  const fallback = view.setTimeout(() => reveal(), STAGE_SETTLE_TIMEOUT_MS);
+  function reveal() {
+    if (settled) return;
+    settled = true;
+    observer.disconnect();
+    view.clearTimeout(fallback);
+    // Two frames: the renderer draws at the new size on the next one, and
+    // the frame after that is the first the viewer can see.
+    view.requestAnimationFrame(() => view.requestAnimationFrame(() => host.classList.remove(SETTLING_CLASS)));
+  }
+  observer.observe(canvas, { attributes: true, attributeFilter: ["width", "height"] });
 }
 
 interface SharedAppleStageProps {

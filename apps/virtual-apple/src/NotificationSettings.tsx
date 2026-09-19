@@ -1,23 +1,11 @@
 import { Bell, BellOff } from "lucide-react";
-import { useEffect, useState } from "react";
-import {
-  currentPushSubscription,
-  disablePushNotifications,
-  enablePushNotifications,
-  type NotificationPreferences,
-  pushNotificationsSupported,
-  registerNotificationServiceWorker,
-  savePushPreferences,
-  showLocalTestNotification,
-  sendServerTestPush,
-  subscriptionStatus,
-  type LastPush,
-} from "./notificationClient";
+import { type LastPush, pushNotificationsSupported } from "./notificationClient";
 import { isStandalonePwa } from "./PwaInstallPrompt";
+import type { NotificationSubscription } from "./useNotificationSubscription";
 
-const DEFAULT_PREFERENCES: NotificationPreferences = { homeRuns: true, metsWins: true };
-
-type NotificationState = "CHECKING" | "DISABLED" | "ENABLING" | "ENABLED" | "DENIED";
+interface NotificationSettingsProps {
+  notifications: NotificationSubscription;
+}
 
 function describeLastPush(lastPush: LastPush | null) {
   if (!lastPush) return "No notifications have been sent to this device yet.";
@@ -35,125 +23,20 @@ function describeLastPush(lastPush: LastPush | null) {
   }
 }
 
-export function NotificationSettings() {
-  const [state, setState] = useState<NotificationState>("CHECKING");
-  const [subscription, setSubscription] = useState<PushSubscription>();
-  const [preferences, setPreferences] = useState(DEFAULT_PREFERENCES);
-  const [message, setMessage] = useState("");
-  const [lastPush, setLastPush] = useState<LastPush | null>(null);
+/**
+ * The phone's notification card: separate switches for home runs and Mets
+ * wins, and a record of the last notification. Phones only get push once the
+ * site is installed, so the card waits for that. Desktop uses the toolbar
+ * bell instead.
+ */
+export function NotificationSettings({ notifications }: NotificationSettingsProps) {
   // The server-side test push is a debugging tool: a dev build, or a page
   // opened with ?diag=1 while the server has the route switched on.
   const debugging = import.meta.env.DEV || new URLSearchParams(window.location.search).has("diag");
   const available = isStandalonePwa() && pushNotificationsSupported();
-
-  useEffect(() => {
-    if (!available) return;
-    let disposed = false;
-    void (async () => {
-      if (Notification.permission === "denied") {
-        setState("DENIED");
-        return;
-      }
-      try {
-        const registration = await registerNotificationServiceWorker();
-        const active = await currentPushSubscription(registration);
-        if (disposed) return;
-        if (!active) {
-          setState("DISABLED");
-          return;
-        }
-        const status = await subscriptionStatus(active);
-        if (disposed) return;
-        if (!status.enabled) {
-          setState("DISABLED");
-          return;
-        }
-        setSubscription(active);
-        if (status.preferences) setPreferences(status.preferences);
-        setLastPush(status.lastPush ?? null);
-        setState("ENABLED");
-      } catch {
-        if (!disposed) setState("DISABLED");
-      }
-    })();
-    return () => {
-      disposed = true;
-    };
-  }, [available]);
+  const { state, preferences, lastPush, message, enable, disable, setPreference, testPush, testLocally } = notifications;
 
   if (!available || state === "CHECKING") return null;
-
-  async function enable() {
-    setState("ENABLING");
-    setMessage("");
-    try {
-      const result = await enablePushNotifications(DEFAULT_PREFERENCES);
-      if (!result.subscription) {
-        setState("DENIED");
-        return;
-      }
-      setPreferences(DEFAULT_PREFERENCES);
-      setSubscription(result.subscription);
-      setState("ENABLED");
-    } catch (reason) {
-      setMessage(reason instanceof Error ? reason.message : "Notifications could not be enabled.");
-      setState("DISABLED");
-    }
-  }
-
-  async function disable() {
-    if (!subscription) return;
-    setMessage("");
-    try {
-      await disablePushNotifications(subscription);
-    } catch {
-      // The browser subscription is still removed in a finally block. Any
-      // stale server record is discarded after its push endpoint returns 410.
-    }
-    setSubscription(undefined);
-    setState("DISABLED");
-  }
-
-  async function setPreference(name: keyof NotificationPreferences, enabled: boolean) {
-    if (!subscription) return;
-    const previous = preferences;
-    const next = { ...preferences, [name]: enabled };
-    setPreferences(next);
-    setMessage("");
-    try {
-      await savePushPreferences(subscription, next);
-    } catch (reason) {
-      setPreferences(previous);
-      setMessage(reason instanceof Error ? reason.message : "That setting could not be saved.");
-    }
-  }
-
-  async function testPush() {
-    if (!subscription) return;
-    setMessage("Sending a test notification…");
-    try {
-      const result = await sendServerTestPush(subscription);
-      setLastPush(result.lastPush);
-      setMessage(
-        result.sent
-          ? "Sent. It should appear on this device within a few seconds."
-          : result.lastPush.outcome === "EXPIRED_SUBSCRIPTION"
-            ? "The test notification could not be delivered. Turn notifications off and on again on this device."
-            : "The test notification could not be delivered.",
-      );
-    } catch (reason) {
-      setMessage(reason instanceof Error ? reason.message : "The test notification could not be sent.");
-    }
-  }
-
-  async function testLocally() {
-    setMessage("");
-    try {
-      await showLocalTestNotification();
-    } catch (reason) {
-      setMessage(reason instanceof Error ? reason.message : "The test notification could not be shown.");
-    }
-  }
 
   return (
     <section className="notification-settings" aria-labelledby="notification-settings-title">
@@ -207,9 +90,7 @@ export function NotificationSettings() {
           Send test notification
         </button>
       )}
-      {state === "ENABLED" && (
-        <p className="notification-settings__last">{describeLastPush(lastPush)}</p>
-      )}
+      {state === "ENABLED" && <p className="notification-settings__last">{describeLastPush(lastPush)}</p>}
       {import.meta.env.DEV && (
         <button className="notification-settings__test" type="button" onClick={() => void testLocally()}>
           Show a sample notification

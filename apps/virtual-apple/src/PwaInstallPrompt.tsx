@@ -2,8 +2,31 @@ import { Download } from "lucide-react";
 import { useEffect, useState } from "react";
 
 const STANDALONE_DISPLAY_QUERY = "(display-mode: standalone)";
-const MANUAL_INSTALL_INSTRUCTIONS =
-  "On iPhone or iPad, tap Share, then Add to Home Screen. On Android, open the browser menu and choose Add to Home screen.";
+
+export type InstallPlatform = "ios" | "android" | "other";
+
+/**
+ * Which manual install steps apply. iPadOS presents itself as a Mac, so a
+ * "Macintosh" with a touch screen is an iPad.
+ */
+export function installPlatform(nav: Pick<Navigator, "userAgent" | "maxTouchPoints"> = window.navigator): InstallPlatform {
+  const agent = nav.userAgent;
+  if (/iPhone|iPad|iPod/.test(agent) || (/Macintosh/.test(agent) && nav.maxTouchPoints > 1)) return "ios";
+  if (/Android/.test(agent)) return "android";
+  return "other";
+}
+
+const MANUAL_INSTALL_INSTRUCTIONS: Record<InstallPlatform, string> = {
+  ios: "Tap Share, then Add to Home Screen.",
+  android: "Open the browser menu and choose Add to Home screen.",
+  other: "Open your browser's Share sheet or menu and choose Add to Home Screen.",
+};
+
+const LATER_INSTRUCTIONS: Record<InstallPlatform, string> = {
+  ios: "You can add Virtual Apple later from the Share sheet.",
+  android: "You can add Virtual Apple later from the browser menu.",
+  other: "You can add Virtual Apple later from your browser's Share sheet or menu.",
+};
 
 type InstallPromptOutcome = "accepted" | "dismissed";
 
@@ -53,7 +76,7 @@ export function PwaInstallPrompt() {
 
   async function install() {
     if (!deferredPrompt) {
-      setInstructions(MANUAL_INSTALL_INSTRUCTIONS);
+      setInstructions(MANUAL_INSTALL_INSTRUCTIONS[installPlatform()]);
       return;
     }
 
@@ -65,9 +88,9 @@ export function PwaInstallPrompt() {
         setInstalled(true);
         return;
       }
-      setInstructions("You can add Virtual Apple later from your browser's Share sheet or menu.");
+      setInstructions(LATER_INSTRUCTIONS[installPlatform()]);
     } catch {
-      setInstructions(MANUAL_INSTALL_INSTRUCTIONS);
+      setInstructions(MANUAL_INSTALL_INSTRUCTIONS[installPlatform()]);
     }
   }
 

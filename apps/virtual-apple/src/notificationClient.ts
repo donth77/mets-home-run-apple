@@ -49,6 +49,15 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   });
   const body = (await response.json().catch(() => undefined)) as { error?: string } | undefined;
   if (!response.ok) throw new Error(body?.error || "Notifications are temporarily unavailable.");
+  // The API is a Pages Function. A page instead of JSON means it is not
+  // deployed here, which on a dev server means the proxy is not configured.
+  if (body === undefined) {
+    throw new Error(
+      import.meta.env.DEV
+        ? "The dev server has no notification API. Start it with NOTIFICATIONS_PROXY_TARGET=https://www.metsapple.com."
+        : "Notifications are temporarily unavailable.",
+    );
+  }
   return body as T;
 }
 

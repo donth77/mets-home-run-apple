@@ -10,8 +10,9 @@ import { gameDateParts, nextGameLabelParts, timeZoneAbbreviation } from "./gameD
 import { selectHomeRunPhrase } from "./homeRunPhrases";
 import { LiveGamedayWidget } from "./LiveGamedayWidget";
 import { MiniAppleView } from "./MiniAppleView";
+import { pushNotificationsSupported } from "./notificationClient";
 import { NotificationSettings } from "./NotificationSettings";
-import { PwaInstallPrompt } from "./PwaInstallPrompt";
+import { isStandalonePwa, PwaInstallPrompt } from "./PwaInstallPrompt";
 import {
   fanFacingMoment,
   isCitiFieldVenue,
@@ -26,6 +27,7 @@ import { type CelebrationSoundCue, useCelebrationSound } from "./useCelebrationS
 import { useDesktopViewModes } from "./useDesktopViewModes";
 import { useFixturePlayback } from "./useFixturePlayback";
 import { useLiveMetsGame } from "./useLiveMetsGame";
+import { useNotificationSubscription } from "./useNotificationSubscription";
 import { useMetsSchedule } from "./useMetsSchedule";
 import { useMiniAppleWindow } from "./useMiniAppleWindow";
 import { useMlbSeasonPhase } from "./useMlbSeasonPhase";
@@ -53,6 +55,11 @@ export function App() {
   const diagnostics = useMemo(() => new URLSearchParams(window.location.search).has("diag"), []);
   const reducedMotion = useReducedMotion();
   const desktopViewModes = useDesktopViewModes();
+  // One subscription state for whichever surface shows: the toolbar bell on
+  // desktop, the alerts card on an installed phone app.
+  const notifications = useNotificationSubscription(
+    pushNotificationsSupported() && (desktopViewModes || isStandalonePwa()),
+  );
   const [sceneReady, setSceneReady] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
   const activeFocusMode = desktopViewModes && focusMode;
@@ -329,6 +336,7 @@ export function App() {
                 desktopViewModes={desktopViewModes}
                 focusMode={activeFocusMode}
                 miniWindowSupported={miniAppleWindow.supported}
+                notifications={notifications}
                 onOpenMiniWindow={openMiniApple}
                 onToggleFocusMode={() => setFocusMode((current) => !current)}
                 sound={soundControls}
@@ -446,7 +454,7 @@ export function App() {
         {!miniAppleWindow.isOpen && (
           <>
             {!desktopViewModes && <PwaInstallPrompt />}
-            <NotificationSettings />
+            {!desktopViewModes && <NotificationSettings notifications={notifications} />}
           </>
         )}
         {diagnostics && (
