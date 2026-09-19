@@ -1,4 +1,4 @@
-import { dateFromMlbTimecode, METS_TEAM_ID, type MlbHistoricalBookmark } from "@apple/mlb-live-feed";
+import { dateFromMlbTimecode, type MlbHistoricalBookmark } from "@apple/mlb-live-feed";
 import { Scoreboard } from "@apple/scoreboard-ui";
 import { appleLabPresentationSnapshot } from "./corePresentation";
 import { useMlbHistoricalReplay } from "./useMlbHistoricalReplay";
@@ -12,10 +12,19 @@ function timecodeLabel(timecode: string | undefined) {
   });
 }
 
+// Bookmarks cover what can move the Apple, Mets home runs and Mets wins, plus
+// the final of a game the Mets lost, which only changes the screen over.
 function bookmarkContext(bookmark: MlbHistoricalBookmark) {
-  if (bookmark.kind === "FINAL") return "Final transition";
-  const event = bookmark.kind === "GRAND_SLAM" ? "grand slam" : "home run";
-  return bookmark.battingTeamId === METS_TEAM_ID ? `Mets ${event}` : `Opponent ${event}`;
+  switch (bookmark.kind) {
+    case "METS_WIN":
+      return "Mets win celebration";
+    case "FINAL":
+      return "Final transition, no celebration";
+    case "GRAND_SLAM":
+      return "Mets grand slam";
+    default:
+      return "Mets home run";
+  }
 }
 
 export function HistoricalReplayPanel() {
@@ -235,7 +244,7 @@ export function HistoricalReplayPanel() {
                 <small>Stage before → run transition</small>
               </header>
               {replay.archive.bookmarks.length === 0 ? (
-                <p className="empty-state">This archived game has no home-run or final-state bookmarks.</p>
+                <p className="empty-state">This archived game has no Mets home-run, Mets-win, or final-state bookmarks.</p>
               ) : (
                 <ol className="bookmark-list">
                   {replay.archive.bookmarks.map((bookmark) => (

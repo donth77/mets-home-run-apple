@@ -2,7 +2,7 @@ import type { GameSnapshot, NormalizedGameInput } from "@apple/protocol";
 
 type CoreInputEnvelope = NormalizedGameInput;
 
-export type MlbHistoricalBookmarkKind = "HOME_RUN" | "GRAND_SLAM" | "FINAL";
+export type MlbHistoricalBookmarkKind = "HOME_RUN" | "GRAND_SLAM" | "METS_WIN" | "FINAL";
 
 export interface MlbHistoricalBookmark {
   id: string;
