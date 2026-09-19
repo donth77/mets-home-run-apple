@@ -5,6 +5,7 @@ import { isFullFeed } from "./feedPayload";
 import { arrayAt, numberAt, objectAt, stringAt } from "./jsonValue";
 import { formatMlbTimecode } from "./timecode";
 import { fetchJson } from "./transport";
+import { METS_TEAM_ID } from "./constants";
 import type { MlbHistoricalBookmark, MlbHistoricalGameIndex } from "./types";
 
 function historicalTargetIndex(timestamps: readonly string[], target: string) {
@@ -72,6 +73,8 @@ export async function fetchMlbHistoricalGameIndex(
     const beforeIndex = Math.max(0, targetIndex - 1);
     const half = stringAt(about, "halfInning").toLowerCase();
     const battingTeamId = half === "bottom" ? homeTeamId : awayTeamId;
+    // Only Mets home runs move the Apple, so only those are worth a bookmark.
+    if (battingTeamId !== METS_TEAM_ID) continue;
     bookmarks.push({
       id: playEventKey(play, gamePk),
       kind: grandSlam ? "GRAND_SLAM" : "HOME_RUN",
@@ -91,11 +94,20 @@ export async function fetchMlbHistoricalGameIndex(
   if (abstractState === "final" || detailedState.includes("final") || detailedState === "game over") {
     const targetIndex = timestamps.length - 1;
     const beforeIndex = Math.max(0, targetIndex - 1);
+    // A Mets win is the other thing that moves the Apple; any other final is
+    // only the screen changing over.
+    const linescoreTeams = objectAt(objectAt(objectAt(finalFeed, "liveData"), "linescore"), "teams");
+    const homeRuns = numberAt(objectAt(linescoreTeams, "home"), "runs");
+    const awayRuns = numberAt(objectAt(linescoreTeams, "away"), "runs");
+    const metsWon =
+      (homeTeamId === METS_TEAM_ID && homeRuns > awayRuns) || (awayTeamId === METS_TEAM_ID && awayRuns > homeRuns);
     bookmarks.push({
       id: `${gamePk}:final`,
-      kind: "FINAL",
-      label: "Final state",
-      detail: "Transition from the last live update to MLB's final game status.",
+      kind: metsWon ? "METS_WIN" : "FINAL",
+      label: metsWon ? "Mets win" : "Final state",
+      detail: metsWon
+        ? "The final update that makes it a Mets win, which the Apple celebrates."
+        : "Transition from the last live update to MLB's final game status. No celebration.",
       targetIndex,
       beforeIndex,
       targetTimecode: timestamps[targetIndex],

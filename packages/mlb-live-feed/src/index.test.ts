@@ -825,7 +825,17 @@ describe("MLB recording transport", () => {
     core.dispose();
   });
 
-  it("builds home-run, grand-slam, and final bookmarks from a completed archived feed", async () => {
+  it("builds Mets home-run, grand-slam, and Mets-win bookmarks from a completed archived feed, skipping the opponent's", async () => {
+    const opponentHomeRun = play({
+      atBatIndex: 17,
+      halfInning: "top",
+      eventType: "home_run",
+      batterName: "Ronald Acuña Jr.",
+    });
+    const archivedOpponentHomeRun = {
+      ...opponentHomeRun,
+      about: { ...opponentHomeRun.about, endTime: "2026-08-27T19:00:05.000Z" },
+    };
     const homeRun = play({ atBatIndex: 18, halfInning: "bottom", eventType: "home_run", batterName: "Juan Soto" });
     const grandSlam = play({
       atBatIndex: 19,
@@ -842,7 +852,11 @@ describe("MLB recording transport", () => {
       ...grandSlam,
       about: { ...grandSlam.about, endTime: "2026-08-27T19:00:20.000Z" },
     };
-    const finalFeed = feed("20260827_220000", [archivedHomeRun, archivedGrandSlam], "Final");
+    const finalFeed = feed(
+      "20260827_220000",
+      [archivedOpponentHomeRun, archivedHomeRun, archivedGrandSlam],
+      "Final",
+    );
     const fetcher = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(response(["20260827_190000", "20260827_190010", "20260827_190020", "20260827_220000"]))
@@ -851,6 +865,8 @@ describe("MLB recording transport", () => {
     const index = await fetchMlbHistoricalGameIndex(777001, fetcher);
 
     expect(index.timestamps).toHaveLength(4);
+    expect(index.bookmarks).toHaveLength(3);
+    expect(index.bookmarks.map((bookmark) => bookmark.label)).not.toContain("Home run · Ronald Acuña Jr.");
     expect(index.bookmarks).toMatchObject([
       {
         kind: "HOME_RUN",
@@ -867,10 +883,28 @@ describe("MLB recording transport", () => {
         battingTeamId: 121,
       },
       {
-        kind: "FINAL",
+        kind: "METS_WIN",
+        label: "Mets win",
         beforeTimecode: "20260827_190020",
         targetTimecode: "20260827_220000",
       },
     ]);
+  });
+
+  it("marks a final the Mets lost as a plain final, not a celebration", async () => {
+    const finalFeed = feed("20260827_220000", [], "Final", {
+      teams: {
+        away: { runs: 5, hits: 9, errors: 0 },
+        home: { runs: 3, hits: 7, errors: 0 },
+      },
+    });
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(response(["20260827_190000", "20260827_220000"]))
+      .mockResolvedValueOnce(response(finalFeed));
+
+    const index = await fetchMlbHistoricalGameIndex(777001, fetcher);
+
+    expect(index.bookmarks).toMatchObject([{ kind: "FINAL", label: "Final state" }]);
   });
 });
