@@ -4,12 +4,13 @@ This directory contains the shared C++ game code, the Nano ESP32 firmware, and
 hardware-free native tests.
 
 The main target, `nano_esp32_apple`, follows Mets games over Wi-Fi and runs the
-display on its own. It records motion commands but keeps the motor pins low.
-`nano_esp32_apple_motion` uses the same code and drives the commissioned lift.
+display on its own. It drives the lift through the L298N whenever the Motor
+switch in Apple Manager is on, which is the default; with the switch off it
+records motion commands and keeps the motor pins low.
 
 The [wiring diagram](../docs/WIRING.md) shows how the Nano, display, card,
 amplifier, motor driver and button connect. Its pins are the ones defined in
-`include/apple/firmware/board_pins.hpp` and at the top of `src/apple_live.cpp`.
+`include/apple/firmware/board_pins.hpp` and `src/apple_live/pins.hpp`.
 
 ## Build and test
 
@@ -29,9 +30,9 @@ pio run -e nano_esp32_apple --target upload
 pio device monitor --baud 115200
 ```
 
-Do not flash `nano_esp32_apple_motion` until the attached actuator and driver
-have passed the guarded tests in Apple Lab. Disconnect 12 V before every flash
-or wiring change.
+Until the attached actuator and driver have passed the guarded tests in Apple
+Lab, keep 12 V disconnected or turn Motor off in Apple Manager: this target
+moves the lift. Disconnect 12 V before every flash or wiring change.
 
 ## What works
 
@@ -62,14 +63,13 @@ Lighting and autonomous current or end-stop sensing are not finished.
 
 The shared tests use a fake clock, fake storage, and a recording motor. Passing
 them does not qualify real hardware. Use Apple Lab's Hardware Tests in order
-before enabling the motion build.
+before letting the Apple drive its lift.
 
 ## Nano targets
 
 | Target | Purpose |
 | --- | --- |
-| `nano_esp32_apple` | Autonomous game follower; real display, recorded motion |
-| `nano_esp32_apple_motion` | Autonomous game follower with the commissioned lift enabled |
+| `nano_esp32_apple` | Autonomous game follower; drives the lift while Motor is on in Apple Manager |
 | `nano_esp32_usb_diagnostics` | Board, Wi-Fi scan, and shared-core checks over USB |
 | `nano_esp32_usb_smoke` | Minimal startup, serial, and built-in LED check |
 | `nano_esp32_display_test` | Physical game screens and celebrations |
@@ -157,7 +157,8 @@ The Apple updates itself from the project's GitHub releases:
 
 | Path | Contents |
 | --- | --- |
-| `src/apple_live.cpp` | Autonomous Nano program |
+| `src/apple_live/` | Autonomous Nano program, one folder per subsystem; `main.cpp` starts them and runs the loop |
+| `src/bench/` | Bench and commissioning programs, one per PlatformIO target |
 | `lib/core/` | Celebration decisions and sequence safety |
 | `lib/game_state/` | Game snapshot and status classification |
 | `lib/mlb_feed/` | Nano MLB schedule and live-feed adapter |

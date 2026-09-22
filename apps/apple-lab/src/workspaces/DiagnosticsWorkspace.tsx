@@ -7,6 +7,11 @@ function kilobytes(bytes: number): string {
   return `${Math.round(bytes / 1024)} KB`;
 }
 
+// Stack margins are a few kilobytes, so they need the decimal.
+function stackKilobytes(bytes: number): string {
+  return `${(bytes / 1024).toFixed(1)} KB`;
+}
+
 export function DiagnosticsWorkspace({
   events,
   apple,
@@ -93,6 +98,9 @@ export function DiagnosticsWorkspace({
                   <dd>
                     heap {kilobytes(status.heapFree)} free · largest {kilobytes(status.heapLargest)} · PSRAM{" "}
                     {kilobytes(status.psramFree)}
+                    {status.stackFree
+                      ? ` · stack free: loop ${stackKilobytes(status.stackFree.loop)}, audio ${stackKilobytes(status.stackFree.audio)}`
+                      : null}
                   </dd>
                 </div>
                 <div>

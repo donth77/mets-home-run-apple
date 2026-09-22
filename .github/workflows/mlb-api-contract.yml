@@ -1,10 +1,13 @@
 name: MLB API contract
 
-# The MLB Stats API is unofficial and changes without notice. This job pulls
-# a recent Mets game through the same native feed adapter the physical Apple
-# runs and the browser adapter Apple Lab and Virtual Apple use, so a breaking
-# change shows up here first, as an issue opened in this repository (and
-# closed again once the check passes), instead of on a game night. It runs
+# The MLB Stats API is unofficial and changes without notice. This job fetches
+# this week's schedule and a recent Mets game the way the physical Apple does
+# (HTTP/1.0 over TLS 1.2, its `fields=` lists), runs them through the same C++
+# schedule parser and feed adapter the Nano runs, holds the adapter's score and
+# home runs against MLB's box score, and runs the browser adapter Apple Lab and
+# Virtual Apple use. A breaking change shows up here first, as an issue opened
+# in this repository (and closed again once the check passes), instead of on a
+# game night. It runs
 # weekly in season and monthly in the offseason, when the API tends to change
 # ahead of the new year; the last completed game still exercises the parsers.
 

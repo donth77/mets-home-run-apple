@@ -18,6 +18,15 @@ describe("bounded JSON Patch safety", () => {
     ).toThrow(/Unsafe JSON pointer token/);
   });
 
+  it("rejects unsafe move sources and moves into the value's own child", () => {
+    expect(() =>
+      applyJsonPatch({ safe: { value: 1 } }, [{ op: "move", from: "/__proto__/value", path: "/safe/moved" }]),
+    ).toThrow(/Unsafe JSON pointer token/);
+    expect(() =>
+      applyJsonPatch({ safe: { value: 1 } }, [{ op: "move", from: "/safe", path: "/safe/value/inner" }]),
+    ).toThrow(/Cannot move a value into itself/);
+  });
+
   it("never traverses inherited properties", () => {
     expect(() => applyJsonPatch({ safe: {} }, [{ op: "copy", from: "/toString", path: "/safe/copied" }])).toThrow(
       /Patch source is missing/,

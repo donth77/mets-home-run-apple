@@ -6,16 +6,26 @@ current Mets schedule and the most recent completed Mets game, then:
 
 1. verifies the TLS chains still end at the roots the firmware pins: DigiCert
    Global Root G2 for MLB, and the GitHub roots in update_roots.hpp that the
-   Apple's own firmware-release checks depend on;
+   Apple's own firmware-release checks depend on, over TLS 1.2, the newest
+   version the Nano's mbedTLS speaks;
 2. verifies MLB's game-status table still carries the delay, suspended,
    postponed, and cancelled codes the shared classifier keys on;
-3. verifies the `fields=` query still trims the live feed;
-4. runs the native feed adapter (the same C++ the Nano executes) over both the
-   full and the field-limited capture and requires identical frames;
-5. replays the 2026-07-18 rain delay by timecode and requires the Game
+3. fetches this week's schedule exactly as the Nano does (HTTP/1.0, its
+   headers and `fields=` list, TLS 1.2), parses it with the Nano's C++ schedule
+   parser and filter, and requires every game to read as MLB sent it and a
+   game to follow whenever one is still to come;
+4. verifies the `fields=` query still trims the live feed;
+5. runs the native feed adapter (the same C++ the Nano executes) over both the
+   full capture and the field-limited one fetched the Nano's way, requires
+   identical frames, and requires the adapter's final score and home runs to
+   match MLB's own linescore and box score;
+6. replays the 2026-07-18 rain delay by timecode and requires the Game
    Advisory that names the rain, since the status block alone says "Delayed";
-6. optionally runs the browser adapter's live contract test used by Apple Lab
+7. optionally runs the browser adapter's live contract test used by Apple Lab
    and Virtual Apple.
+
+The `fields=` lists and the User-Agent come from the firmware sources, so this
+check always asks for what the Nano asks for.
 
 Exit status is non-zero on any failure so a scheduled GitHub Actions run
 reports it. Run locally with:
@@ -28,29 +38,42 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import http.client
 import json
 import pathlib
 import re
+import ssl
 import subprocess
 import sys
 import tempfile
+import time
 import urllib.request
+import zoneinfo
 
 ORIGIN = "https://statsapi.mlb.com"
+MLB_HOST = "statsapi.mlb.com"
 METS = 121
 PINNED_ROOT_NAME = "DigiCert Global Root G2"
 MAX_FIELDS_BYTES = 400_000
 TIMEOUT = 60
+FIRMWARE = pathlib.Path(__file__).resolve().parents[1]
+# The Apple's default zone; the Nano asks for the schedule from yesterday to a
+# week ahead in local dates (refresh_schedule in src/apple_live/game/following.cpp).
+DEVICE_ZONE = zoneinfo.ZoneInfo("America/New_York")
 
-LIVE_FEED_FIELDS = (
-    "gamePk,metaData,timeStamp,wait,gameData,status,abstractGameState,detailedState,statusCode,"
-    "reason,teams,away,home,id,abbreviation,teamName,name,datetime,dateTime,venue,liveData,plays,"
-    "allPlays,currentPlay,about,atBatIndex,halfInning,inning,isComplete,result,eventType,rbi,"
-    "description,matchup,batter,pitcher,fullName,playEvents,playId,details,reviewDetails,"
-    "inProgress,isOverturned,count,balls,strikes,linescore,currentInning,inningState,inningHalf,"
-    "outs,innings,num,runs,hits,errors,offense,defense,first,second,third,boxscore,players,stats,"
-    "batting,pitching,atBats,homeRuns,numberOfPitches"
-)
+
+def firmware_string(relative: str, pattern: str) -> str:
+    """A string constant read from the firmware source, so this check always
+    sends what the Nano sends. Adjacent C++ string literals are joined."""
+    match = re.search(pattern, (FIRMWARE / relative).read_text(), re.S)
+    if not match:
+        raise SystemExit(f"MLB API CONTRACT FAILED: could not read {pattern!r} from firmware/{relative}")
+    return "".join(re.findall(r'"([^"]*)"', match.group(1)))
+
+
+LIVE_FEED_FIELDS = firmware_string("lib/mlb_feed/src/feed.cpp", r'kLiveFeedFields\[\] =((?:\s*"[^"]*")+);')
+SCHEDULE_FIELDS = firmware_string("lib/mlb_feed/src/schedule.cpp", r'kScheduleFields\[\] =((?:\s*"[^"]*")+);')
+DEVICE_USER_AGENT = firmware_string("src/apple_live/net/https.cpp", r'setUserAgent\(("[^"]*")\)')
 
 
 class ContractFailure(Exception):
@@ -65,24 +88,62 @@ def fetch(url: str) -> bytes:
         return response.read()
 
 
+class _Http10Connection(http.client.HTTPSConnection):
+    _http_vsn = 10
+    _http_vsn_str = "HTTP/1.0"
+
+
+def fetch_like_device(path: str) -> bytes:
+    """GET from MLB the way the Nano's HTTPClient does: HTTP/1.0 (useHTTP10),
+    the same headers, and TLS no newer than 1.2. The Nano reads the body as it
+    arrives, so a chunked reply would be as fatal as a refused handshake."""
+    context = ssl.create_default_context()
+    context.maximum_version = ssl.TLSVersion.TLSv1_2
+    connection = _Http10Connection(MLB_HOST, 443, timeout=TIMEOUT, context=context)
+    try:
+        connection.request("GET", path, headers={
+            "Host": MLB_HOST,
+            "User-Agent": DEVICE_USER_AGENT,
+            "Connection": "close",
+            "Accept": "application/json",
+        })
+        response = connection.getresponse()
+        body = response.read()
+    except (OSError, http.client.HTTPException) as error:
+        raise ContractFailure(f"the Nano's request for {path[:60]} failed: {error}") from error
+    finally:
+        connection.close()
+    if response.status != 200:
+        raise ContractFailure(f"MLB answered the Nano's request for {path[:60]} with HTTP {response.status}")
+    if "chunked" in (response.getheader("Transfer-Encoding") or "").lower():
+        raise ContractFailure("MLB answered an HTTP/1.0 request with a chunked body, which the Nano cannot read")
+    return body
+
+
+def served_chain(host: str) -> list[bytes]:
+    """The certificates a host serves over TLS 1.2, the newest the Nano speaks."""
+    result = subprocess.run(
+        ["openssl", "s_client", "-tls1_2", "-connect", f"{host}:443", "-servername", host, "-showcerts"],
+        input=b"", capture_output=True, timeout=TIMEOUT,
+    )
+    blocks = re.findall(rb"-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----", result.stdout, re.S)
+    if not blocks:
+        raise ContractFailure(f"no TLS 1.2 handshake with {host}; the Nano's mbedTLS cannot use TLS 1.3")
+    return blocks
+
+
 def check_certificate_chain() -> None:
     """The device pins DigiCert Global Root G2; a new root needs a firmware update.
 
     Servers rarely send the root itself, so the check reads the issuer of the
     last certificate MLB serves (the intermediate), which must be that root.
     """
-    result = subprocess.run(
-        ["openssl", "s_client", "-connect", "statsapi.mlb.com:443", "-servername", "statsapi.mlb.com", "-showcerts"],
-        input=b"", capture_output=True, timeout=TIMEOUT,
-    )
-    blocks = re.findall(rb"-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----", result.stdout, re.S)
-    if not blocks:
-        raise ContractFailure("openssl returned no certificates for statsapi.mlb.com")
+    blocks = served_chain(MLB_HOST)
     issuer = subprocess.run(["openssl", "x509", "-noout", "-issuer"], input=blocks[-1], capture_output=True, timeout=TIMEOUT)
     issuer_text = issuer.stdout.decode("utf-8", "replace").strip()
     if PINNED_ROOT_NAME not in issuer_text:
         raise ContractFailure(f"certificate chain no longer ends at {PINNED_ROOT_NAME}: {issuer_text}")
-    print(f"certificate chain: {len(blocks)} certificates served, issued under {PINNED_ROOT_NAME}")
+    print(f"certificate chain: {len(blocks)} certificates served over TLS 1.2, issued under {PINNED_ROOT_NAME}")
 
 
 UPDATE_ROOTS_HEADER = pathlib.Path(__file__).resolve().parents[1] / "include" / "apple" / "firmware" / "update_roots.hpp"
@@ -97,18 +158,125 @@ def check_github_roots() -> None:
     if not names:
         raise ContractFailure(f"no root names found in {UPDATE_ROOTS_HEADER.name}")
     for host in GITHUB_HOSTS:
-        result = subprocess.run(
-            ["openssl", "s_client", "-connect", f"{host}:443", "-servername", host, "-showcerts"],
-            input=b"", capture_output=True, timeout=TIMEOUT,
-        )
-        blocks = re.findall(rb"-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----", result.stdout, re.S)
-        if not blocks:
-            raise ContractFailure(f"openssl returned no certificates for {host}")
+        blocks = served_chain(host)
         issuer = subprocess.run(["openssl", "x509", "-noout", "-issuer"], input=blocks[-1], capture_output=True, timeout=TIMEOUT)
         issuer_text = issuer.stdout.decode("utf-8", "replace").strip()
         if not any(name in issuer_text for name in names):
             raise ContractFailure(f"{host} chain no longer ends at a pinned root ({', '.join(names)}): {issuer_text}")
-    print(f"github roots: {', '.join(GITHUB_HOSTS)} still chain to the pinned roots")
+    print(f"github roots: {', '.join(GITHUB_HOSTS)} still chain to the pinned roots over TLS 1.2")
+
+
+def interrupted(detailed_state: str) -> bool:
+    """The words ScheduleGame::followable() treats as a game that will not be played now."""
+    return any(word in detailed_state.lower() for word in ("postponed", "cancelled", "canceled", "suspended"))
+
+
+def node_at(document: dict, path: tuple[str, ...], what: str):
+    node = document
+    for key in path:
+        if not isinstance(node, dict) or key not in node:
+            raise ContractFailure(f"{what} lost {'.'.join(path)}")
+        node = node[key]
+    return node
+
+
+def parse_utc(value: str) -> int | None:
+    try:
+        return int(dt.datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp())
+    except ValueError:
+        return None
+
+
+def check_schedule_through_device(native: pathlib.Path, workdir: pathlib.Path) -> None:
+    """The Nano's first request after joining Wi-Fi, and every hour after: this
+    week's schedule, parsed by its C++ with its filter. Every game must read the
+    way MLB sent it, and a game still to come must be one the Nano follows."""
+    today = dt.datetime.now(DEVICE_ZONE).date()
+    start = (today - dt.timedelta(days=1)).isoformat()
+    end = (today + dt.timedelta(days=7)).isoformat()
+    body = fetch_like_device(
+        f"/api/v1/schedule?sportId=1&teamId={METS}&startDate={start}&endDate={end}"
+        f"&hydrate=team&fields={SCHEDULE_FIELDS}"
+    )
+    payload = json.loads(body)
+    path = workdir / "schedule.json"
+    path.write_bytes(body)
+    now = int(time.time())
+    result = subprocess.run([str(native), "--schedule", str(path), str(now)], capture_output=True, text=True, timeout=120)
+    sys.stderr.write(result.stderr)
+    if result.returncode != 0:
+        raise ContractFailure("the Nano's schedule parser rejected this week's schedule")
+    printed = dict(line.split(" ", 1) for line in result.stdout.splitlines() if " " in line)
+    if "SCHEDULE" not in printed or "CHOSEN" not in printed:
+        raise ContractFailure(f"the native schedule check printed nothing usable: {result.stdout[:200]!r}")
+    parsed = json.loads(printed["SCHEDULE"])
+    chosen = printed["CHOSEN"].strip()
+
+    # What MLB sent, read directly, under the parser's own rule for which
+    # entries are games (a positive gamePk, game 1 or 2, and teams).
+    sent = []
+    for date in payload.get("dates", []):
+        for game in date.get("games", []):
+            if not isinstance(game, dict) or not isinstance(game.get("teams"), dict):
+                continue
+            if not isinstance(game.get("gamePk"), int) or game["gamePk"] <= 0 or game.get("gameNumber", 1) not in (1, 2):
+                continue
+            status = game.get("status", {})
+            teams = game["teams"]
+            sent.append({
+                "gamePk": game["gamePk"],
+                "gameNumber": game.get("gameNumber"),
+                "officialDate": date.get("date"),
+                "gameDate": game.get("gameDate"),
+                "abstractGameState": status.get("abstractGameState"),
+                "detailedState": status.get("detailedState"),
+                "away": {key: teams.get("away", {}).get("team", {}).get(key) for key in ("id", "abbreviation")},
+                "home": {key: teams.get("home", {}).get("team", {}).get(key) for key in ("id", "abbreviation")},
+            })
+    if len(parsed) != len(sent):
+        raise ContractFailure(f"MLB sent {len(sent)} games for {start}..{end}; the Nano's parser read {len(parsed)}")
+    for expected, read in zip(sent, parsed):
+        for key, value in expected.items():
+            if read.get(key) != value:
+                raise ContractFailure(
+                    f"game {expected['gamePk']}: MLB sent {key}={value!r}, the Nano's parser read {read.get(key)!r}")
+
+    # The choice rules are unit-tested; this only requires that a followable
+    # game still to come is not lost, and that the choice is a real game.
+    upcoming = [game["gamePk"] for game in parsed if game["followable"] and game["abstractGameState"].lower() != "final"
+                and (game["abstractGameState"].lower() == "live" or (parse_utc(game["gameDate"]) or 0) > now)]
+    if chosen == "none":
+        if upcoming:
+            raise ContractFailure(f"games {upcoming} are still to come, but the Nano would follow none of them")
+    elif int(chosen) not in {game["gamePk"] for game in parsed}:
+        raise ContractFailure(f"the Nano would follow game {chosen}, which is not on the schedule")
+    print(f"device schedule: {len(parsed)} games {start}..{end} read as sent; the Nano would follow {chosen}")
+
+
+def check_adapter_reading(summary: dict, full_feed: dict) -> None:
+    """The captures parsing identically proves nothing if both miss the home
+    runs, say because MLB renamed the event type the adapter keys on. So the
+    adapter's reading must agree with MLB's own linescore and box score."""
+    if summary.get("phase") != "FINAL":
+        raise ContractFailure(f"the adapter reads the completed game as {summary.get('phase')!r}, not FINAL")
+    found = {}
+    for side in ("away", "home"):
+        team = summary[side]
+        expected_id = node_at(full_feed, ("gameData", "teams", side, "id"), "full feed")
+        runs = node_at(full_feed, ("liveData", "linescore", "teams", side, "runs"), "full feed")
+        home_runs = node_at(full_feed, ("liveData", "boxscore", "teams", side, "teamStats", "batting", "homeRuns"), "full feed")
+        if team["id"] != expected_id:
+            raise ContractFailure(f"the adapter reads the {side} team as {team['id']}; MLB says {expected_id}")
+        if team["runs"] != runs:
+            raise ContractFailure(f"the adapter reads the {side} score as {team['runs']}; MLB's linescore says {runs}")
+        found[side] = team["homeRuns"] + team["grandSlams"]
+        if found[side] != home_runs:
+            raise ContractFailure(
+                f"the adapter found {found[side]} home runs by the {side} team; MLB's box score counts {home_runs}. "
+                "A home run the adapter misses is one the Apple never celebrates.")
+    print(f"adapter reading: {summary['away']['abbreviation']} {summary['away']['runs']}, "
+          f"{summary['home']['abbreviation']} {summary['home']['runs']}, final; "
+          f"{found['away']} and {found['home']} home runs, as MLB's box score counts them")
 
 
 def recent_final_game() -> dict:
@@ -122,7 +290,7 @@ def recent_final_game() -> dict:
         end = (today + dt.timedelta(days=1)).isoformat()
         url = (
             f"{ORIGIN}/api/v1/schedule?sportId=1&teamId={METS}&startDate={start}&endDate={end}&hydrate=team"
-            "&fields=dates,date,games,gamePk,gameNumber,gameDate,status,abstractGameState,detailedState,teams,away,home,team,id,abbreviation,name,venue"
+            f"&fields={SCHEDULE_FIELDS}"
         )
         payload = json.loads(fetch(url))
         games = [game for date in payload.get("dates", []) for game in date.get("games", [])]
@@ -141,7 +309,9 @@ def recent_final_game() -> dict:
             if not isinstance(team.get("id"), int) or not team.get("abbreviation"):
                 raise ContractFailure(f"schedule {side} team lost id or abbreviation")
     print(f"schedule: {len(games)} Mets games between {start} and {end}")
-    finals = [game for game in games if game["status"].get("abstractGameState") == "Final"]
+    # Postponed and cancelled games are abstractly Final too, but have no plays.
+    finals = [game for game in games if game["status"].get("abstractGameState") == "Final"
+              and not interrupted(game["status"].get("detailedState", ""))]
     if not finals:
         raise ContractFailure("no completed Mets game in the window to exercise the live feed")
     return max(finals, key=lambda game: game["gameDate"])
@@ -150,7 +320,7 @@ def recent_final_game() -> dict:
 def check_live_feed(game: dict, native: pathlib.Path | None, workdir: pathlib.Path) -> None:
     game_pk = game["gamePk"]
     full = fetch(f"{ORIGIN}/api/v1.1/game/{game_pk}/feed/live")
-    fields = fetch(f"{ORIGIN}/api/v1.1/game/{game_pk}/feed/live?fields={LIVE_FEED_FIELDS}")
+    fields = fetch_like_device(f"/api/v1.1/game/{game_pk}/feed/live?fields={LIVE_FEED_FIELDS}")
     print(f"live feed {game_pk}: full {len(full)} bytes, fields {len(fields)} bytes")
     if len(fields) > MAX_FIELDS_BYTES:
         raise ContractFailure(f"the fields query no longer trims the feed ({len(fields)} bytes)")
@@ -200,6 +370,10 @@ def check_live_feed(game: dict, native: pathlib.Path | None, workdir: pathlib.Pa
     sys.stderr.write(result.stderr)
     if result.returncode != 0:
         raise ContractFailure("the native feed adapter rejected the live capture or the fields capture differs")
+    summary = next((line.split(" ", 1)[1] for line in result.stdout.splitlines() if line.startswith("SUMMARY ")), None)
+    if summary is None:
+        raise ContractFailure("the native feed adapter printed no SUMMARY line")
+    check_adapter_reading(json.loads(summary), json.loads(full))
 
 
 def check_browser_adapter(root: pathlib.Path) -> None:
@@ -276,6 +450,8 @@ def main() -> int:
         check_game_statuses()
         game = recent_final_game()
         with tempfile.TemporaryDirectory() as tmp:
+            if args.native is not None:
+                check_schedule_through_device(args.native, pathlib.Path(tmp))
             check_live_feed(game, args.native, pathlib.Path(tmp))
         check_delay_advisory()
         if args.browser:

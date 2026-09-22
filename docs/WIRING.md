@@ -20,4 +20,4 @@ or battery pack will do. The [parts list](PARTS.md) has every component.
 | `A4` | Free; reserved for optional LED sticks |
 
 The firmware defines these in `firmware/include/apple/firmware/board_pins.hpp`
-and at the top of `firmware/src/apple_live.cpp`.
+and `firmware/src/apple_live/pins.hpp`.

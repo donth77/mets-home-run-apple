@@ -741,19 +741,29 @@ describe("MLB recording transport", () => {
     });
   });
 
-  it("accepts bounded RFC 6902 add, replace, remove and copy operations", () => {
+  it("accepts bounded RFC 6902 add, replace, remove, copy and move operations", () => {
     expect(
-      applyJsonPatch({ score: 1, plays: [{ id: 1 }], stale: true, review: { pending: false } }, [
+      applyJsonPatch({ score: 1, plays: [{ id: 1 }], stale: true, review: { pending: false }, current: { rbi: 2 } }, [
         { op: "replace", path: "/score", value: 2 },
         { op: "add", path: "/plays/-", value: { id: 2 } },
         { op: "copy", from: "/review/pending", path: "/review/confirmed" },
         { op: "remove", path: "/stale" },
+        { op: "move", from: "/current/rbi", path: "/plays/0/rbi" },
       ]),
     ).toEqual({
       score: 2,
-      plays: [{ id: 1 }, { id: 2 }],
+      plays: [{ id: 1, rbi: 2 }, { id: 2 }],
       review: { pending: false, confirmed: false },
+      current: {},
     });
+  });
+
+  it("moves array items the RFC 6902 way, removing before inserting", () => {
+    expect(
+      applyJsonPatch({ plays: [{ id: 1 }, { id: 2 }, { id: 3 }] }, [
+        { op: "move", from: "/plays/0", path: "/plays/2" },
+      ]),
+    ).toEqual({ plays: [{ id: 2 }, { id: 3 }, { id: 1 }] });
   });
 
   it("applies wrapped MLB diff envelopes instead of falling back to a full feed", async () => {
@@ -774,6 +784,12 @@ describe("MLB recording transport", () => {
                 from: "/liveData/plays/currentPlay/about/isComplete",
                 path: "/liveData/plays/currentPlay/about/hasReview",
               },
+              // MLB moves values from the current play into allPlays.
+              {
+                op: "move",
+                from: "/liveData/plays/currentPlay/about/hasReview",
+                path: "/liveData/plays/allPlays/0/about/hasReview",
+              },
             ],
           },
         ]),
@@ -788,6 +804,54 @@ describe("MLB recording transport", () => {
       { kind: "HOME_RUN", batterName: "Juan Soto", battingTeamId: 121 },
     ]);
     expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps a historical replay on its timecode when MLB answers a diff with the final feed", async () => {
+    const firstPlay = play({ atBatIndex: 1, halfInning: "bottom" });
+    const homeRun = play({ atBatIndex: 2, halfInning: "bottom", eventType: "home_run" });
+    const lastPlay = play({ atBatIndex: 30, halfInning: "bottom", inning: 9 });
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(response(feed("20260827_190000", [firstPlay])))
+      .mockResolvedValueOnce(response(feed("20260827_220000", [firstPlay, homeRun, lastPlay], "Final")))
+      .mockResolvedValueOnce(response(feed("20260827_190010", [firstPlay, homeRun])))
+      .mockResolvedValueOnce(response([]));
+    const client = new MlbRecordingClient(fetcher, () => new Date("2026-08-28T12:00:00Z"));
+    const game = { gamePk: 777001, gameNumber: 1 } as const;
+
+    await client.loadTimecode(game, "20260827_190000");
+    const step = await client.loadTimecode(game, "20260827_190010");
+
+    expect(step.payloadKind).toBe("FULL_FALLBACK");
+    expect(step.cursor).toBe("20260827_190010");
+    expect(step.capture?.gameSnapshot.phase).not.toBe("FINAL");
+    expect(new URL(String(fetcher.mock.calls[2]?.[0])).searchParams.get("timecode")).toBe("20260827_190010");
+    // Without the fallback the cursor would sit at the final and this step would regress.
+    await expect(client.loadTimecode(game, "20260827_190020")).resolves.toMatchObject({ payloadKind: "NO_CHANGE" });
+  });
+
+  it("polls the trimmed full feed instead of diffPatch when fields are set", async () => {
+    const firstPlay = play({ atBatIndex: 1, halfInning: "bottom" });
+    const homeRun = play({ atBatIndex: 2, halfInning: "bottom", eventType: "home_run" });
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(response(feed("20260827_190000", [firstPlay])))
+      .mockResolvedValueOnce(response(feed("20260827_190010", [firstPlay, homeRun])));
+    const client = new MlbRecordingClient(fetcher, () => new Date("2026-08-27T19:00:10Z"), undefined, undefined, {
+      fields: "gamePk,metaData",
+    });
+
+    await client.poll({ gamePk: 777001, gameNumber: 1 });
+    const update = await client.poll({ gamePk: 777001, gameNumber: 1 });
+
+    expect(update.payloadKind).toBe("FULL_FALLBACK");
+    expect(update.capture?.coreInput.plays).toMatchObject([{ kind: "HOME_RUN", battingTeamId: 121 }]);
+    const urls = fetcher.mock.calls.map(([url]) => new URL(String(url)));
+    expect(urls.map((url) => url.pathname)).toEqual([
+      "/api/v1.1/game/777001/feed/live",
+      "/api/v1.1/game/777001/feed/live",
+    ]);
+    expect(urls[1]?.searchParams.get("fields")).toBe("gamePk,metaData");
   });
 
   it("delivers a final transition even when MLB leaves the feed cursor unchanged", async () => {

@@ -57,7 +57,7 @@ It cannot discover or control a physical Apple.
 
 | Path | Owns |
 | --- | --- |
-| `firmware/src/apple_live.cpp` | Autonomous Nano game loop |
+| `firmware/src/apple_live/` | Autonomous Nano program, split by subsystem |
 | `firmware/lib/mlb_feed/` | Nano schedule and live-feed adapter |
 | `firmware/lib/game_state/` | Canonical game snapshot and status labels |
 | `firmware/lib/core/` | Celebration decisions, deduplication, and sequence safety |
