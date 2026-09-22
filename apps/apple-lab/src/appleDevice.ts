@@ -55,6 +55,8 @@ export interface AppleStatus {
   heapFree: number;
   heapLargest: number;
   psramFree: number;
+  /** The least stack each task has had free since boot, in bytes; null on firmware that does not report it. */
+  stackFree: { loop: number; audio: number } | null;
   game: AppleGame | null;
   snapshot: GameSnapshot | null;
   poll: { ok: number; failed: number; lastMs: number; lastBytes: number; nextInMs: number; lastError: string };
@@ -154,6 +156,7 @@ export function parseAppleStatus(value: unknown): AppleStatus {
   const last =
     root.lastCelebration === null || root.lastCelebration === undefined ? null : record(root.lastCelebration);
   const maintenance = record(root.maintenance);
+  const stack = root.stackFree === null || root.stackFree === undefined ? null : record(root.stackFree);
   const fixture = record(root.fixture);
   const screenBlock = root.screen === null || root.screen === undefined ? null : record(root.screen);
   const motionKnown =
@@ -219,6 +222,7 @@ export function parseAppleStatus(value: unknown): AppleStatus {
     heapFree: number(root.heapFree),
     heapLargest: number(root.heapLargest),
     psramFree: number(root.psramFree),
+    stackFree: stack === null ? null : { loop: number(stack.loop), audio: number(stack.audio) },
     game:
       game === null
         ? null

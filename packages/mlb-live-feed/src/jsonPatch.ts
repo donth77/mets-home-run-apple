@@ -112,6 +112,16 @@ export function applyJsonPatch(document: unknown, patch: unknown): unknown {
     else if (op === "copy") {
       if (typeof operation.from !== "string") throw new Error("Copy operation omitted its source pointer");
       result = replaceAtPointer(result, path, valueAtPointer(result, operation.from), true);
+    } else if (op === "move") {
+      // MLB moves values between plays, e.g. from currentPlay into allPlays.
+      const from = operation.from;
+      if (typeof from !== "string") throw new Error("Move operation omitted its source pointer");
+      if (path.startsWith(`${from}/`)) throw new Error("Cannot move a value into itself");
+      if (path !== from) {
+        const value = valueAtPointer(result, from);
+        result = removeAtPointer(result, from);
+        result = replaceAtPointer(result, path, value, true);
+      }
     } else throw new Error(`Unsupported JSON patch operation: ${op}`);
   }
   return result;

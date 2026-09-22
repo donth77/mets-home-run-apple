@@ -581,6 +581,55 @@ void test_rejects_malformed_feeds() {
   EXPECT_EQ(error, std::string_view("INVALID_CURSOR"));
 }
 
+const char *phase_label(Phase phase) {
+  switch (phase) {
+  case Phase::Live:
+    return "LIVE";
+  case Phase::Review:
+    return "REVIEW";
+  case Phase::Delayed:
+    return "DELAYED";
+  case Phase::Final:
+    return "FINAL";
+  case Phase::Sleep:
+    return "SLEEP";
+  case Phase::Pregame:
+  default:
+    return "PREGAME";
+  }
+}
+
+// What the adapter made of a capture, as one JSON line. The contract check
+// holds it against MLB's own linescore and box score, because two captures
+// that parse identically can still both miss every home run.
+void print_summary(const CanonicalFrame &frame) {
+  JsonDocument summary;
+  summary["gamePk"] = frame.game_pk;
+  summary["phase"] = phase_label(frame.phase);
+  const auto team = [&frame](JsonObject node, const apple::game_state::TeamScore &score) {
+    node["id"] = score.id;
+    node["abbreviation"] = score.abbreviation;
+    node["runs"] = score.runs;
+    int home_runs = 0;
+    int grand_slams = 0;
+    for (const auto &play : frame.changed_plays) {
+      if (play.batting_team_id != score.id)
+        continue;
+      if (play.kind == PlayKind::HomeRun)
+        ++home_runs;
+      if (play.kind == PlayKind::GrandSlam)
+        ++grand_slams;
+    }
+    node["homeRuns"] = home_runs;
+    node["grandSlams"] = grand_slams;
+  };
+  team(summary["away"].to<JsonObject>(), frame.away);
+  team(summary["home"].to<JsonObject>(), frame.home);
+  std::string line;
+  serializeJson(summary, line);
+  std::cout << "SUMMARY " << line << '\n';
+}
+
 int compare_captures(const char *full_path, const char *fields_path) {
   std::ifstream full_file(full_path);
   std::ifstream fields_file(fields_path);
@@ -600,7 +649,60 @@ int compare_captures(const char *full_path, const char *fields_path) {
   std::cout << (same ? "MATCH" : "MISMATCH") << ": full capture " << full.size()
             << " bytes, fields capture " << fields.size() << " bytes, filtered document "
             << measureJson(from_fields) << " bytes, plays " << full_frame.play_count << '\n';
+  print_summary(fields_frame.frame);
   return same ? 0 : 1;
+}
+
+// Parses a schedule response the way the Nano's fetch does, with the same
+// filter and nesting limit, then prints every game it read and the game it
+// would follow at now_epoch, for the contract check to compare with the raw
+// response.
+int check_schedule_capture(const char *path, std::int64_t now_epoch) {
+  std::ifstream file(path);
+  std::stringstream text;
+  text << file.rdbuf();
+  const std::string body = text.str();
+  JsonDocument filter;
+  EXPECT_TRUE(deserializeJson(filter, apple::mlb_feed::schedule_filter_json()) ==
+              ArduinoJson::DeserializationError::Ok);
+  JsonDocument doc;
+  const ArduinoJson::DeserializationError error = deserializeJson(
+      doc, body, ArduinoJson::DeserializationOption::Filter(filter),
+      ArduinoJson::DeserializationOption::NestingLimit(apple::mlb_feed::kLiveFeedNestingLimit));
+  if (error != ArduinoJson::DeserializationError::Ok) {
+    std::cerr << "schedule parse failed: " << error.c_str() << '\n';
+    return 1;
+  }
+  if (doc.overflowed()) {
+    std::cerr << "schedule document overflowed\n";
+    return 1;
+  }
+  const auto games = apple::mlb_feed::parse_schedule(doc.as<JsonVariantConst>());
+  JsonDocument listed;
+  JsonArray list = listed.to<JsonArray>();
+  for (const auto &game : games) {
+    JsonObject node = list.add<JsonObject>();
+    node["gamePk"] = game.game_pk;
+    node["gameNumber"] = game.game_number;
+    node["officialDate"] = game.official_date;
+    node["gameDate"] = game.game_date;
+    node["abstractGameState"] = game.abstract_state;
+    node["detailedState"] = game.detailed_state;
+    node["followable"] = game.followable();
+    const auto team = [](JsonObject side, const apple::mlb_feed::ScheduleTeam &value) {
+      side["id"] = value.id;
+      side["abbreviation"] = value.abbreviation;
+    };
+    team(node["away"].to<JsonObject>(), game.away);
+    team(node["home"].to<JsonObject>(), game.home);
+  }
+  std::string line;
+  serializeJson(listed, line);
+  std::cout << "SCHEDULE " << line << '\n';
+  const auto chosen = apple::mlb_feed::choose_game(games, now_epoch);
+  std::cout << "CHOSEN " << (chosen ? std::to_string(chosen->game_pk) : std::string("none"))
+            << '\n';
+  return 0;
 }
 
 } // namespace
@@ -639,6 +741,10 @@ void test_real_rain_delay_captures() {
 }
 
 int main(int argc, char **argv) {
+  // The live contract check (tools/mlb_contract_check.py) runs these two modes
+  // over fresh MLB responses; with no arguments the recorded fixtures run.
+  if (argc == 4 && std::string(argv[1]) == "--schedule")
+    return check_schedule_capture(argv[2], std::atoll(argv[3]));
   if (argc == 3)
     return compare_captures(argv[1], argv[2]);
   test_iso8601();

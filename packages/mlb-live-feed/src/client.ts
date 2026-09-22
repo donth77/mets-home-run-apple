@@ -17,7 +17,10 @@ import { fetchJson } from "./transport";
 import type { FeedPayloadKind, MlbPollResult, NormalizedFeedCapture } from "./types";
 
 export interface MlbRecordingClientOptions {
-  /** MLB `fields=` list for full-feed requests; see LIVE_FEED_FIELDS. Unset fetches the whole feed. */
+  /**
+   * MLB `fields=` list for full-feed requests; see LIVE_FEED_FIELDS. Unset fetches the whole feed.
+   * When set, every poll fetches the trimmed full feed, because diffPatch cannot patch it.
+   */
   fields?: string;
 }
 
@@ -105,35 +108,41 @@ export class MlbRecordingClient {
 
   async #advance(
     game: Pick<MlbScheduleGame, "gamePk" | "gameNumber">,
-    diffUrl: string,
+    diffUrl: string | undefined,
     fallbackUrl: string,
     signal?: AbortSignal,
+    targetCursor?: string,
   ): Promise<MlbPollResult> {
-    const diff = await fetchJson(this.#fetcher, diffUrl, signal);
-    if (Array.isArray(diff) && diff.length === 0) return this.#noChange();
-
     let nextFeed: unknown;
-    let payloadKind: Exclude<FeedPayloadKind, "NO_CHANGE">;
-    if (isFullFeed(diff)) {
-      nextFeed = diff;
-      payloadKind = "FULL_DIFF_RESPONSE";
-    } else {
-      const operations = patchOperationsFromPayload(diff);
-      if (operations) {
-        try {
-          nextFeed = applyJsonPatch(this.#baseline, operations);
-          payloadKind = "DIFF_PATCH";
-        } catch {
-          nextFeed = undefined;
-          payloadKind = "FULL_FALLBACK";
-        }
-      } else if (Array.isArray(diff) && isFullFeed(diff.at(-1))) {
-        nextFeed = diff.at(-1);
+    let payloadKind: Exclude<FeedPayloadKind, "NO_CHANGE"> = "FULL_FALLBACK";
+    if (diffUrl) {
+      const diff = await fetchJson(this.#fetcher, diffUrl, signal);
+      if (Array.isArray(diff) && diff.length === 0) return this.#noChange();
+
+      if (isFullFeed(diff)) {
+        nextFeed = diff;
         payloadKind = "FULL_DIFF_RESPONSE";
       } else {
-        nextFeed = undefined;
-        payloadKind = "FULL_FALLBACK";
+        const operations = patchOperationsFromPayload(diff);
+        if (operations) {
+          try {
+            nextFeed = applyJsonPatch(this.#baseline, operations);
+            payloadKind = "DIFF_PATCH";
+          } catch {
+            nextFeed = undefined;
+          }
+        } else if (Array.isArray(diff) && isFullFeed(diff.at(-1))) {
+          nextFeed = diff.at(-1);
+          payloadKind = "FULL_DIFF_RESPONSE";
+        }
       }
+    }
+
+    // A historical diff can answer with the game's final feed instead of the
+    // requested moment, so replay loads the feed at its own timecode instead.
+    if (nextFeed && targetCursor && feedCursor(nextFeed) > targetCursor) {
+      nextFeed = undefined;
+      payloadKind = "FULL_FALLBACK";
     }
 
     if (!nextFeed) nextFeed = await fetchJson(this.#fetcher, fallbackUrl, signal);
@@ -192,6 +201,9 @@ export class MlbRecordingClient {
     if (!this.#baseline) {
       return this.#bootstrap(game, this.#fullFeedUrl(game.gamePk), signal);
     }
+    // diffPatch ignores `fields=` and patches the untrimmed feed, so a trimmed
+    // baseline cannot take its patches: poll the trimmed full feed instead.
+    if (this.#fields) return this.#advance(game, undefined, this.#fullFeedUrl(game.gamePk), signal);
 
     const diffUrl = new URL(`/api/v1.1/game/${game.gamePk}/feed/live/diffPatch`, MLB_STATS_API_ORIGIN);
     diffUrl.searchParams.set("startTimecode", this.#upstreamCursor);
@@ -213,10 +225,11 @@ export class MlbRecordingClient {
       throw new MlbFeedError("Historical replay must reset before moving backward.", "REPLAY_CURSOR_REGRESSION");
     }
     if (timecode === this.#upstreamCursor) return this.#noChange();
+    if (this.#fields) return this.#advance(game, undefined, fullUrl.toString(), signal);
 
     const diffUrl = new URL(`/api/v1.1/game/${game.gamePk}/feed/live/diffPatch`, MLB_STATS_API_ORIGIN);
     diffUrl.searchParams.set("startTimecode", this.#upstreamCursor);
     diffUrl.searchParams.set("endTimecode", timecode);
-    return this.#advance(game, diffUrl.toString(), fullUrl.toString(), signal);
+    return this.#advance(game, diffUrl.toString(), fullUrl.toString(), signal, timecode);
   }
 }

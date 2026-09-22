@@ -45,7 +45,13 @@ describe("parseAppleStatus", () => {
     expect(sparse.motionKnown).toBe(false);
     expect(sparse.fault).toBeNull();
     expect(sparse.positionMm).toBeNull();
+    expect(sparse.stackFree).toBeNull();
     expect(appleIsIdle(sparse)).toBe(false);
+  });
+
+  it("reads each task's free stack from firmware that reports it", () => {
+    const frame = parseAppleStatus({ ...statusFixture, stackFree: { loop: 3120, audio: 5400 } });
+    expect(frame.stackFree).toEqual({ loop: 3120, audio: 5400 });
   });
 
   it.each([undefined, null, "OFF", Number.NaN, -1])("never enables motion with invalid position %s", (positionMm) => {

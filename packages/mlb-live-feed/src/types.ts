@@ -27,6 +27,11 @@ export interface MlbCelebrationReplayCandidate {
   occurredAt: string;
 }
 
+/**
+ * How a poll got its feed. FULL_FALLBACK means a full feed was fetched in place
+ * of a usable diff: the patch failed, the diff answered past a replay target,
+ * or the client trims feeds with `fields=` and so skips diffPatch.
+ */
 export type FeedPayloadKind = "FULL_BOOTSTRAP" | "DIFF_PATCH" | "FULL_DIFF_RESPONSE" | "FULL_FALLBACK" | "NO_CHANGE";
 
 export interface NormalizedFeedCapture {

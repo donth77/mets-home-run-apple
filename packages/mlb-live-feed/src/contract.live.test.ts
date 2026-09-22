@@ -15,7 +15,11 @@ describe.skipIf(!live)("MLB API contract (live)", () => {
     const start = new Date(Date.parse(`${today}T12:00:00Z`) - 10 * 86_400_000).toISOString().slice(0, 10);
     const games = await fetchMetsScheduleRange(start, today);
     expect(games.length).toBeGreaterThan(0);
-    const finals = games.filter((game) => game.abstractState.toUpperCase() === "FINAL");
+    // Postponed and cancelled games are abstractly Final too, but have no plays.
+    const finals = games.filter(
+      (game) =>
+        game.abstractState.toUpperCase() === "FINAL" && !/postponed|cancell?ed|suspended/i.test(game.detailedState),
+    );
     expect(finals.length).toBeGreaterThan(0);
     const game = finals.reduce((latest, candidate) => (candidate.gameDate > latest.gameDate ? candidate : latest));
 

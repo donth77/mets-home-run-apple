@@ -1,7 +1,7 @@
 name: Firmware release
 
 # Tag a commit `firmware-vX.Y.Z` (matching kFirmwareVersion in
-# firmware/src/apple_live.cpp) to build, sign, and publish the Home Run Apple firmware
+# firmware/src/apple_live/version.hpp) to build, sign, and publish the Home Run Apple firmware
 # as a GitHub release. Owners install the .bin from the Manager's Update
 # section. A version with a suffix, such as `0.3.0-rc.1`, becomes a
 # pre-release: the Manager's Check for updates skips it, so only an Apple
@@ -34,7 +34,7 @@ jobs:
         id: version
         run: |
           tag="${GITHUB_REF_NAME#firmware-v}"
-          source=$(grep -o 'kFirmwareVersion\[\] = "[^"]*"' src/apple_live.cpp | sed 's/.*"\(.*\)"/\1/' | tail -1)
+          source=$(grep -o 'kFirmwareVersion\[\] = "[^"]*"' src/apple_live/version.hpp | sed 's/.*"\(.*\)"/\1/' | tail -1)
           echo "tag=$tag source=$source"
           if [ "$tag" != "$source" ]; then
             echo "Tag firmware-v$tag does not match kFirmwareVersion $source" >&2
