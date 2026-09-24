@@ -7,6 +7,9 @@ export interface AppleAssemblyProps {
   restingOffsetY?: number;
 }
 
+/** A window whose animation frames can draw the scene. */
+export type SceneAnimationWindow = Pick<Window, "cancelAnimationFrame" | "requestAnimationFrame">;
+
 export interface AppleStageProps extends Omit<AppleAssemblyProps, "restingOffsetY"> {
   mode: "lab" | "outfield";
   framing?: "default" | "mini";
@@ -14,6 +17,12 @@ export interface AppleStageProps extends Omit<AppleAssemblyProps, "restingOffset
   scoreboardData?: StadiumScoreboardData;
   className?: string;
   onReadyChange?: (ready: boolean) => void;
+  /**
+   * Draw on this window's animation frames instead of the page's. The Mini
+   * Apple passes its own window, which keeps painting while the page that owns
+   * the scene sits in a background tab.
+   */
+  animationWindow?: SceneAnimationWindow;
 }
 
 export interface StadiumScoreboardTeam {

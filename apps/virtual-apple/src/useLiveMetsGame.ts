@@ -13,6 +13,7 @@ import {
 import { MINI_APPLE_HEARTBEAT_EVENT } from "./miniAppleHeartbeat";
 import { mlbApiFetch } from "./mlbApiFetch";
 import { buildRecentCelebrationReplay, RECENT_CELEBRATION_REPLAY_WINDOW_MS } from "./recentCelebrationReplay";
+import { forgetExpiredCelebrations, readShownCelebrations, rememberShownCelebration } from "./shownCelebrations";
 
 export type { LiveCelebration } from "./liveGameCoreController";
 
@@ -124,10 +125,17 @@ export function useLiveMetsGame(enabled = true): LiveMetsGameState {
   const celebrationLatchRef = useRef(new LiveCelebrationLatch());
   const afterCorePresentationRef = useRef<((presentation: LiveCorePresentation) => void) | undefined>(undefined);
   const presentedEventKeysRef = useRef(new Set<string>());
+  const rememberedEventKeyRef = useRef<string | undefined>(undefined);
 
   const acceptCorePresentation = useCallback((presentation: LiveCorePresentation, fallbackSnapshot?: GameSnapshot) => {
     const latched = celebrationLatchRef.current.accept(presentation, fallbackSnapshot);
-    if (latched.celebration) presentedEventKeysRef.current.add(latched.celebration.eventKey);
+    const eventKey = latched.celebration?.eventKey;
+    if (eventKey) {
+      presentedEventKeysRef.current.add(eventKey);
+      // Kept past this page too, so a reload or another tab never replays it.
+      if (eventKey !== rememberedEventKeyRef.current) rememberShownCelebration(eventKey, Date.now());
+      rememberedEventKeyRef.current = eventKey;
+    }
     setCelebration(latched.celebration);
     setSequenceState(latched.decision?.sequenceState);
     setTargetPositionMm(latched.targetPositionMm);
@@ -142,6 +150,9 @@ export function useLiveMetsGame(enabled = true): LiveMetsGameState {
     },
     [acceptCorePresentation],
   );
+
+  // Every visit deletes the shown celebrations that have aged out, game or no game.
+  useEffect(() => forgetExpiredCelebrations(Date.now()), []);
 
   useEffect(() => {
     let disposed = false;
@@ -310,10 +321,11 @@ export function useLiveMetsGame(enabled = true): LiveMetsGameState {
                 result.waitMs,
                 result.capture.gameSnapshot.label,
               );
+              // Nothing replays that this page, an earlier load or another tab already showed.
               const replayPlan = buildRecentCelebrationReplay(
                 result.capture,
                 Date.now(),
-                presentedEventKeysRef.current,
+                new Set([...presentedEventKeysRef.current, ...readShownCelebrations(Date.now())]),
               );
               let bootstrapPresentation: LiveCorePresentation | undefined;
               let corePresentation: LiveCorePresentation;
@@ -411,7 +423,10 @@ export function useLiveMetsGame(enabled = true): LiveMetsGameState {
           nextFeedPollAt = 0;
           void poll();
         };
-        await poll();
+        // A page opened in the background waits until it is seen, so a recent
+        // home run replays on screen instead of being used up unseen.
+        if (document.visibilityState !== "visible") pauseTracking();
+        if (!pausedByHide) await poll();
       } catch (reason) {
         if (core) {
           if (coreRef.current === core) coreRef.current = undefined;

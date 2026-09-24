@@ -16,7 +16,7 @@ import {
   sceneStartupPageId,
   shouldBypassUnstableScene,
 } from "./sceneRendering";
-import type { AppleStageProps } from "./types";
+import type { AppleStageProps, SceneAnimationWindow } from "./types";
 
 const PAGE_SCENE_STARTUP_ID = sceneStartupPageId(
   typeof window === "undefined" ? undefined : (window as unknown as Record<string, unknown>),
@@ -27,6 +27,7 @@ export { AppleAssembly } from "./AppleAssembly";
 export type {
   AppleAssemblyProps,
   AppleStageProps,
+  SceneAnimationWindow,
   StadiumScoreboardData,
   StadiumScoreboardTeam,
 } from "./types";
@@ -81,6 +82,30 @@ function SceneReadySignal({ onReady }: { onReady: () => void }) {
   return null;
 }
 
+/**
+ * Draws the scene on another window's animation frames. react-three-fiber's
+ * own loop only ever uses the page's, and a page in a background tab gets
+ * none, so the Mini Apple window lends its frames to the scene it shows.
+ */
+function WindowFrameLoop({ animationWindow }: { animationWindow: SceneAnimationWindow }) {
+  const advance = useThree((state) => state.advance);
+  const clock = useThree((state) => state.clock);
+  useEffect(() => {
+    let frame = 0;
+    let previousTime: number | undefined;
+    const draw = (time: number) => {
+      frame = animationWindow.requestAnimationFrame(draw);
+      // The scene clock counts seconds, and only forward.
+      const elapsedSeconds = previousTime === undefined ? 0 : Math.max(0, time - previousTime) / 1000;
+      previousTime = time;
+      advance(clock.elapsedTime + elapsedSeconds);
+    };
+    frame = animationWindow.requestAnimationFrame(draw);
+    return () => animationWindow.cancelAnimationFrame(frame);
+  }, [advance, animationWindow, clock]);
+  return null;
+}
+
 function RendererLifecycle({ onFailure }: { onFailure: () => void }) {
   const { gl } = useThree();
   useEffect(() => {
@@ -123,6 +148,7 @@ export function AppleStage({
   scoreboardData,
   className = "",
   onReadyChange,
+  animationWindow,
 }: AppleStageProps) {
   const outfield = mode === "outfield";
   const [startupAttempt] = useState(() => (outfield ? beginSceneStartup(browserStorage(), PAGE_SCENE_STARTUP_ID) : 1));
@@ -206,6 +232,7 @@ export function AppleStage({
           <SceneCanvasErrorBoundary key={rendererAttempt} onFailure={handleRendererFailure}>
             <Canvas
               key={rendererAttempt}
+              frameloop={animationWindow ? "never" : "always"}
               shadows={renderSettings.shadows}
               dpr={renderSettings.dpr}
               resize={renderQuality === "conservative" ? { debounce: { resize: 120, scroll: 80 } } : undefined}
@@ -226,6 +253,7 @@ export function AppleStage({
                 stencil: false,
               }}
             >
+              {animationWindow && <WindowFrameLoop animationWindow={animationWindow} />}
               <RendererLifecycle onFailure={handleRendererFailure} />
               <CameraTarget framing={framing} mode={mode} />
               {outfield ? (

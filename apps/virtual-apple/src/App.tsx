@@ -478,6 +478,7 @@ export function App() {
       </main>
 
       <SharedAppleStage
+        animationWindow={miniAppleWindow.animationWindow ?? undefined}
         host={stageHost}
         mini={miniAppleWindow.isOpen}
         onReadyChange={setSceneReady}

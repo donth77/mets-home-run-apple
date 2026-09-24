@@ -31,7 +31,12 @@ self.addEventListener("notificationclick", (event) => {
   const target = requested.origin === self.location.origin ? requested.href : self.location.origin;
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(async (clients) => {
-      const existing = clients.find((client) => new URL(client.url).origin === self.location.origin);
+      const ours = clients.filter((client) => new URL(client.url).origin === self.location.origin);
+      // A tab already on the page is live, so bring it forward as it is:
+      // reloading it would cut off a celebration and close the Mini Apple.
+      const showing = ours.find((client) => new URL(client.url).pathname === new URL(target).pathname);
+      if (showing) return showing.focus();
+      const existing = ours[0];
       if (existing) {
         if ("navigate" in existing) await existing.navigate(target);
         return existing.focus();

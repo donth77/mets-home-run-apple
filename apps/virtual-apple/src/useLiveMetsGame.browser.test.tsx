@@ -118,8 +118,47 @@ async function flush() {
   });
 }
 
+function mockRecentHomeRun(eventKey: string) {
+  const recentInput = {
+    ...coreInput,
+    cursor: "20260828_230400",
+    homeRuns: 2,
+    plays: [
+      {
+        atBatIndex: 42,
+        batterName: "Juan Soto",
+        battingTeamId: 121,
+        complete: true,
+        eventKey,
+        kind: "HOME_RUN" as const,
+        review: "NONE" as const,
+      },
+    ],
+  };
+  const activePresentation = {
+    celebration: { eventKey, kind: "HOME_RUN" as const, subject: "Juan Soto" },
+    decision: { sequenceState: "LEAD_IN" as const },
+    targetPositionMm: 0,
+  };
+  testState.ingest.mockImplementation((input: NormalizedGameInput) =>
+    input.updateMode === "INCREMENTAL"
+      ? activePresentation
+      : { decision: { sequenceState: "IDLE" }, celebration: undefined, targetPositionMm: 0 },
+  );
+  testState.poll.mockResolvedValue({
+    capture: {
+      coreInput: recentInput,
+      gameSnapshot: { ...snapshot, home: { ...snapshot.home, runs: 2 } },
+      replayCandidates: [{ eventKey, kind: "HOME_RUN", occurredAt: "2026-08-28T23:04:00.000Z" }],
+    },
+    waitMs: 10_000,
+  });
+  return { activePresentation, recentInput };
+}
+
 beforeEach(() => {
   vi.useFakeTimers();
+  window.localStorage.clear();
   testState.clientArguments = [];
   testState.gameStateClassify.mockReset();
   testState.gameStateDispose.mockReset();
@@ -134,6 +173,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
+  Reflect.deleteProperty(document, "visibilityState");
 });
 
 describe("live mobile recovery", () => {
@@ -230,46 +270,64 @@ describe("live mobile recovery", () => {
 describe("fresh-entry celebration replay", () => {
   it("starts the full core sequence for a home run completed within the replay window", async () => {
     vi.setSystemTime(new Date("2026-08-28T23:05:00.000Z"));
-    const eventKey = "823583:recent-home-run";
-    const recentInput = {
-      ...coreInput,
-      cursor: "20260828_230400",
-      homeRuns: 2,
-      plays: [
-        {
-          atBatIndex: 42,
-          batterName: "Juan Soto",
-          battingTeamId: 121,
-          complete: true,
-          eventKey,
-          kind: "HOME_RUN" as const,
-          review: "NONE" as const,
-        },
-      ],
-    };
-    const activePresentation = {
-      celebration: { eventKey, kind: "HOME_RUN" as const, subject: "Juan Soto" },
-      decision: { sequenceState: "LEAD_IN" as const },
-      targetPositionMm: 0,
-    };
-    testState.ingest.mockImplementation((input: NormalizedGameInput) =>
-      input.updateMode === "INCREMENTAL"
-        ? activePresentation
-        : { decision: { sequenceState: "IDLE" }, celebration: undefined, targetPositionMm: 0 },
-    );
-    testState.poll.mockResolvedValue({
-      capture: {
-        coreInput: recentInput,
-        gameSnapshot: { ...snapshot, home: { ...snapshot.home, runs: 2 } },
-        replayCandidates: [{ eventKey, kind: "HOME_RUN", occurredAt: "2026-08-28T23:04:00.000Z" }],
-      },
-      waitMs: 10_000,
-    });
+    const { activePresentation } = mockRecentHomeRun("823583:recent-home-run");
 
     const { result } = renderHook(() => useLiveMetsGame());
     await flush();
 
     expect(testState.ingest.mock.calls.map(([input]) => input.updateMode)).toEqual(["BOOTSTRAP", "INCREMENTAL"]);
+    expect(result.current.celebration).toEqual(activePresentation.celebration);
+  });
+
+  it("does not replay a home run this browser already showed when the page is opened again", async () => {
+    vi.setSystemTime(new Date("2026-08-28T23:05:00.000Z"));
+    const { activePresentation, recentInput } = mockRecentHomeRun("823583:shown-home-run");
+    const firstVisit = renderHook(() => useLiveMetsGame());
+    await flush();
+    expect(firstVisit.result.current.celebration).toEqual(activePresentation.celebration);
+    firstVisit.unmount();
+
+    testState.ingest.mockClear();
+    vi.setSystemTime(new Date("2026-08-28T23:05:30.000Z"));
+    const reload = renderHook(() => useLiveMetsGame());
+    await flush();
+
+    expect(testState.ingest).toHaveBeenCalledOnce();
+    expect(testState.ingest.mock.calls[0]?.[0]).toBe(recentInput);
+    expect(reload.result.current.celebration).toBeUndefined();
+  });
+
+  it("deletes aged-out shown celebrations when the page opens, even between games", async () => {
+    vi.setSystemTime(new Date("2026-08-29T12:00:00.000Z"));
+    window.localStorage.setItem(
+      "virtual-apple:shown-celebrations",
+      JSON.stringify({ "823583:last-night-home-run": Date.parse("2026-08-28T23:05:00.000Z") }),
+    );
+    testState.schedule.mockResolvedValue([]);
+
+    const { result } = renderHook(() => useLiveMetsGame());
+    await flush();
+
+    expect(result.current.status).toBe("BETWEEN_GAMES");
+    expect(window.localStorage.getItem("virtual-apple:shown-celebrations")).toBeNull();
+  });
+
+  it("waits until a page opened in the background is seen before replaying", async () => {
+    vi.setSystemTime(new Date("2026-08-28T23:05:00.000Z"));
+    const { activePresentation } = mockRecentHomeRun("823583:background-home-run");
+    Object.defineProperty(document, "visibilityState", { configurable: true, value: "hidden" });
+
+    const { result } = renderHook(() => useLiveMetsGame());
+    await flush();
+    expect(testState.clientArguments).toHaveLength(4);
+    expect(testState.poll).not.toHaveBeenCalled();
+
+    vi.setSystemTime(new Date("2026-08-28T23:06:00.000Z"));
+    Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
+    act(() => document.dispatchEvent(new Event("visibilitychange")));
+    await flush();
+
+    expect(testState.poll).toHaveBeenCalledOnce();
     expect(result.current.celebration).toEqual(activePresentation.celebration);
   });
 

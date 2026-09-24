@@ -7,7 +7,9 @@ import { AppleStage } from "./AppleStage";
 import { SCENE_STARTUP_STORAGE_KEY, SCENE_STARTUP_TIMEOUT_MS } from "./sceneRendering";
 
 const rendererState = vi.hoisted(() => ({
+  advancedTo: [] as number[],
   canvas: undefined as HTMLCanvasElement | undefined,
+  clock: { elapsedTime: 0 },
   renderFrame: true,
 }));
 
@@ -15,17 +17,28 @@ vi.mock("@react-three/fiber", async () => {
   const React = await import("react");
   const { PerspectiveCamera } = await import("three");
   const camera = new PerspectiveCamera();
+  const advance = (timestamp: number) => {
+    rendererState.advancedTo.push(timestamp);
+    rendererState.clock.elapsedTime = timestamp;
+  };
   return {
     Canvas: ({
       children,
       dpr,
+      frameloop,
       shadows,
     }: {
       children: React.ReactNode;
       dpr: number | [number, number];
+      frameloop: string;
       shadows: boolean | string;
     }) => (
-      <div data-testid="renderer" data-dpr={JSON.stringify(dpr)} data-shadows={String(shadows)}>
+      <div
+        data-testid="renderer"
+        data-dpr={JSON.stringify(dpr)}
+        data-frameloop={frameloop}
+        data-shadows={String(shadows)}
+      >
         {children}
       </div>
     ),
@@ -34,11 +47,16 @@ vi.mock("@react-three/fiber", async () => {
         if (rendererState.renderFrame) callback();
       }, [callback]);
     },
-    useThree: () => ({
-      camera,
-      gl: { domElement: rendererState.canvas ?? document.createElement("canvas") },
-      size: { height: 915, width: 412 },
-    }),
+    useThree: (selector?: (state: Record<string, unknown>) => unknown) => {
+      const state = {
+        advance,
+        camera,
+        clock: rendererState.clock,
+        gl: { domElement: rendererState.canvas ?? document.createElement("canvas") },
+        size: { height: 915, width: 412 },
+      };
+      return selector ? selector(state) : state;
+    },
   };
 });
 
@@ -64,7 +82,9 @@ beforeEach(() => {
   originalInnerWidth = window.innerWidth;
   Object.defineProperty(window, "innerWidth", { configurable: true, value: 412 });
   window.sessionStorage.clear();
+  rendererState.advancedTo = [];
   rendererState.canvas = document.createElement("canvas");
+  rendererState.clock.elapsedTime = 0;
   rendererState.renderFrame = true;
   container = document.createElement("div");
   document.body.append(container);
@@ -94,6 +114,45 @@ describe("AppleStage assembly placement", () => {
       root.render(<AppleStage mode="lab" positionMm={0} />);
     });
     expect(container.querySelector('[data-testid="apple-assembly"]')?.getAttribute("data-resting-offset-y")).toBe("0");
+  });
+});
+
+describe("AppleStage frame source", () => {
+  it("draws on another window's animation frames while it is given one", async () => {
+    const frames = new Map<number, FrameRequestCallback>();
+    let nextFrame = 0;
+    const animationWindow = {
+      requestAnimationFrame: (callback: FrameRequestCallback) => {
+        nextFrame += 1;
+        frames.set(nextFrame, callback);
+        return nextFrame;
+      },
+      cancelAnimationFrame: (id: number) => {
+        frames.delete(id);
+      },
+    };
+    const runFrame = (time: number) => {
+      const [id, callback] = [...frames][0] ?? [];
+      if (id === undefined || !callback) throw new Error("No animation frame is pending.");
+      frames.delete(id);
+      callback(time);
+    };
+
+    await act(async () => {
+      root.render(<AppleStage mode="outfield" positionMm={0} animationWindow={animationWindow} />);
+    });
+    expect(container.querySelector('[data-testid="renderer"]')?.getAttribute("data-frameloop")).toBe("never");
+
+    runFrame(1_000);
+    runFrame(1_250);
+    runFrame(1_750);
+    expect(rendererState.advancedTo).toEqual([0, 0.25, 0.75]);
+
+    await act(async () => {
+      root.render(<AppleStage mode="outfield" positionMm={0} />);
+    });
+    expect(container.querySelector('[data-testid="renderer"]')?.getAttribute("data-frameloop")).toBe("always");
+    expect(frames.size).toBe(0);
   });
 });
 

@@ -1,8 +1,8 @@
-import { useThree } from "@react-three/fiber";
+import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
 import { CanvasTexture, SRGBColorSpace } from "three";
 import type { SceneRenderQuality } from "./sceneRendering";
-import { stadiumCelebrationKind } from "./stadiumCelebration";
+import { type StadiumCelebrationKind, stadiumCelebrationKind } from "./stadiumCelebration";
 import {
   drawCelebrationScoreboard,
   drawOffseasonScoreboard,
@@ -11,6 +11,13 @@ import {
 } from "./stadiumVideoBoardDrawing";
 import { stadiumVideoBoardTextureSettings } from "./stadiumVideoBoardTexture";
 import type { StadiumScoreboardData } from "./types";
+
+interface CelebrationPaint {
+  context: CanvasRenderingContext2D;
+  kind: StadiumCelebrationKind;
+  startedAt: number;
+  lastPaintedAt: number;
+}
 
 export function StadiumVideoBoard({
   data,
@@ -62,25 +69,32 @@ export function StadiumVideoBoard({
     texture.needsUpdate = true;
   }, [offseason, texture]);
 
+  // The celebration animates on the scene's own frames, so it keeps moving
+  // wherever the scene is drawn, the Mini Apple window included.
+  const celebrationPaint = useRef<CelebrationPaint | undefined>(undefined);
   useEffect(() => {
     if (!celebrationKind) return;
     const context = texture.image.getContext("2d") as CanvasRenderingContext2D | null;
     if (!context) return;
 
     const startedAt = performance.now();
-    let animationFrame = 0;
-    let lastPaintedAt = -Infinity;
-    const paint = (now: number) => {
-      if (now - lastPaintedAt >= 40 || reducedMotion) {
-        drawCelebrationScoreboard(context, latestData.current, now - startedAt, reducedMotion, celebrationKind);
-        texture.needsUpdate = true;
-        lastPaintedAt = now;
-      }
-      if (!reducedMotion) animationFrame = requestAnimationFrame(paint);
+    drawCelebrationScoreboard(context, latestData.current, 0, reducedMotion, celebrationKind);
+    texture.needsUpdate = true;
+    if (reducedMotion) return;
+    celebrationPaint.current = { context, kind: celebrationKind, startedAt, lastPaintedAt: startedAt };
+    return () => {
+      celebrationPaint.current = undefined;
     };
-    paint(startedAt);
-    return () => cancelAnimationFrame(animationFrame);
   }, [celebrationKind, reducedMotion, texture]);
+
+  useFrame(() => {
+    const paint = celebrationPaint.current;
+    const now = performance.now();
+    if (!paint || now - paint.lastPaintedAt < 40) return;
+    drawCelebrationScoreboard(paint.context, latestData.current, now - paint.startedAt, false, paint.kind);
+    texture.needsUpdate = true;
+    paint.lastPaintedAt = now;
+  });
 
   useEffect(() => () => texture.dispose(), [texture]);
 

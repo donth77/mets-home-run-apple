@@ -2,6 +2,7 @@ export { AppleAssembly, AppleStage } from "./AppleStage";
 export type {
   AppleAssemblyProps,
   AppleStageProps,
+  SceneAnimationWindow,
   StadiumScoreboardData,
   StadiumScoreboardTeam,
 } from "./AppleStage";
