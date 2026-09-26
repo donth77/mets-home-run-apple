@@ -27,8 +27,11 @@ export function moveSharedAppleStage(host: HTMLElement, target: HTMLElement | nu
 
 function settleSharedAppleStage(host: HTMLElement) {
   const view = host.ownerDocument.defaultView ?? window;
-  const canvas = host.querySelector("canvas");
-  if (!canvas) return; // still loading, or no renderer: nothing to hide
+  // Only a drawn scene can show stretched. The canvas is there from the first
+  // render, but until the scene is ready the loading overlay covers it and
+  // must stay in view, the page's first placement included.
+  const canvas = host.querySelector('.apple-stage[data-renderer-status="ready"] canvas');
+  if (!canvas) return;
   host.classList.add(SETTLING_CLASS);
   let settled = false;
   const observer = new MutationObserver(() => reveal());

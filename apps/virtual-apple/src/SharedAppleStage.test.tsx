@@ -5,13 +5,17 @@ import { createSharedAppleStageHost, moveSharedAppleStage, STAGE_SETTLE_TIMEOUT_
 
 const SETTLING = "shared-apple-stage-host--settling";
 
-function stageWithCanvas() {
+function stageWithCanvas(status: "loading" | "ready" = "ready") {
   const host = createSharedAppleStageHost(document);
   const stage = document.createElement("div");
   stage.className = "apple-stage";
+  stage.setAttribute("data-renderer-status", status);
+  // react-three-fiber renders the canvas at once, and the renderer sizes it later.
   const canvas = document.createElement("canvas");
-  canvas.width = 1280;
-  canvas.height = 900;
+  if (status === "ready") {
+    canvas.width = 1280;
+    canvas.height = 900;
+  }
   stage.append(canvas);
   host.append(stage);
   return { host, canvas };
@@ -86,7 +90,13 @@ describe("moving the shared stage between windows", () => {
     expect(host.classList.contains(SETTLING)).toBe(false);
   });
 
-  it("does not veil a stage that has no canvas yet", () => {
+  it("leaves a loading stage in view, so its loading overlay shows from the page's first frame", () => {
+    const { host } = stageWithCanvas("loading");
+    moveSharedAppleStage(host, slot());
+    expect(host.classList.contains(SETTLING)).toBe(false);
+  });
+
+  it("does not veil a stage that has no canvas", () => {
     const host = createSharedAppleStageHost(document);
     moveSharedAppleStage(host, slot());
     expect(host.classList.contains(SETTLING)).toBe(false);
