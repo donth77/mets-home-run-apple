@@ -57,4 +57,10 @@ IdleCard idle_card(int month, const std::optional<TeamStanding> &standing,
 /// the coming one in January and February.
 int next_season_year(int year, int month);
 
+/// How long to wait before reading the schedule again with nothing to
+/// follow. Through the offseason the only thing ahead is spring training
+/// coming within the week, so every six hours is plenty; an empty week in the
+/// season, or a postseason round MLB has not listed yet, is checked hourly.
+std::uint32_t idle_schedule_refresh_ms(IdleCard card);
+
 }  // namespace apple::mlb_feed

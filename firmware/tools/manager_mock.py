@@ -101,7 +101,8 @@ def make_handler(state):
         if state["polls"] <= 0:
             raise ConnectionError("restarting")
         settings = state["settings"]
-        return {
+        offseason = connected and state["offseason"]
+        payload = {
             "type": "status",
             "mode": "LIVE" if connected else "SETUP",
             "firmwareVersion": state["version"],
@@ -135,6 +136,13 @@ def make_handler(state):
             "screen": {"state": "GAME" if connected else "SETUP", "title": "", "status": "", "note": ""},
             "sequence": "IDLE", "fault": False, "positionMm": 0,
         }
+        if offseason:
+            # The Apple resting between seasons: no game, the schedule read every six hours.
+            payload.update({"mode": "BETWEEN_GAMES", "game": None, "snapshot": None,
+                            "screen": {"state": "OFFSEASON", "title": "", "status": "", "note": ""}})
+            payload["schedule"].update({"checkedAgoMs": 9_000_000, "nextInMs": 12_600_000,
+                                        "refreshMs": 21_600_000, "games": 0, "failed": 0})
+        return payload
 
     class Handler(http.server.SimpleHTTPRequestHandler):
         def __init__(self, *a, **kw):
@@ -372,9 +380,11 @@ def main():
     ap.add_argument("--tracks", type=int, default=0, help="pad the library to this many tracks, to try a big list")
     ap.add_argument("--game-type", default="R", choices=sorted(GAME_LABELS) + ["R"],
                     help="MLB gameType of the followed game, to see its round on the game tile")
+    ap.add_argument("--offseason", action="store_true", help="the Apple resting between seasons")
     args = ap.parse_args()
     state = {
         "game_type": args.game_type,
+        "offseason": args.offseason,
         "joined": not args.setup,
         "polls": 10,
         "version": "0.2.0",

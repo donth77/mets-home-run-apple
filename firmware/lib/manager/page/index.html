@@ -420,7 +420,7 @@ function showZoneList(){var box=$("tz-list"),q=$("tz").value;if(tzSelected&&zone
 function zoneHint(typing){var mine=zoneFor(browserZone),el=$("tz-hint");el.className="";el.innerHTML="";if(!zones.length)return;if(!tzSelected){if($("tz").value.trim()&&!typing){el.className="bad";el.textContent="Not a time zone we know. Pick one from the list."}return}if(!mine||mine.id===tzSelected)return;el.appendChild(document.createTextNode("This device is on "+mine.label+". "));var a=document.createElement("a");a.href="#";a.textContent="Use it";a.addEventListener("click",function(ev){ev.preventDefault();pickZone(mine)});el.appendChild(a)}
 function loadZones(){fetch("/api/timezones").then(function(r){return r.json()}).then(function(list){zones=list;if(lastSettings)fillSettings(lastSettings)}).catch(function(){})}
 function render(s){
-  var w=s.wifi||{},b,host,sc=s.schedule,everyMin=sc&&sc.refreshMs?Math.round(sc.refreshMs/60000):10,everyText=everyMin>=60?"every hour":"every "+everyMin+" minutes";
+  var w=s.wifi||{},b,host,sc=s.schedule,everyMin=sc&&sc.refreshMs?Math.round(sc.refreshMs/60000):10,everyText=everyMin>=120?"every "+Math.round(everyMin/60)+" hours":everyMin>=60?"every hour":"every "+everyMin+" minutes";
   var screen=(s.screen&&s.screen.state)||"",offseason=screen==="OFFSEASON"||s.mode==="OFFSEASON";
   // Firmware before 0.4.6 reported the last final as its mode until the next
   // game's first update; the screen state says what the Apple is really showing.
@@ -469,7 +469,7 @@ function render(s){
     text("feed-label","Schedule");
     var ago=sc.checkedAgoMs>=0?Math.round(sc.checkedAgoMs/60000):-1;
     if(sc.lastError){text("feed","Problem","bad");text("feed-2",sc.lastError+weak+" · retrying")}
-    else if(sc.ok){text("feed",g?"Up to date":offseason?"Nothing scheduled":tbd?"Next game not listed yet":"No Mets game this week","ok");text("feed-2","Checked "+(ago<1?"just now":ago+" min ago")+" · "+everyText+(sc.failed?" · "+sc.failed+(sc.failed===1?" retry":" retries")+" since power-on":""))}
+    else if(sc.ok){text("feed",g?"Up to date":offseason?"Nothing scheduled":tbd?"Next game not listed yet":"No Mets game this week","ok");text("feed-2","Checked "+(ago<1?"just now":ago<60?ago+" min ago":ago<120?"an hour ago":Math.floor(ago/60)+" hours ago")+" · "+everyText+(sc.failed?" · "+sc.failed+(sc.failed===1?" retry":" retries")+" since power-on":""))}
     else{text("feed",w.state==="CONNECTED"?"Waiting for the schedule":"Needs Wi-Fi");text("feed-2","")}
   }
   var seq=(s.sequence||"IDLE"),liftWord={IDLE:"Home",LEAD_IN:"Getting ready",REVIEW_HOLD:"Waiting on a review",EXTENDING:"Rising",RAISED:"Raised",RETRACTING:"Lowering",FAULT:"Stopped"}[seq]||seq;

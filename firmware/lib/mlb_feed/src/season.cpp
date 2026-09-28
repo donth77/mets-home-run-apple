@@ -83,4 +83,9 @@ IdleCard idle_card(int month, const std::optional<TeamStanding> &standing,
 
 int next_season_year(int year, int month) { return month >= 3 ? year + 1 : year; }
 
+std::uint32_t idle_schedule_refresh_ms(IdleCard card) {
+  constexpr std::uint32_t kHourMs = 60UL * 60 * 1000;
+  return card == IdleCard::Offseason ? 6 * kHourMs : kHourMs;
+}
+
 }  // namespace apple::mlb_feed

@@ -244,9 +244,10 @@ std::uint64_t schedule_digest(const std::vector<ScheduleGame>& games) {
   return hash;
 }
 
-// Often around a game, hourly otherwise. Also hourly with nothing to follow.
+// Often around a game, hourly otherwise. With nothing to follow, hourly for
+// an empty week and every six hours through the offseason.
 std::uint32_t schedule_refresh_interval_ms() {
-  if (!game) return kScheduleRefreshIdleMs;
+  if (!game) return idle_card ? apple::mlb_feed::idle_schedule_refresh_ms(*idle_card) : kScheduleRefreshIdleMs;
   if (game->live() || final_seen) return kScheduleRefreshMs;
   const std::optional<std::int64_t> start = apple::mlb_feed::parse_iso8601_utc(game->game_date);
   if (!start) return kScheduleRefreshMs;

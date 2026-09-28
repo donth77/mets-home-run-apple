@@ -361,6 +361,12 @@ void test_season_over() {
   EXPECT_TRUE(apple::mlb_feed::season_facts_needed(9) && apple::mlb_feed::season_facts_needed(10));
   EXPECT_TRUE(!apple::mlb_feed::season_facts_needed(11) && !apple::mlb_feed::season_facts_needed(8));
 
+  // Through the offseason the schedule is read every six hours; an empty
+  // week in the season, or a round not yet listed, hourly.
+  EXPECT_EQ(apple::mlb_feed::idle_schedule_refresh_ms(IdleCard::Offseason), 6UL * 60 * 60 * 1000);
+  EXPECT_EQ(apple::mlb_feed::idle_schedule_refresh_ms(IdleCard::NoGameThisWeek), 60UL * 60 * 1000);
+  EXPECT_EQ(apple::mlb_feed::idle_schedule_refresh_ms(IdleCard::NextGameTbd), 60UL * 60 * 1000);
+
   EXPECT_EQ(next_season_year(2026, 9), 2027);
   EXPECT_EQ(next_season_year(2026, 12), 2027);
   EXPECT_EQ(next_season_year(2027, 1), 2027);
