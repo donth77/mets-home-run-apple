@@ -710,6 +710,25 @@ describe("Virtual Apple accessibility", () => {
     ).toBe("OFFSEASON");
   });
 
+  it("stays in the offseason while the live hook checks the schedule again", () => {
+    metsSeasonTestState.seasonOver = true;
+    // A tab coming back into view checks the schedule; the last final may be
+    // looked over quietly; a failed lookup is an error. None of them is a game.
+    for (const status of ["CHECKING", "CONNECTING", "ERROR", "BETWEEN_GAMES"]) {
+      liveTestState.status = status;
+      const { container, getByRole, unmount } = render(<App />);
+      expect(container.querySelector(".moment-card"), status).toBeNull();
+      expect(container.querySelector(".apple-scorebug"), status).toBeNull();
+      expect(
+        getByRole("img", { name: "Virtual Home Run Apple behind the center-field wall" }).getAttribute(
+          "data-scoreboard-label",
+        ),
+        status,
+      ).toBe("OFFSEASON");
+      unmount();
+    }
+  });
+
   it("keeps the season's last final on the board until the Apple moves on", () => {
     metsSeasonTestState.seasonOver = true;
     liveTestState.game = { venue: "Nationals Park" };
@@ -732,7 +751,9 @@ describe("Virtual Apple accessibility", () => {
     const stage = () => getByRole("img", { name: "Virtual Home Run Apple behind the center-field wall" });
     expect(stage().getAttribute("data-scoreboard-label")).toBe("METS WIN!");
 
+    // As the live hook does between games: no game, no scoreboard.
     liveTestState.celebration = undefined;
+    liveTestState.game = undefined;
     liveTestState.snapshot = undefined;
     liveTestState.status = "BETWEEN_GAMES";
     rerender(<App />);

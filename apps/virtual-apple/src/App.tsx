@@ -94,12 +94,14 @@ export function App() {
     [],
   );
   const [demoOverride, setDemoOverride] = useState(() => showDemoControls && playback.scenarioId !== "sleep");
-  // The Mets' season is over and nothing is being followed. A game still on
-  // the board or a celebration holds the offseason off, and so does a win's
-  // track (see `offseason` below).
+  // The Mets' season is over and no game is on show. A game still on the
+  // board or a celebration holds the offseason off, and so does a win's track
+  // (see `offseason` below). The live hook's own schedule checks, such as the
+  // one when the tab comes back into view, pass through other statuses with
+  // no game and must not blink the offseason away.
   const restingForSeason = demoOverride
     ? playback.scenarioId === "offseason"
-    : metsSeason.seasonOver && (!liveEnabled || live.status === "BETWEEN_GAMES") && !live.celebration;
+    : metsSeason.seasonOver && (!liveEnabled || live.game === undefined) && !live.celebration;
   const liveStandby = !demoOverride && !restingForSeason && live.status === "ERROR" && !live.celebration;
   const displayPhase = demoOverride
     ? playback.activeFrame.snapshot.phase
