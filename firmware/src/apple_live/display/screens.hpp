@@ -11,6 +11,10 @@
 
 namespace apple::live {
 
+// The waiting card's words for a week with nothing to follow.
+inline constexpr char kNoGameThisWeek[] = "NO GAME THIS WEEK";
+inline constexpr char kNextGameTbd[] = "NEXT GAME TBD";
+
 void show_waiting(const char* status, std::uint16_t accent = apple::firmware::kMetsOrange,
                   apple::firmware::WaitingIcon icon = apple::firmware::WaitingIcon::None);
 void show_upcoming(const apple::mlb_feed::ScheduleGame& next);

@@ -132,6 +132,7 @@ void fill_status(JsonDocument& doc) {
   owner["brightness"] = settings.brightness;
   owner["volume"] = settings.volume;
   owner["winFullTrack"] = settings.win_full_track;
+  owner["springCelebrations"] = settings.spring_celebrations;
   owner["autoUpdate"] = settings.auto_update;
   owner["beta"] = settings.beta;
   owner["tokenSet"] = settings.github_token[0] != '\0';
@@ -216,7 +217,11 @@ void fill_status(JsonDocument& doc) {
     node["away"] = game->away.abbreviation;
     node["home"] = game->home.abbreviation;
     node["scheduled"] = game->game_date;
+    node["officialDate"] = game->official_date;
+    node["startTimeTbd"] = game->start_time_tbd;
     node["state"] = game->detailed_state;
+    node["gameType"] = game->game_type;
+    node["label"] = apple::mlb_feed::game_label(*game);
   } else {
     doc["game"] = nullptr;
   }

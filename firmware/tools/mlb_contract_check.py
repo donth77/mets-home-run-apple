@@ -73,6 +73,7 @@ def firmware_string(relative: str, pattern: str) -> str:
 
 LIVE_FEED_FIELDS = firmware_string("lib/mlb_feed/src/feed.cpp", r'kLiveFeedFields\[\] =((?:\s*"[^"]*")+);')
 SCHEDULE_FIELDS = firmware_string("lib/mlb_feed/src/schedule.cpp", r'kScheduleFields\[\] =((?:\s*"[^"]*")+);')
+STANDING_FIELDS = firmware_string("lib/mlb_feed/src/season.cpp", r'kTeamStandingFields\[\] =((?:\s*"[^"]*")+);')
 DEVICE_USER_AGENT = firmware_string("src/apple_live/net/https.cpp", r'setUserAgent\(("[^"]*")\)')
 
 
@@ -187,6 +188,98 @@ def parse_utc(value: str) -> int | None:
         return None
 
 
+def game_as_sent(date: dict, game: dict) -> dict:
+    """One schedule game as MLB sent it, in the fields the Nano's parser reads."""
+    status = game.get("status", {})
+    teams = game["teams"]
+    sent = {
+        "gamePk": game["gamePk"],
+        "gameNumber": game.get("gameNumber"),
+        "officialDate": date.get("date"),
+        "gameDate": game.get("gameDate"),
+        "abstractGameState": status.get("abstractGameState"),
+        "detailedState": status.get("detailedState"),
+        # What names the round (Spring Training, NLDS Game 3) and keeps an
+        # unset start time from reading as 3:33 AM.
+        "gameType": game.get("gameType", "R"),
+        "seriesGameNumber": game.get("seriesGameNumber", 0),
+        "startTimeTbd": bool(status.get("startTimeTBD", False)),
+        "away": {key: teams.get("away", {}).get("team", {}).get(key) for key in ("id", "abbreviation")},
+        "home": {key: teams.get("home", {}).get("team", {}).get(key) for key in ("id", "abbreviation")},
+    }
+    series = game.get("seriesStatus")
+    if isinstance(series, dict):
+        sent["seriesStatus"] = {
+            "isOver": bool(series.get("isOver", False)),
+            "winningTeamId": (series.get("winningTeam") or {}).get("id", 0),
+            "losingTeamId": (series.get("losingTeam") or {}).get("id", 0),
+        }
+    return sent
+
+
+def compare_games(sent: list[dict], parsed: list[dict], window: str) -> None:
+    if len(parsed) != len(sent):
+        raise ContractFailure(f"MLB sent {len(sent)} games for {window}; the Nano's parser read {len(parsed)}")
+    for expected, read in zip(sent, parsed):
+        for key, value in expected.items():
+            if read.get(key) != value:
+                raise ContractFailure(
+                    f"game {expected['gamePk']}: MLB sent {key}={value!r}, the Nano's parser read {read.get(key)!r}")
+
+
+def parse_through_device(native: pathlib.Path, workdir: pathlib.Path, body: bytes, now: int) -> tuple[list, str]:
+    path = workdir / "schedule.json"
+    path.write_bytes(body)
+    result = subprocess.run([str(native), "--schedule", str(path), str(now)], capture_output=True, text=True, timeout=120)
+    sys.stderr.write(result.stderr)
+    if result.returncode != 0:
+        raise ContractFailure("the Nano's schedule parser rejected the schedule")
+    printed = dict(line.split(" ", 1) for line in result.stdout.splitlines() if " " in line)
+    if "SCHEDULE" not in printed or "CHOSEN" not in printed:
+        raise ContractFailure(f"the native schedule check printed nothing usable: {result.stdout[:200]!r}")
+    return json.loads(printed["SCHEDULE"]), printed["CHOSEN"].strip()
+
+
+def check_season_facts_through_device(native: pathlib.Path, workdir: pathlib.Path) -> None:
+    """With nothing scheduled in September or October the Nano asks whether the
+    Mets' season is over: their standing, and once they have clinched, how their
+    postseason ended. Both must read the way MLB sends them. The 2024 postseason
+    (a Wild Card and an NLDS won, the NLCS lost) is fixed history."""
+    year = dt.datetime.now(DEVICE_ZONE).year
+    body = fetch_like_device(f"/api/v1/teams/{METS}?season={year}&hydrate=standings&fields={STANDING_FIELDS}")
+    record = next((team.get("record", {}) for team in json.loads(body).get("teams", []) if team.get("id") == METS), {})
+    path = workdir / "standing.json"
+    path.write_bytes(body)
+    result = subprocess.run([str(native), "--standing", str(path)], capture_output=True, text=True, timeout=60)
+    sys.stderr.write(result.stderr)
+    line = next((line for line in result.stdout.splitlines() if line.startswith("STANDING ")), "")
+    if result.returncode != 0 or not line:
+        raise ContractFailure("the Nano's standing parser rejected the Mets' standing")
+    read = line.split(" ", 1)[1]
+    if not isinstance(record.get("clinched"), bool):
+        if read != "none":
+            raise ContractFailure(f"MLB sent no clinch flag, yet the Nano read a standing: {read}")
+    else:
+        clinched = record["clinched"]
+        expected = {"clinched": clinched, "eliminated": not clinched and record.get("eliminationNumber") == "E"
+                    and record.get("wildCardEliminationNumber") == "E"}
+        if read == "none" or json.loads(read) != expected:
+            raise ContractFailure(f"MLB sent {record}; the Nano read the standing as {read}")
+    print(f"device standing {year}: {read}")
+
+    body = fetch_like_device(
+        f"/api/v1/schedule?sportId=1&teamId={METS}&season=2024&gameType=F,D,L,W&hydrate=team,seriesStatus"
+        f"&fields={SCHEDULE_FIELDS}"
+    )
+    sent = [game_as_sent(date, game) for date in json.loads(body).get("dates", []) for game in date.get("games", [])]
+    parsed, _ = parse_through_device(native, workdir, body, int(time.time()))
+    compare_games(sent, parsed, "the 2024 postseason")
+    last = parsed[-1] if parsed else {}
+    if last.get("label") != "NLCS GAME 6" or last.get("seriesStatus", {}).get("losingTeamId") != METS:
+        raise ContractFailure(f"the 2024 postseason no longer reads as lost in NLCS Game 6: {last}")
+    print(f"device postseason 2024: {len(parsed)} games read as sent, ending with {last['label']}")
+
+
 def check_schedule_through_device(native: pathlib.Path, workdir: pathlib.Path) -> None:
     """The Nano's first request after joining Wi-Fi, and every hour after: this
     week's schedule, parsed by its C++ with its filter. Every game must read the
@@ -199,18 +292,8 @@ def check_schedule_through_device(native: pathlib.Path, workdir: pathlib.Path) -
         f"&hydrate=team&fields={SCHEDULE_FIELDS}"
     )
     payload = json.loads(body)
-    path = workdir / "schedule.json"
-    path.write_bytes(body)
     now = int(time.time())
-    result = subprocess.run([str(native), "--schedule", str(path), str(now)], capture_output=True, text=True, timeout=120)
-    sys.stderr.write(result.stderr)
-    if result.returncode != 0:
-        raise ContractFailure("the Nano's schedule parser rejected this week's schedule")
-    printed = dict(line.split(" ", 1) for line in result.stdout.splitlines() if " " in line)
-    if "SCHEDULE" not in printed or "CHOSEN" not in printed:
-        raise ContractFailure(f"the native schedule check printed nothing usable: {result.stdout[:200]!r}")
-    parsed = json.loads(printed["SCHEDULE"])
-    chosen = printed["CHOSEN"].strip()
+    parsed, chosen = parse_through_device(native, workdir, body, now)
 
     # What MLB sent, read directly, under the parser's own rule for which
     # entries are games (a positive gamePk, game 1 or 2, and teams).
@@ -221,25 +304,8 @@ def check_schedule_through_device(native: pathlib.Path, workdir: pathlib.Path) -
                 continue
             if not isinstance(game.get("gamePk"), int) or game["gamePk"] <= 0 or game.get("gameNumber", 1) not in (1, 2):
                 continue
-            status = game.get("status", {})
-            teams = game["teams"]
-            sent.append({
-                "gamePk": game["gamePk"],
-                "gameNumber": game.get("gameNumber"),
-                "officialDate": date.get("date"),
-                "gameDate": game.get("gameDate"),
-                "abstractGameState": status.get("abstractGameState"),
-                "detailedState": status.get("detailedState"),
-                "away": {key: teams.get("away", {}).get("team", {}).get(key) for key in ("id", "abbreviation")},
-                "home": {key: teams.get("home", {}).get("team", {}).get(key) for key in ("id", "abbreviation")},
-            })
-    if len(parsed) != len(sent):
-        raise ContractFailure(f"MLB sent {len(sent)} games for {start}..{end}; the Nano's parser read {len(parsed)}")
-    for expected, read in zip(sent, parsed):
-        for key, value in expected.items():
-            if read.get(key) != value:
-                raise ContractFailure(
-                    f"game {expected['gamePk']}: MLB sent {key}={value!r}, the Nano's parser read {read.get(key)!r}")
+            sent.append(game_as_sent(date, game))
+    compare_games(sent, parsed, f"{start}..{end}")
 
     # The choice rules are unit-tested; this only requires that a followable
     # game still to come is not lost, and that the choice is a real game.
@@ -452,6 +518,7 @@ def main() -> int:
         with tempfile.TemporaryDirectory() as tmp:
             if args.native is not None:
                 check_schedule_through_device(args.native, pathlib.Path(tmp))
+                check_season_facts_through_device(args.native, pathlib.Path(tmp))
             check_live_feed(game, args.native, pathlib.Path(tmp))
         check_delay_advisory()
         if args.browser:

@@ -1,5 +1,5 @@
 import { type StadiumScoreboardData, useActuatorSimulation } from "@apple/apple-3d";
-import { METS_TEAM_ID } from "@apple/mlb-live-feed";
+import { METS_TEAM_ID, mlbGameLabel } from "@apple/mlb-live-feed";
 import { MAX_STROKE_MM, type PresentationSnapshot } from "@apple/protocol";
 import { Scoreboard } from "@apple/scoreboard-ui";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -29,6 +29,7 @@ import { useFixturePlayback } from "./useFixturePlayback";
 import { useLiveMetsGame } from "./useLiveMetsGame";
 import { useNotificationSubscription } from "./useNotificationSubscription";
 import { useMetsSchedule } from "./useMetsSchedule";
+import { useMetsSeason } from "./useMetsSeason";
 import { useMiniAppleWindow } from "./useMiniAppleWindow";
 import { useMlbSeasonPhase } from "./useMlbSeasonPhase";
 import { useReducedMotion } from "./useReducedMotion";
@@ -49,7 +50,22 @@ const modes = [
 export function App() {
   const playback = useFixturePlayback("sleep");
   const seasonPhase = useMlbSeasonPhase();
-  const live = useLiveMetsGame(seasonPhase.status !== "CHECKING" && !seasonPhase.isOffseason);
+  const seasonChecked = seasonPhase.status !== "CHECKING";
+  const metsSeason = useMetsSeason(seasonPhase.isOffseason, seasonChecked);
+  // Between seasons nothing is followed until a game, spring training
+  // included, comes within the week.
+  const liveEnabled = seasonChecked && (!seasonPhase.isOffseason || metsSeason.gameThisWeek);
+  const live = useLiveMetsGame(liveEnabled);
+  // A game just ended may have been the Mets' last: decide the season again.
+  const followedGameRef = useRef(false);
+  useEffect(() => {
+    if (live.status === "CONNECTING" || live.status === "POLLING" || live.status === "FINAL") {
+      followedGameRef.current = true;
+    } else if (live.status === "BETWEEN_GAMES" && followedGameRef.current) {
+      followedGameRef.current = false;
+      metsSeason.recheck();
+    }
+  }, [live.status, metsSeason.recheck]);
   // ?diag shows what the core and the actuator are doing, for a phone that
   // misbehaves where no devtools can reach.
   const diagnostics = useMemo(() => new URLSearchParams(window.location.search).has("diag"), []);
@@ -78,11 +94,16 @@ export function App() {
     [],
   );
   const [demoOverride, setDemoOverride] = useState(() => showDemoControls && playback.scenarioId !== "sleep");
-  const offseason = demoOverride ? playback.scenarioId === "offseason" : seasonPhase.isOffseason;
-  const liveStandby = !demoOverride && !offseason && live.status === "ERROR" && !live.celebration;
+  // The Mets' season is over and nothing is being followed. A game still on
+  // the board or a celebration holds the offseason off, and so does a win's
+  // track (see `offseason` below).
+  const restingForSeason = demoOverride
+    ? playback.scenarioId === "offseason"
+    : metsSeason.seasonOver && (!liveEnabled || live.status === "BETWEEN_GAMES") && !live.celebration;
+  const liveStandby = !demoOverride && !restingForSeason && live.status === "ERROR" && !live.celebration;
   const displayPhase = demoOverride
     ? playback.activeFrame.snapshot.phase
-    : offseason
+    : restingForSeason
       ? "SLEEP"
       : liveStandby
         ? "LIVE"
@@ -90,11 +111,11 @@ export function App() {
           ? "CELEBRATION"
           : (live.snapshot?.phase ?? "SLEEP");
   const gameIsActive = liveStandby || ["LIVE", "REVIEW", "DELAYED", "CELEBRATION"].includes(displayPhase);
-  const upcomingGames = useMetsSchedule(seasonPhase.status !== "CHECKING" && !gameIsActive && !offseason);
+  const upcomingGames = useMetsSchedule(seasonChecked && !gameIsActive && !restingForSeason);
   const liveRestingSnapshot = useMemo(() => liveBetweenGamesSnapshot(upcomingGames[0]), [upcomingGames]);
   const sourceSnapshot = demoOverride
     ? playback.activeFrame.snapshot
-    : offseason
+    : restingForSeason
       ? liveOffseasonSnapshot
       : (live.snapshot ?? liveRestingSnapshot);
   const [homeRunRoll, setHomeRunRoll] = useState(() => Math.random());
@@ -109,10 +130,10 @@ export function App() {
     () =>
       demoOverride
         ? fanFacingMoment(playback.scenarioId, sourceSnapshot, homeRunPhrase)
-        : offseason
+        : restingForSeason
           ? fanFacingMoment("offseason", sourceSnapshot, homeRunPhrase)
           : liveMoment(live.status, sourceSnapshot, live.celebration, homeRunPhrase),
-    [demoOverride, homeRunPhrase, live.celebration, live.status, offseason, playback.scenarioId, sourceSnapshot],
+    [demoOverride, homeRunPhrase, live.celebration, live.status, playback.scenarioId, restingForSeason, sourceSnapshot],
   );
   const rawPublicSnapshot = useMemo<PresentationSnapshot>(
     () => ({
@@ -161,6 +182,8 @@ export function App() {
     ],
   );
   const celebrationSound = useCelebrationSound(celebrationSoundCue, rainDelay);
+  // The last game's win plays its track out before the Apple rests for the season.
+  const offseason = restingForSeason && (demoOverride || !celebrationSound.winTrackPlaying);
   const heldWinSnapshotRef = useRef<PresentationSnapshot | undefined>(undefined);
   useEffect(() => {
     if (rawWinCelebration) heldWinSnapshotRef.current = rawPublicSnapshot;
@@ -197,9 +220,13 @@ export function App() {
         : isCitiFieldVenue(upcomingGames[0]?.venue);
   const rainAtCitiField = rainDelay && metsHomeGame && atCitiField;
   const progress = playback.durationMs === 0 ? 0 : Math.min(100, (playback.elapsedMs / playback.durationMs) * 100);
-  const nextGame = upcomingGames[0]
-    ? gameDateParts(upcomingGames[0].gameDate)
+  const nextGame: { day: string; time: string; timeSet?: boolean } = upcomingGames[0]
+    ? gameDateParts(upcomingGames[0].gameDate, undefined, undefined, upcomingGames[0])
     : nextGameLabelParts(publicSnapshot.label);
+  // Spring Training, NLDS Game 3 and the like, for the game on show.
+  const liveGameLabel = !demoOverride && live.game ? mlbGameLabel(live.game) : undefined;
+  const nextGameLabel = demoOverride ? undefined : upcomingGames[0]?.label;
+  const shownGameLabel = offseason ? undefined : betweenGames ? nextGameLabel : liveGameLabel;
   const nextGameDateTime = upcomingGames[0]?.gameDate;
   const browserTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
   const nextGameTimeZone = timeZoneAbbreviation(
@@ -216,8 +243,14 @@ export function App() {
       batterLine: publicSnapshot.atBat?.batterLine,
       pitcher: publicSnapshot.atBat?.pitcher,
       pitchCount: publicSnapshot.atBat?.pitchCount,
+      gameLabel: shownGameLabel,
       nextGame:
-        betweenGames && nextGame.time ? { day: nextGame.day, time: `${nextGame.time} ${nextGameTimeZone}` } : undefined,
+        betweenGames && nextGame.time
+          ? {
+              day: nextGame.day,
+              time: nextGame.timeSet === false ? "TIME TBD" : `${nextGame.time} ${nextGameTimeZone}`,
+            }
+          : undefined,
     }),
     [
       atCitiField,
@@ -226,12 +259,20 @@ export function App() {
       liveStandby,
       nextGame.day,
       nextGame.time,
+      nextGame.timeSet,
       nextGameTimeZone,
       publicSnapshot,
+      shownGameLabel,
     ],
   );
   const liveInningMoment = publicSnapshot.phase === "LIVE" && publicSnapshot.label.trim().toUpperCase() === "LIVE";
-  const momentEyebrow = offseason ? "SEE YOU NEXT SEASON" : liveStandby ? "LIVE UPDATES" : publicSnapshot.phase;
+  const momentEyebrow = offseason
+    ? "SEE YOU NEXT SEASON"
+    : liveStandby
+      ? "LIVE UPDATES"
+      : liveInningMoment && liveGameLabel
+        ? liveGameLabel.toUpperCase()
+        : publicSnapshot.phase;
   const momentHeadline = liveStandby ? "STANDBY" : delayWidgetLabel(publicSnapshot);
   const showMomentEyebrow =
     liveInningMoment ||
@@ -241,7 +282,8 @@ export function App() {
     offseason,
     standby: liveStandby,
     nextGameDay: nextGame.day,
-    nextGameTime: nextGame.time,
+    nextGameTime: nextGame.timeSet === false ? "a time to be announced" : nextGame.time,
+    gameLabel: shownGameLabel,
   });
   const showBroadcastScoreboard = !offseason && !betweenGames && (!liveStandby || publicSnapshot.gamePk > 0);
   const soundControls = {
@@ -361,7 +403,12 @@ export function App() {
         {!miniAppleWindow.isOpen && showBroadcastScoreboard && (
           <div className="virtual-hud">
             <div className="virtual-scoreboard">
-              <Scoreboard snapshot={publicSnapshot} announceUpdates={false} standby={liveStandby} />
+              <Scoreboard
+                snapshot={publicSnapshot}
+                announceUpdates={false}
+                standby={liveStandby}
+                gameLabel={liveGameLabel}
+              />
             </div>
           </div>
         )}
@@ -374,17 +421,21 @@ export function App() {
           >
             {betweenGames ? (
               <div className="moment-card__next">
-                <span className="moment-card__next-label">NEXT GAME</span>
+                <span className="moment-card__next-label">{nextGameLabel?.toUpperCase() ?? "NEXT GAME"}</span>
                 <h2 className="moment-card__next-game">
                   <strong>{nextGame.day}</strong>
-                  {nextGame.time && (
-                    <time dateTime={nextGameDateTime}>
-                      {nextGame.time}
-                      <small className="moment-card__next-time-zone" title={browserTimeZone}>
-                        <span aria-hidden="true">{nextGameTimeZone}</span>
-                        <span className="visually-hidden"> {nextGameTimeZone} time zone</span>
-                      </small>
-                    </time>
+                  {nextGame.time && nextGame.timeSet === false ? (
+                    <time dateTime={upcomingGames[0]?.officialDate}>Time TBD</time>
+                  ) : (
+                    nextGame.time && (
+                      <time dateTime={nextGameDateTime}>
+                        {nextGame.time}
+                        <small className="moment-card__next-time-zone" title={browserTimeZone}>
+                          <span aria-hidden="true">{nextGameTimeZone}</span>
+                          <span className="visually-hidden"> {nextGameTimeZone} time zone</span>
+                        </small>
+                      </time>
+                    )
                   )}
                 </h2>
               </div>
@@ -493,6 +544,7 @@ export function App() {
           betweenGames={betweenGames}
           confettiActive={winCelebration && appleFullyRaised}
           container={miniAppleWindow.container}
+          gameLabel={shownGameLabel}
           nextGame={nextGame}
           offseason={offseason}
           onReturn={miniAppleWindow.close}

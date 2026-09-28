@@ -30,6 +30,10 @@ extern bool final_seen;
 extern bool final_has_game_two;
 
 void reset_final_tracking();
+// Paints the card for a week with nothing to follow (no game this week, the
+// next postseason game not yet listed, or the offseason) once a schedule has
+// decided which. False before then, or while a game is being followed.
+bool show_idle_card();
 std::optional<apple::mlb_feed::ScheduleGame> doubleheader_game_two();
 void mark_final_card_visible();
 void pause_following();

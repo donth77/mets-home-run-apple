@@ -10,6 +10,7 @@
 #include "apple/game_state/projector.hpp"
 #include "apple/mlb_feed/feed.hpp"
 #include "apple/mlb_feed/schedule.hpp"
+#include "apple/mlb_feed/season.hpp"
 #include "fixtures.hpp"
 
 #include <cstdlib>
@@ -214,6 +215,156 @@ void test_doubleheader_game_two_selection() {
   EXPECT_TRUE(!apple::mlb_feed::choose_doubleheader_game_two(
                    {game_one, game_two}, game_one)
                    .has_value());
+}
+
+std::vector<apple::mlb_feed::ScheduleGame> schedule_capture(const char *json) {
+  JsonDocument filter;
+  EXPECT_TRUE(deserializeJson(filter, apple::mlb_feed::schedule_filter_json()) ==
+              ArduinoJson::DeserializationError::Ok);
+  JsonDocument doc;
+  EXPECT_TRUE(deserializeJson(doc, json, ArduinoJson::DeserializationOption::Filter(filter)) ==
+              ArduinoJson::DeserializationError::Ok);
+  return apple::mlb_feed::parse_schedule(doc.as<JsonVariantConst>());
+}
+
+// 2026-03-13 was a split-squad day: the Mets at Washington at 6:05 PM and
+// Miami at Clover Park at 6:10 PM. The Apple follows the home game.
+void test_spring_training_and_split_squads() {
+  using apple::mlb_feed::choose_game;
+  using apple::mlb_feed::game_label;
+  using apple::mlb_feed::yields_to_home_split_squad;
+  auto games = schedule_capture(apple::fixtures::mlb::k_schedule_20260312_20260314);
+  EXPECT_EQ(games.size(), static_cast<std::size_t>(4));
+  for (const auto &game : games) {
+    EXPECT_EQ(game.game_type, std::string("S"));
+    EXPECT_TRUE(game.spring() && !game.postseason());
+    EXPECT_EQ(game_label(game), std::string("SPRING TRAINING"));
+    EXPECT_TRUE(!game.start_time_tbd);
+  }
+  EXPECT_EQ(games[1].game_pk, 831464);  // at Washington
+  EXPECT_EQ(games[2].game_pk, 831462);  // Miami at Clover Park
+  EXPECT_TRUE(yields_to_home_split_squad(games[1], games));
+  EXPECT_TRUE(!yields_to_home_split_squad(games[2], games));
+  EXPECT_TRUE(!yields_to_home_split_squad(games[0], games));  // no home game on the 12th
+
+  for (auto &game : games) {
+    game.abstract_state = "Preview";
+    game.detailed_state = "Scheduled";
+  }
+  games[0].abstract_state = "Final";
+  const std::int64_t afternoon = apple::mlb_feed::parse_iso8601_utc("2026-03-13T21:00:00Z").value_or(0);
+  EXPECT_EQ(choose_game(games, afternoon)->game_pk, 831462);
+  // The road game going live first does not pull the Apple away.
+  games[1].abstract_state = "Live";
+  EXPECT_EQ(choose_game(games, afternoon + 3600)->game_pk, 831462);
+  // A rained-out home game leaves the day to the road game.
+  games[2].detailed_state = "Postponed";
+  EXPECT_EQ(choose_game(games, afternoon + 3600)->game_pk, 831464);
+  games[2].detailed_state = "Scheduled";
+  // The same club twice in a day is a doubleheader, not a split squad.
+  games[1].home = games[2].away;
+  EXPECT_TRUE(!yields_to_home_split_squad(games[1], games));
+  // Only spring games split squads; a regular season road game is followed.
+  games[1].home = {120, "WSH", "Washington Nationals"};
+  games[1].game_type = "R";
+  EXPECT_TRUE(!yields_to_home_split_squad(games[1], games));
+}
+
+// The Mets' 2024 postseason: they won the Wild Card Series at Milwaukee and
+// the NLDS against the Phillies, then lost the NLCS to the Dodgers in six.
+void test_postseason_labels_and_run() {
+  using apple::mlb_feed::game_label;
+  using apple::mlb_feed::postseason_run_over;
+  using apple::mlb_feed::ScheduleGame;
+  const auto games = schedule_capture(apple::fixtures::mlb::k_postseason_2024);
+  EXPECT_EQ(games.size(), static_cast<std::size_t>(13));
+  EXPECT_EQ(game_label(games[0]), std::string("WILD CARD GAME 1"));
+  EXPECT_EQ(game_label(games[3]), std::string("NLDS GAME 1"));
+  EXPECT_EQ(game_label(games[7]), std::string("NLCS GAME 1"));
+  EXPECT_EQ(game_label(games.back()), std::string("NLCS GAME 6"));
+  EXPECT_TRUE(games.back().postseason() && !games.back().spring());
+  EXPECT_TRUE(games.back().series_status.present && games.back().series_status.is_over);
+  EXPECT_EQ(games.back().series_status.winning_team_id, 119);
+  EXPECT_EQ(games.back().series_status.losing_team_id, 121);
+
+  EXPECT_TRUE(postseason_run_over(games));
+  EXPECT_TRUE(!postseason_run_over({}));
+  // Mid-series, and after winning a round, the run goes on.
+  EXPECT_TRUE(!postseason_run_over({games.begin(), games.begin() + 2}));
+  EXPECT_TRUE(!postseason_run_over({games.begin(), games.begin() + 7}));
+  // Winning the World Series ends it as well.
+  ScheduleGame clincher = games.back();
+  clincher.game_type = "W";
+  clincher.series_status.winning_team_id = 121;
+  clincher.series_status.losing_team_id = 147;
+  EXPECT_EQ(game_label(clincher), std::string("WORLD SERIES GAME 6"));
+  EXPECT_TRUE(postseason_run_over({clincher}));
+
+  ScheduleGame other = games[3];
+  other.series_description = "AL Division Series";
+  EXPECT_EQ(game_label(other), std::string("ALDS GAME 1"));
+  other.game_type = "E";
+  EXPECT_EQ(game_label(other), std::string("EXHIBITION"));
+  EXPECT_TRUE(other.spring());
+  other.game_type = "R";
+  EXPECT_EQ(game_label(other), std::string());
+}
+
+// Until MLB sets a start time it lists the game at 3:33 AM Eastern.
+void test_start_time_tbd() {
+  const auto games = schedule_capture(apple::fixtures::mlb::k_schedule_20270218_20270222);
+  EXPECT_TRUE(!games.empty());
+  EXPECT_EQ(games.front().game_pk, 868574);
+  EXPECT_EQ(games.front().official_date, std::string("2027-02-19"));
+  EXPECT_EQ(games.front().game_date, std::string("2027-02-19T08:33:00Z"));
+  EXPECT_TRUE(games.front().start_time_tbd);
+  EXPECT_EQ(apple::mlb_feed::game_label(games.front()), std::string("SPRING TRAINING"));
+}
+
+void test_season_over() {
+  using apple::mlb_feed::IdleCard;
+  using apple::mlb_feed::idle_card;
+  using apple::mlb_feed::next_season_year;
+  using apple::mlb_feed::TeamStanding;
+  const auto standing = [](const char *json) {
+    JsonDocument filter;
+    EXPECT_TRUE(deserializeJson(filter, apple::mlb_feed::team_standing_filter_json()) ==
+                ArduinoJson::DeserializationError::Ok);
+    JsonDocument doc;
+    EXPECT_TRUE(deserializeJson(doc, json, ArduinoJson::DeserializationOption::Filter(filter)) ==
+                ArduinoJson::DeserializationError::Ok);
+    return apple::mlb_feed::parse_team_standing(doc.as<JsonVariantConst>());
+  };
+  // 2026: 74-88, out of both races. 2024: a wild card.
+  const auto eliminated = standing(apple::fixtures::mlb::k_team_standing_2026);
+  EXPECT_TRUE(eliminated.has_value() && eliminated->eliminated && !eliminated->clinched);
+  const auto clinched = standing(apple::fixtures::mlb::k_team_standing_2024);
+  EXPECT_TRUE(clinched.has_value() && clinched->clinched && !clinched->eliminated);
+  EXPECT_TRUE(!standing(R"({"teams":[{"id":121}]})").has_value());
+
+  // The 2026 finale, 2026-09-27: the Mets' last game over and no week ahead.
+  EXPECT_TRUE(idle_card(9, eliminated, std::nullopt) == IdleCard::Offseason);
+  EXPECT_TRUE(idle_card(10, eliminated, std::nullopt) == IdleCard::Offseason);
+  const std::optional<TeamStanding> racing = TeamStanding{};
+  EXPECT_TRUE(idle_card(9, racing, std::nullopt) == IdleCard::NoGameThisWeek);
+  EXPECT_TRUE(idle_card(9, std::nullopt, std::nullopt) == IdleCard::NoGameThisWeek);
+  // A clinched club is waiting on its next round until its run is over.
+  EXPECT_TRUE(idle_card(10, clinched, std::nullopt) == IdleCard::NextGameTbd);
+  EXPECT_TRUE(idle_card(10, clinched, false) == IdleCard::NextGameTbd);
+  EXPECT_TRUE(idle_card(10, clinched, true) == IdleCard::Offseason);
+  // November through February is the offseason whatever the standing says,
+  // and March through August never is.
+  for (const int month : {11, 12, 1, 2})
+    EXPECT_TRUE(idle_card(month, std::nullopt, std::nullopt) == IdleCard::Offseason);
+  for (const int month : {3, 5, 8})
+    EXPECT_TRUE(idle_card(month, eliminated, true) == IdleCard::NoGameThisWeek);
+  EXPECT_TRUE(apple::mlb_feed::season_facts_needed(9) && apple::mlb_feed::season_facts_needed(10));
+  EXPECT_TRUE(!apple::mlb_feed::season_facts_needed(11) && !apple::mlb_feed::season_facts_needed(8));
+
+  EXPECT_EQ(next_season_year(2026, 9), 2027);
+  EXPECT_EQ(next_season_year(2026, 12), 2027);
+  EXPECT_EQ(next_season_year(2027, 1), 2027);
+  EXPECT_EQ(next_season_year(2027, 2), 2027);
 }
 
 void test_pregame() {
@@ -689,6 +840,16 @@ int check_schedule_capture(const char *path, std::int64_t now_epoch) {
     node["abstractGameState"] = game.abstract_state;
     node["detailedState"] = game.detailed_state;
     node["followable"] = game.followable();
+    node["gameType"] = game.game_type;
+    node["seriesGameNumber"] = game.series_game_number;
+    node["startTimeTbd"] = game.start_time_tbd;
+    node["label"] = apple::mlb_feed::game_label(game);
+    if (game.series_status.present) {
+      JsonObject series = node["seriesStatus"].to<JsonObject>();
+      series["isOver"] = game.series_status.is_over;
+      series["winningTeamId"] = game.series_status.winning_team_id;
+      series["losingTeamId"] = game.series_status.losing_team_id;
+    }
     const auto team = [](JsonObject side, const apple::mlb_feed::ScheduleTeam &value) {
       side["id"] = value.id;
       side["abbreviation"] = value.abbreviation;
@@ -740,16 +901,46 @@ void test_real_rain_delay_captures() {
   EXPECT_EQ(bare.frame.label, std::string("Delayed"));
 }
 
+// The Mets' standing as the Nano reads it, for the live contract check.
+int check_standing_capture(const char *path) {
+  std::ifstream file(path);
+  std::stringstream text;
+  text << file.rdbuf();
+  JsonDocument filter;
+  EXPECT_TRUE(deserializeJson(filter, apple::mlb_feed::team_standing_filter_json()) ==
+              ArduinoJson::DeserializationError::Ok);
+  JsonDocument doc;
+  if (deserializeJson(doc, text.str(), ArduinoJson::DeserializationOption::Filter(filter)) !=
+      ArduinoJson::DeserializationError::Ok) {
+    std::cerr << "standing parse failed\n";
+    return 1;
+  }
+  const auto standing = apple::mlb_feed::parse_team_standing(doc.as<JsonVariantConst>());
+  if (!standing) {
+    std::cout << "STANDING none\n";
+    return 0;
+  }
+  std::cout << "STANDING {\"clinched\":" << (standing->clinched ? "true" : "false")
+            << ",\"eliminated\":" << (standing->eliminated ? "true" : "false") << "}\n";
+  return 0;
+}
+
 int main(int argc, char **argv) {
-  // The live contract check (tools/mlb_contract_check.py) runs these two modes
+  // The live contract check (tools/mlb_contract_check.py) runs these modes
   // over fresh MLB responses; with no arguments the recorded fixtures run.
   if (argc == 4 && std::string(argv[1]) == "--schedule")
     return check_schedule_capture(argv[2], std::atoll(argv[3]));
+  if (argc == 3 && std::string(argv[1]) == "--standing")
+    return check_standing_capture(argv[2]);
   if (argc == 3)
     return compare_captures(argv[1], argv[2]);
   test_iso8601();
   test_schedule();
   test_doubleheader_game_two_selection();
+  test_spring_training_and_split_squads();
+  test_postseason_labels_and_run();
+  test_start_time_tbd();
+  test_season_over();
   test_pregame();
   test_home_run_bootstrap();
   test_live_situation();

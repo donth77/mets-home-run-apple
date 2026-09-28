@@ -5,6 +5,8 @@ export interface StadiumHeaderData {
   inning: number;
   outs: number;
   standby?: boolean;
+  /** The round, such as "NLDS Game 3" or "Spring Training"; none in the regular season. */
+  gameLabel?: string;
   nextGame?: {
     day: string;
     time: string;
@@ -27,13 +29,15 @@ export function stadiumHeaderText(data: StadiumHeaderData) {
   if (data.phase === "SLEEP") {
     const nextGame = data.nextGame ? `${data.nextGame.day.toUpperCase()} - ${data.nextGame.time}` : "SCHEDULE TBD";
     return {
-      center: `NEXT GAME · ${nextGame}`,
+      center: `${data.gameLabel?.toUpperCase() ?? "NEXT GAME"} · ${nextGame}`,
       right: "",
     };
   }
 
   const isFinal = data.phase === "FINAL";
-  const center = !isFinal && data.label.trim().toUpperCase() === "FINAL" ? (data.phase ?? "LIVE") : data.label;
+  const plainLabel = !isFinal && data.label.trim().toUpperCase() === "FINAL" ? (data.phase ?? "LIVE") : data.label;
+  // As on the physical Apple, the round stands in for a plain LIVE.
+  const center = data.gameLabel && plainLabel.trim().toUpperCase() === "LIVE" ? data.gameLabel : plainLabel;
   const inningLabel =
     data.half === "TOP"
       ? `▲ ${data.inning}`

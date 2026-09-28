@@ -7,6 +7,8 @@ export interface ScoreboardProps {
   variant?: "lab" | "broadcast";
   announceUpdates?: boolean;
   standby?: boolean;
+  /** The round, such as "NLDS Game 3" or "Spring Training"; none in the regular season. */
+  gameLabel?: string;
 }
 
 function BaseDiamond({ bases }: { bases?: AtBatState["bases"] }) {
@@ -55,10 +57,12 @@ function BroadcastScorebug({
   snapshot,
   announceUpdates,
   standby,
+  gameLabel,
 }: {
   snapshot: PresentationSnapshot;
   announceUpdates: boolean;
   standby: boolean;
+  gameLabel?: string;
 }) {
   const teams = [
     { side: "away", team: snapshot.away },
@@ -108,6 +112,7 @@ function BroadcastScorebug({
 
   return (
     <section className="apple-scorebug" aria-label="Game scoreboard" aria-live={announceUpdates ? "polite" : "off"}>
+      {gameLabel && <header className="apple-scorebug__round">{gameLabel}</header>}
       <div className="apple-scorebug__main">
         <div className="apple-scorebug__teams">
           {teams.map(({ side, team }) => {
@@ -243,9 +248,10 @@ export function Scoreboard({
   variant = "broadcast",
   announceUpdates = true,
   standby = false,
+  gameLabel,
 }: ScoreboardProps) {
   return variant === "broadcast" ? (
-    <BroadcastScorebug snapshot={snapshot} announceUpdates={announceUpdates} standby={standby} />
+    <BroadcastScorebug snapshot={snapshot} announceUpdates={announceUpdates} standby={standby} gameLabel={gameLabel} />
   ) : (
     <LabScoreboard snapshot={snapshot} announceUpdates={announceUpdates} />
   );

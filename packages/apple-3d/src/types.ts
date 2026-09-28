@@ -47,6 +47,8 @@ export interface StadiumScoreboardData {
   batterLine?: string;
   pitcher?: string;
   pitchCount?: number;
+  /** The round, such as "NLDS Game 3" or "Spring Training"; none in the regular season. */
+  gameLabel?: string;
   nextGame?: {
     day: string;
     time: string;

@@ -180,7 +180,7 @@ APPLE_EXPORT int apple_display_set_screen(
     unsigned strikes, const char *batter, const char *batter_line,
     const char *pitcher, unsigned pitch_count, const char *event,
     const char *venue, const char *date, const char *time,
-    const char *timezone, const char *season) {
+    const char *timezone, const char *season, const char *label) {
   auto *handle = as_handle(raw);
   if (handle == nullptr ||
       screen_state < static_cast<unsigned>(apple::firmware::ScreenState::Game) ||
@@ -209,6 +209,7 @@ APPLE_EXPORT int apple_display_set_screen(
   game.pitch_count = static_cast<std::uint16_t>(pitch_count);
   copy_ascii(game.event, sizeof(game.event), event);
   copy_ascii(game.venue, sizeof(game.venue), venue);
+  copy_ascii(game.label, sizeof(game.label), label, true);
   game.valid = true;
 
   auto &upcoming = model.upcoming;
@@ -219,6 +220,7 @@ APPLE_EXPORT int apple_display_set_screen(
   copy_ascii(upcoming.time, sizeof(upcoming.time), time, true);
   copy_ascii(upcoming.timezone, sizeof(upcoming.timezone), timezone, true);
   copy_ascii(upcoming.venue, sizeof(upcoming.venue), venue);
+  copy_ascii(upcoming.label, sizeof(upcoming.label), label, true);
 
   auto &final_game = model.final_game;
   copy_ascii(final_game.away, sizeof(final_game.away), away, true);

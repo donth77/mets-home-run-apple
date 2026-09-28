@@ -100,4 +100,14 @@ describe("Scoreboard", () => {
     expect(html).not.toContain("apple-scorebug__event");
     expect(html.match(/FINAL/g)).toHaveLength(1);
   });
+
+  it("names a spring training or postseason round above the score, final included", () => {
+    const live = renderToStaticMarkup(<Scoreboard snapshot={awayMetsSnapshot} gameLabel="NLDS Game 3" />);
+    expect(live).toContain('<header class="apple-scorebug__round">NLDS Game 3</header>');
+    const final = renderToStaticMarkup(
+      <Scoreboard snapshot={{ ...awayMetsSnapshot, phase: "FINAL", label: "FINAL" }} gameLabel="Spring Training" />,
+    );
+    expect(final).toContain("Spring Training");
+    expect(renderToStaticMarkup(<Scoreboard snapshot={awayMetsSnapshot} />)).not.toContain("apple-scorebug__round");
+  });
 });

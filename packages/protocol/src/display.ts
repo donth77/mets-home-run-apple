@@ -151,7 +151,12 @@ export interface DeviceDisplayState {
   status: string;
   lastEvent: string;
   scheduledStart?: string;
+  /** MLB's date for the game, shown alone while its start time is not set. */
+  officialDate?: string;
+  startTimeTbd?: boolean;
   venue?: string;
+  /** SPRING TRAINING, NLDS GAME 3 and the like; absent for a regular season game. */
+  label?: string;
   finalResult?: DeviceFinalResult;
   away: DeviceDisplayTeam;
   home: DeviceDisplayTeam;

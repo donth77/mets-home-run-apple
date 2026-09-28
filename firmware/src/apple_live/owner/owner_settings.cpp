@@ -75,6 +75,7 @@ String on_settings(const apple::firmware::SettingsUpdate& update) {
     manager.set_code_required(settings.require_code);
   }
   if (update.win_full >= 0) settings.win_full_track = update.win_full == 1;
+  if (update.spring >= 0) settings.spring_celebrations = update.spring == 1;
   if (update.volume >= 0) {
     if (update.volume > 100) return "VOLUME_RANGE";
     const bool changed = settings.volume != static_cast<std::uint8_t>(update.volume);
@@ -110,12 +111,13 @@ String on_settings(const apple::firmware::SettingsUpdate& update) {
   save_settings();
   char detail[160];
   std::snprintf(detail, sizeof(detail),
-                "raised=%us motor=%s follow=%s sleep=%s lock=%s tz=%s bright=%u auto=%s beta=%s token=%s",
+                "raised=%us motor=%s follow=%s sleep=%s lock=%s tz=%s bright=%u spring=%s auto=%s beta=%s token=%s",
                 static_cast<unsigned>(settings.raised_seconds), settings.motor ? "on" : "off",
                 settings.follow ? "auto" : "paused", settings.sleep_display ? "on" : "off",
                 settings.require_code ? "on" : "off", settings.time_zone,
-                static_cast<unsigned>(settings.brightness), settings.auto_update ? "on" : "off",
-                settings.beta ? "on" : "off", settings.github_token[0] ? "set" : "none");
+                static_cast<unsigned>(settings.brightness), settings.spring_celebrations ? "on" : "off",
+                settings.auto_update ? "on" : "off", settings.beta ? "on" : "off",
+                settings.github_token[0] ? "set" : "none");
   publish_trace("SETTINGS", detail);
   request_redraw();
   return String();

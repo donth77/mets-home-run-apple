@@ -6,6 +6,7 @@
 #include "apple_live/game/following.hpp"
 #include "apple_live/motion/motion.hpp"
 #include "apple_live/net/https.hpp"
+#include "apple_live/owner/settings.hpp"
 #include "apple_live/system/clock.hpp"
 #include "apple_live/system/psram.hpp"
 #include "apple_live/system/trace.hpp"
@@ -146,7 +147,12 @@ void accept_feed(ArduinoJson::JsonVariantConst feed, std::int32_t game_number, c
                 static_cast<unsigned long>(extraction.wait_ms));
   note_batter(snapshot);
   const std::uint64_t now = now_ms();
-  if (engine) handle_output(engine->ingest(apple::core::to_input_envelope(projector.decision_evidence()), now), now);
+  // With spring celebrations off the decision core never hears of a spring
+  // game, so nothing starts. Turned back on mid-game, its first frame is a
+  // bootstrap: the home runs already hit are recorded, not celebrated.
+  const bool celebrates = !game || !game->spring() || settings.spring_celebrations;
+  if (engine && celebrates)
+    handle_output(engine->ingest(apple::core::to_input_envelope(projector.decision_evidence()), now), now);
   show_snapshot(snapshot);
   if (snapshot.phase == Phase::Final && !final_seen) {
     final_seen = true;

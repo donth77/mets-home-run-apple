@@ -13,16 +13,30 @@ export { fetchMlbHistoricalGameIndex } from "./historical";
 export { applyJsonPatch } from "./jsonPatch";
 export {
   easternDate,
+  fetchMetsPostseasonGames,
   fetchMetsSchedule,
   fetchMetsScheduleRange,
+  fetchMetsStanding,
   fetchMlbSeasonDates,
+  isPostseasonGame,
+  isSpringGame,
+  METS_STANDING_FIELDS,
+  metsIdleCard,
+  mlbGameLabel,
   offseasonWindowForDate,
+  parseMetsStanding,
+  postseasonRunOver,
+  seasonFactsNeeded,
   selectUpcomingMetsGames,
+  yieldsToHomeSplitSquad,
 } from "./schedule";
 export type {
+  MetsIdleCard,
+  MetsStanding,
   MlbOffseasonWindow,
   MlbScheduleGame,
   MlbSeasonDates,
+  MlbSeriesStatus,
   UpcomingMetsGame,
 } from "./schedule";
 export { dateFromMlbTimecode, formatMlbTimecode } from "./timecode";

@@ -20,6 +20,20 @@
   grid-template-columns: 53.3% 46.7%;
   min-height: 90px;
 }
+
+/* The round above the score, like a broadcast's bug: NLDS GAME 3. */
+.apple-scorebug__round {
+  background: var(--board-blue);
+  border-bottom: 2px solid var(--board-orange);
+  color: #ffffff;
+  font-size: 0.64rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  line-height: 1;
+  padding: 5px 9px 4px;
+  text-align: center;
+  text-transform: uppercase;
+}
 .apple-scorebug__teams {
   display: grid;
 }

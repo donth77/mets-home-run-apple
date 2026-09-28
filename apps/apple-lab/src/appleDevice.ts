@@ -36,6 +36,7 @@ export interface AppleStatus {
     follow: boolean;
     requireCode: boolean;
     winFullTrack: boolean;
+    springCelebrations: boolean;
   };
   audio: {
     card: boolean;
@@ -183,6 +184,7 @@ export function parseAppleStatus(value: unknown): AppleStatus {
       follow: flag(settings.follow, true),
       requireCode: flag(settings.requireCode),
       winFullTrack: flag(settings.winFullTrack),
+      springCelebrations: flag(settings.springCelebrations, true),
     },
     audio: {
       card: flag(audio.card),

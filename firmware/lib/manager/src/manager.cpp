@@ -460,6 +460,7 @@ void ManagerServer::handle_settings() {
   if (server_.hasArg("bright")) update.brightness = server_.arg("bright").toInt();
   if (server_.hasArg("volume")) update.volume = server_.arg("volume").toInt();
   if (server_.hasArg("winfull")) update.win_full = on_off(server_.arg("winfull"));
+  if (server_.hasArg("spring")) update.spring = on_off(server_.arg("spring"));
   if (server_.hasArg("auto")) update.auto_update = on_off(server_.arg("auto"));
   if (server_.hasArg("beta")) update.beta = on_off(server_.arg("beta"));
   if (server_.hasArg("token")) {

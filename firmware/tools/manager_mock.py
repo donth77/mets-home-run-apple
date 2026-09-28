@@ -118,7 +118,9 @@ def make_handler(state):
             },
             "clock": connected,
             "game": {"gamePk": 822931, "gameNumber": 1, "away": "NYM", "home": "TB",
-                     "scheduled": "2026-09-02T22:40:00Z", "state": "In Progress"} if connected else None,
+                     "scheduled": "2026-09-02T22:40:00Z", "officialDate": "2026-09-02", "startTimeTbd": False,
+                     "state": "In Progress", "gameType": state["game_type"],
+                     "label": GAME_LABELS.get(state["game_type"], "")} if connected else None,
             "snapshot": {"phase": "LIVE", "label": "LIVE", "awayRuns": 6, "homeRuns": 4, "inning": 7,
                          "half": "TOP", "outs": 2, "awayId": 121, "homeId": 139} if connected else None,
             "poll": {"ok": 3 if connected else 0, "failed": 0, "lastMs": 1800, "lastBytes": 34000,
@@ -348,7 +350,8 @@ def make_handler(state):
                 if "token" in args:
                     settings["tokenSet"] = bool(args["token"][0])
                 for key, name in (("motor", "motor"), ("follow", "follow"), ("sleep", "sleepDisplay"), ("lock", "requireCode"),
-                                  ("auto", "autoUpdate"), ("beta", "beta"), ("winfull", "winFullTrack")):
+                                  ("auto", "autoUpdate"), ("beta", "beta"), ("winfull", "winFullTrack"),
+                                  ("spring", "springCelebrations")):
                     if key in args:
                         settings[name] = args[key][0] in ("on", "auto", "1", "true")
                 return self.send_json({"ok": True})
@@ -357,20 +360,29 @@ def make_handler(state):
     return Handler
 
 
+# The round the Apple names on its screen for each MLB gameType (lib/mlb_feed game_label).
+GAME_LABELS = {"S": "SPRING TRAINING", "E": "EXHIBITION", "F": "WILD CARD GAME 1", "D": "NLDS GAME 3",
+               "L": "NLCS GAME 5", "W": "WORLD SERIES GAME 7"}
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--setup", action="store_true", help="start with no Wi-Fi saved, setup network open")
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--tracks", type=int, default=0, help="pad the library to this many tracks, to try a big list")
+    ap.add_argument("--game-type", default="R", choices=sorted(GAME_LABELS) + ["R"],
+                    help="MLB gameType of the followed game, to see its round on the game tile")
     args = ap.parse_args()
     state = {
+        "game_type": args.game_type,
         "joined": not args.setup,
         "polls": 10,
         "version": "0.2.0",
         "setup_network": args.setup,
         "settings": {"raisedSeconds": 30, "motor": True, "follow": True, "sleepDisplay": False,
                      "requireCode": False, "timeZone": "America/New_York", "timeZoneChosen": False,
-                     "brightness": 100, "volume": 80, "winFullTrack": True, "autoUpdate": True, "beta": False, "tokenSet": False},
+                     "brightness": 100, "volume": 80, "winFullTrack": True, "springCelebrations": True,
+                     "autoUpdate": True, "beta": False, "tokenSet": False},
         "audio": {"card": True, "playing": "", "batter": "Francisco Lindor", "maxTracks": 200, "next": [],
                   "tracks": [
                       {"file": "/hr1.wav", "title": "hr1.wav", "bytes": 1_600_000, "added": 1_788_200_000, "hr": True, "win": False},

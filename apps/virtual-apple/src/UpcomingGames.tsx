@@ -48,8 +48,12 @@ export function UpcomingGames({ games }: { games: readonly UpcomingMetsGame[] })
       </header>
       <ol>
         {games.map((game) => {
-          const date = gameDateParts(game.gameDate);
+          const date = gameDateParts(game.gameDate, undefined, undefined, game);
           const gameTimeZone = timeZoneAbbreviation(new Date(game.gameDate), browserTimeZone);
+          const venue = game.location === "HOME" ? (game.venue ?? "Citi Field") : (game.venue ?? game.opponent);
+          const when = date.timeSet
+            ? `${date.day} ${date.date} at ${date.time} ${gameTimeZone}`
+            : `${date.day} ${date.date}, time to be announced`;
           return (
             <li key={game.gamePk}>
               <a
@@ -57,7 +61,7 @@ export function UpcomingGames({ games }: { games: readonly UpcomingMetsGame[] })
                 href={`https://www.mlb.com/gameday/${game.gamePk}`}
                 target="_blank"
                 rel="noreferrer"
-                aria-label={`${game.location === "HOME" ? "Mets versus" : "Mets at"} ${game.opponent}, ${date.day} ${date.date} at ${date.time} ${gameTimeZone}; opens MLB Gameday in a new tab`}
+                aria-label={`${game.label ? `${game.label}: ` : ""}${game.location === "HOME" ? "Mets versus" : "Mets at"} ${game.opponent}, ${when}; opens MLB Gameday in a new tab`}
               >
                 <OpponentLogo abbreviation={game.opponentAbbreviation} teamId={game.opponentId} />
                 <time dateTime={game.gameDate}>
@@ -69,7 +73,8 @@ export function UpcomingGames({ games }: { games: readonly UpcomingMetsGame[] })
                     {game.location === "HOME" ? "vs" : "at"} {game.opponentAbbreviation}
                     {game.gameNumber === 2 ? " · G2" : ""}
                   </strong>
-                  <span>{game.location === "HOME" ? "Citi Field" : (game.venue ?? game.opponent)}</span>
+                  {game.label && <em className="upcoming-game__label">{game.label}</em>}
+                  <span>{venue}</span>
                 </div>
                 <time className="upcoming-game__start" dateTime={game.gameDate}>
                   {date.time}

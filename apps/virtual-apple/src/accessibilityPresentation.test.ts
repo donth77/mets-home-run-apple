@@ -48,4 +48,25 @@ describe("gameStatusAnnouncement", () => {
     expect(announcement).not.toContain("Final");
     expect(announcement).not.toContain("between games");
   });
+
+  it("names the round of a spring training or postseason game", () => {
+    expect(gameStatusAnnouncement(snapshot, { betweenGames: false, offseason: false, gameLabel: "NLCS Game 5" })).toBe(
+      "NLCS Game 5. ATL 2, NYM 3. BOT 7, 1 out.",
+    );
+    expect(
+      gameStatusAnnouncement(
+        { ...snapshot, phase: "FINAL", label: "FINAL" },
+        { betweenGames: false, offseason: false, gameLabel: "Spring Training" },
+      ),
+    ).toBe("Spring Training. Final. ATL 2, NYM 3.");
+    expect(
+      gameStatusAnnouncement(snapshot, {
+        betweenGames: true,
+        offseason: false,
+        nextGameDay: "Fri",
+        nextGameTime: "a time to be announced",
+        gameLabel: "Spring Training",
+      }),
+    ).toBe("Next Mets game, Spring Training: Fri at a time to be announced.");
+  });
 });

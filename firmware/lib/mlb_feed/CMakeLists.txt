@@ -1,6 +1,7 @@
 add_library(apple_mlb_feed STATIC
   src/feed.cpp
   src/schedule.cpp
+  src/season.cpp
 )
 
 target_include_directories(apple_mlb_feed

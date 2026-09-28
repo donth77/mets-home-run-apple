@@ -12,14 +12,23 @@ const playbackTestState = vi.hoisted(() => ({ frameIndex: 0, scenarioId: "sleep"
 const actuatorTestState = vi.hoisted(() => ({ positionMm: undefined as number | undefined }));
 const stageTestState = vi.hoisted(() => ({ scoreboardData: [] as Array<object | undefined> }));
 const seasonTestState = vi.hoisted(() => ({ isOffseason: false, status: "READY" as const }));
+const metsSeasonTestState = vi.hoisted(() => ({
+  gameThisWeek: false,
+  recheck: vi.fn(),
+  seasonOver: undefined as boolean | undefined,
+}));
 const liveTestState = vi.hoisted(() => ({
   celebration: undefined as unknown,
-  game: undefined as { venue?: string } | undefined,
+  game: undefined as
+    | { venue?: string; gameType?: string; seriesDescription?: string; seriesGameNumber?: number }
+    | undefined,
   snapshot: undefined as unknown,
   status: "BETWEEN_GAMES",
 }));
 const scheduleTestState = vi.hoisted(() => ({
+  label: undefined as string | undefined,
   location: "HOME" as "HOME" | "AWAY",
+  startTimeTbd: false,
   venue: "Citi Field",
 }));
 const viewportTestState = vi.hoisted(() => ({ desktop: true }));
@@ -151,6 +160,16 @@ vi.mock("./useMlbSeasonPhase", () => ({
   }),
 }));
 
+vi.mock("./useMetsSeason", () => ({
+  // By default the league's own offseason is the Mets' too.
+  useMetsSeason: (leagueOffseason: boolean) => ({
+    gameThisWeek: metsSeasonTestState.gameThisWeek,
+    recheck: metsSeasonTestState.recheck,
+    seasonOver: metsSeasonTestState.seasonOver ?? leagueOffseason,
+    status: "READY",
+  }),
+}));
+
 vi.mock("./useMetsSchedule", () => ({
   useMetsSchedule: (enabled: boolean) =>
     enabled
@@ -159,10 +178,13 @@ vi.mock("./useMetsSchedule", () => ({
             gameDate: NEXT_GAME_DATE,
             gameNumber: 1,
             gamePk: 800001,
+            label: scheduleTestState.label,
             location: scheduleTestState.location,
+            officialDate: "2026-08-28",
             opponent: "Philadelphia Phillies",
             opponentAbbreviation: "PHI",
             opponentId: 143,
+            startTimeTbd: scheduleTestState.startTimeTbd,
             venue: scheduleTestState.venue,
           },
         ]
@@ -191,11 +213,16 @@ afterEach(() => {
   actuatorTestState.positionMm = undefined;
   stageTestState.scoreboardData.length = 0;
   seasonTestState.isOffseason = false;
+  metsSeasonTestState.gameThisWeek = false;
+  metsSeasonTestState.recheck.mockReset();
+  metsSeasonTestState.seasonOver = undefined;
   liveTestState.celebration = undefined;
   liveTestState.game = undefined;
   liveTestState.snapshot = undefined;
   liveTestState.status = "BETWEEN_GAMES";
+  scheduleTestState.label = undefined;
   scheduleTestState.location = "HOME";
+  scheduleTestState.startTimeTbd = false;
   scheduleTestState.venue = "Citi Field";
   soundTestState.cue = undefined;
   soundTestState.enable.mockReset();
@@ -667,6 +694,89 @@ describe("Virtual Apple accessibility", () => {
         "data-scoreboard-label",
       ),
     ).toBe("OFFSEASON");
+  });
+
+  it("rests for the season once the Mets are out of it, ahead of MLB's own offseason", () => {
+    metsSeasonTestState.seasonOver = true;
+    const { container, getByRole } = render(<App />);
+
+    expect(container.querySelector(".apple-scorebug")).toBeNull();
+    expect(container.querySelector(".upcoming-games")).toBeNull();
+    expect(container.querySelector(".moment-card")).toBeNull();
+    expect(
+      getByRole("img", { name: "Virtual Home Run Apple behind the center-field wall" }).getAttribute(
+        "data-scoreboard-label",
+      ),
+    ).toBe("OFFSEASON");
+  });
+
+  it("keeps the season's last final on the board until the Apple moves on", () => {
+    metsSeasonTestState.seasonOver = true;
+    liveTestState.game = { venue: "Nationals Park" };
+    liveTestState.snapshot = { ...getScenario("live").frames[0].snapshot, phase: "FINAL", label: "FINAL" };
+    liveTestState.status = "FINAL";
+    const { container } = render(<App />);
+
+    expect(container.querySelector(".apple-scorebug__final")?.textContent).toBe("FINAL");
+    expect(container.querySelector(".moment-card h2")?.textContent).toBe("FINAL");
+  });
+
+  it("plays the last win's track out before resting for the season", () => {
+    metsSeasonTestState.seasonOver = true;
+    liveTestState.game = { venue: "Citi Field" };
+    liveTestState.snapshot = getScenario("live").frames[0].snapshot;
+    liveTestState.celebration = { eventKey: "777686:final", kind: "METS_WIN", subject: "" };
+    liveTestState.status = "POLLING";
+    soundTestState.winTrackPlaying = true;
+    const { getByRole, rerender } = render(<App />);
+    const stage = () => getByRole("img", { name: "Virtual Home Run Apple behind the center-field wall" });
+    expect(stage().getAttribute("data-scoreboard-label")).toBe("METS WIN!");
+
+    liveTestState.celebration = undefined;
+    liveTestState.snapshot = undefined;
+    liveTestState.status = "BETWEEN_GAMES";
+    rerender(<App />);
+    expect(stage().getAttribute("data-scoreboard-label")).toBe("METS WIN!");
+
+    soundTestState.winTrackPlaying = false;
+    rerender(<App />);
+    expect(stage().getAttribute("data-scoreboard-label")).toBe("OFFSEASON");
+  });
+
+  it("names the postseason round on the scorebug, the stadium board, and the game card", () => {
+    liveTestState.game = {
+      venue: "Citi Field",
+      gameType: "D",
+      seriesDescription: "NL Division Series",
+      seriesGameNumber: 3,
+    };
+    liveTestState.snapshot = getScenario("live").frames[0].snapshot;
+    liveTestState.status = "POLLING";
+    const { container } = render(<App />);
+
+    expect(container.querySelector(".apple-scorebug__round")?.textContent).toBe("NLDS Game 3");
+    expect(stageTestState.scoreboardData.at(-1)).toMatchObject({ gameLabel: "NLDS Game 3" });
+    expect(container.querySelector(".moment-card > span")?.textContent).toBe("NLDS GAME 3");
+  });
+
+  it("labels the next spring training game at its own park and keeps an unset start time TBD", () => {
+    scheduleTestState.label = "Spring Training";
+    scheduleTestState.startTimeTbd = true;
+    scheduleTestState.venue = "Clover Park";
+    const { container, getByRole } = render(<App />);
+
+    expect(container.querySelector(".moment-card__next-label")?.textContent).toBe("SPRING TRAINING");
+    expect(container.querySelector(".moment-card__next-game time")?.textContent).toBe("Time TBD");
+    expect(container.querySelector(".upcoming-game__label")?.textContent).toBe("Spring Training");
+    expect(container.querySelector(".upcoming-game > div span")?.textContent).toBe("Clover Park");
+    expect(container.querySelector(".upcoming-game__start")?.textContent).toBe("TBD");
+    expect(
+      getByRole("link", { name: /Spring Training: Mets versus Philadelphia Phillies/ }).getAttribute("aria-label"),
+    ).toContain("time to be announced");
+    expect(stageTestState.scoreboardData.at(-1)).toMatchObject({
+      gameLabel: "Spring Training",
+      nextGame: { time: "TIME TBD" },
+    });
   });
 
   it("links the active game to its MLB Gameday page", () => {

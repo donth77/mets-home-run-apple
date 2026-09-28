@@ -118,6 +118,34 @@ describe("physical display screen WASM", () => {
       timezone: "EDT",
     });
     expect(deviceUpcomingTime(undefined)).toEqual({ date: "DATE TBD", time: "TIME TBD", timezone: "" });
+    // MLB lists an unset start at 3:33 AM Eastern: the Apple shows its date alone,
+    // even in a zone where 3:33 AM Eastern is the day before.
+    expect(
+      deviceUpcomingTime("2027-02-19T08:33:00Z", "Pacific/Honolulu", { officialDate: "2027-02-19", startTimeTbd: true }),
+    ).toEqual({ date: "FRI FEB 19", time: "TIME TBD", timezone: "" });
+  });
+
+  it("names spring training and postseason games on the upcoming and live cards", async () => {
+    const instance = await renderer();
+    const plain = instance.renderScreenRgb565(screen("UPCOMING", "PREGAME"));
+    const spring = instance.renderScreenRgb565({ ...screen("UPCOMING", "PREGAME"), label: "SPRING TRAINING" });
+    expect(Array.from(spring)).not.toEqual(Array.from(plain));
+    // The upcoming card names the round in its heading; the rest is unchanged.
+    const belowHeader = (frame: Uint16Array) => Array.from(frame.slice(44 * 320));
+    expect(belowHeader(spring)).toEqual(belowHeader(plain));
+    const live = instance.renderScreenRgb565(screen("LIVE", "LIVE"));
+    const worldSeries = instance.renderScreenRgb565({ ...screen("LIVE", "LIVE"), label: "WORLD SERIES GAME 7" });
+    expect(Array.from(worldSeries)).not.toEqual(Array.from(live));
+    // Live keeps its header (scores, inning, LIVE) and everything from the
+    // divider down; the round heads the middle section, whose bases, outs, and
+    // count shrink to make room.
+    const rows = (frame: Uint16Array, from: number, to: number) => Array.from(frame.slice(from * 320, to * 320));
+    expect(rows(worldSeries, 0, 58)).toEqual(rows(live, 0, 58));
+    expect(rows(worldSeries, 151, 240)).toEqual(rows(live, 151, 240));
+    // The heading's row: white text centred across the top of the section.
+    const white = (frame: Uint16Array) => rows(frame, 64, 71).filter((pixel) => pixel === 0xffff).length;
+    expect(white(worldSeries) - white(live)).toBeGreaterThan(100);
+    instance.dispose();
   });
 
   it("renders deterministic live, doubleheader, and final cards through ScreenPainter", async () => {

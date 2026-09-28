@@ -66,6 +66,9 @@ struct GameScreen {
   std::uint16_t pitch_count = 0;
   char venue[31] = "";
   char event[104] = "WAITING FOR LIVE DATA";
+  // What kind of game this is when it is not the regular season, such as
+  // SPRING TRAINING or NLDS GAME 3. Empty for a regular season game.
+  char label[24] = "";
   bool valid = false;
 };
 
@@ -77,6 +80,7 @@ struct UpcomingScreen {
   char time[13] = "TIME TBD";
   char timezone[9] = "LOCAL";
   char venue[31] = "";
+  char label[24] = "";  // as GameScreen::label
 };
 
 struct FinalScreen {
@@ -144,7 +148,8 @@ class ScreenPainter {
   void draw_interruption_score(const GameScreen& game);
   void draw_base_diamond(std::int16_t center_x, std::int16_t center_y,
                          std::int16_t radius, bool occupied);
-  void draw_out_dots(std::uint8_t outs);
+  void draw_out_dots(std::uint8_t outs, std::int16_t center_y, std::int16_t radius,
+                     std::int16_t spacing);
   void draw_waiting_layout(const ScreenModel& model);
   void draw_upcoming_layout(const ScreenModel& model);
   void draw_offseason_layout(const ScreenModel& model);

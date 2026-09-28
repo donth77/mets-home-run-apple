@@ -293,6 +293,7 @@ a.btn{display:inline-block;font-size:15px;font-weight:600;padding:11px 16px;bord
 <h2>Settings</h2>
 <div class="switch"><div><b>Raised time</b><small>How long the Apple stays up</small><div class="range"><input id="raised" type="range" min="5" max="120" step="5" value="30" aria-label="Raised time in seconds"><output id="raised-out">30 s</output></div></div></div>
 <div class="switch"><div><b>Stay up for the whole track on a win</b><small>The game is over, so the Apple stays raised until the win track ends. Off, a win uses the raised time like a home run</small></div><label class="toggle"><input id="winfull" type="checkbox" aria-label="Stay up for the whole track on a win"><i></i></label></div>
+<div class="switch"><div><b>Spring training celebrations</b><small>Spring training and exhibition games are always followed and named on the screen. Off, their home runs and wins leave the Apple down and quiet</small></div><label class="toggle"><input id="spring" type="checkbox" aria-label="Spring training celebrations"><i></i></label></div>
 <div class="switch"><div><b>Motor</b><small>Off keeps the Apple still; celebrations still show on the screen</small></div><label class="toggle"><input id="motor" type="checkbox" aria-label="Motor"><i></i></label></div>
 <div class="switch"><div><b>Pause the Apple</b><small>Stops following games and celebrating until you turn it off</small></div><label class="toggle"><input id="pause" type="checkbox" aria-label="Pause the Apple"><i></i></label></div>
 <div class="switch"><div><b>Sleep screen between games</b><small>Screen off until the next game starts</small></div><label class="toggle"><input id="sleep" type="checkbox" aria-label="Sleep screen between games"><i></i></label></div>
@@ -402,6 +403,11 @@ function notice(msg,cls){return toast(msg,cls,{id:"wifi",sticky:true})}
 function spin(id,label){var el=$(id);el.className="";el.innerHTML="";var s=document.createElement("span");s.className="spin";el.appendChild(s);el.appendChild(document.createTextNode(" "+label))}
 function mode(m){return {SETUP:"Setup",OFFLINE:"Offline",BETWEEN_GAMES:"Between games",BOOTSTRAPPING:"Loading game",UPCOMING:"Next game",PAUSED:"Paused",PREGAME:"Pregame",LIVE:"Live",REVIEW:"Under review",DELAYED:"Delayed",FINAL:"Final",SLEEP:"Idle",CELEBRATING:"Celebrating",REPLAY:"Replay",SAFE_FAULT:"Stopped: fault",SAFE_MODE:"Safe mode"}[m]||m||""}
 /* Times on this page are the reader's own: the browser's locale and zone, with the zone code shown. The Apple's time zone setting is for its screen. */
+/* The round the Apple prints in capitals, SPRING TRAINING or NLDS GAME 3, as the page writes it. */
+function roundName(label){return label?label.toLowerCase().replace(/\b[a-z]/g,function(c){return c.toUpperCase()}).replace(/\b(Nl|Al)(ds|cs)\b/g,function(m){return m.toUpperCase()}):""}
+/* A game MLB has not given a start time yet: its own date, and no time. */
+function gameWhen(g){if(!g)return "";if(!g.startTimeTbd||!/^\d{4}-\d{2}-\d{2}$/.test(g.officialDate||""))return when(g.scheduled);
+  try{return new Date(g.officialDate+"T12:00:00Z").toLocaleDateString([],{weekday:"short",month:"short",day:"numeric",timeZone:"UTC"})+" · time TBD"}catch(e){return g.officialDate+" · time TBD"}}
 function when(iso){if(!iso)return "";var o={weekday:"short",month:"short",day:"numeric",hour:"numeric",minute:"2-digit",timeZoneName:"short"};try{return new Date(iso).toLocaleString([],o)}catch(e){delete o.timeZoneName;return new Date(iso).toLocaleString([],o)}}
 var zones=[],browserZone="";try{browserZone=Intl.DateTimeFormat().resolvedOptions().timeZone||""}catch(e){}
 function zoneFor(name){var i,z;if(!name)return null;for(i=0;i<zones.length;i++){z=zones[i];if(z.id===name||(" "+z.aliases+" ").indexOf(" "+name+" ")>=0)return z}return null}
@@ -434,7 +440,8 @@ function render(s){
   // tonight's final, the next game, or the offseason.
   if(screen==="FINAL"&&snap){live=false;finalNow=true}
   else if(screen==="UPCOMING"||screen==="WAITING"||screen==="OFFSEASON"){live=false;finalNow=false}
-  text("game-label",live?"Live game":finalNow?"Final":offseason?"Offseason":g?"Next game":"Game");
+  var round=g?roundName(g.label):"",tbd=(s.screen&&s.screen.status)==="NEXT GAME TBD";
+  text("game-label",(live?"Live game":finalNow?"Final":offseason?"Offseason":g?"Next game":"Game")+(round&&!offseason?" · "+round:""));
   if(snap&&(live||finalNow)){
     var awayName=(snap.away&&snap.away.abbreviation)||(g&&g.away)||"AWAY",homeName=(snap.home&&snap.home.abbreviation)||(g&&g.home)||"HOME";
     var awayRuns=snap.away&&typeof snap.away.runs==="number"?snap.away.runs:(snap.awayRuns||0),homeRuns=snap.home&&typeof snap.home.runs==="number"?snap.home.runs:(snap.homeRuns||0);
@@ -443,10 +450,11 @@ function render(s){
     var halfName={TOP:"Top",BOTTOM:"Bottom",MIDDLE:"Middle",END:"End"}[snap.half]||"",inningLine=snap.inning?(halfName+" "+snap.inning+(typeof snap.outs==="number"?" · "+snap.outs+(snap.outs===1?" out":" outs"):"")):(snap.label||"In progress");
     text("game-2",(finalNow?"Final":inningLine)+(g&&g.gameNumber===2?" · Game 2":""));
   }
-  else if(offseason){var today=new Date(),season=today.getMonth()>=9?today.getFullYear()+1:today.getFullYear();text("game","Offseason");text("game-2",g?"Opening day "+when(g.scheduled):"Back for the "+season+" season")}
+  // The offseason looks ahead to next year's season from March on, as the Apple's card does.
+  else if(offseason){var today=new Date(),season=today.getMonth()>=2?today.getFullYear()+1:today.getFullYear();text("game","Offseason");text("game-2",g?"Opening day "+gameWhen(g):"Back for the "+season+" season")}
   else{
-    text("game",g?(g.away+" at "+g.home):(w.state==="CONNECTED"?"No Mets game this week":"Set up Wi-Fi first"));
-    text("game-2",g?(when(g.scheduled)+(g.gameNumber===2?" · Game 2":"")):(w.state==="CONNECTED"?"Checks the schedule "+everyText:""));
+    text("game",g?(g.away+" at "+g.home):(w.state!=="CONNECTED"?"Set up Wi-Fi first":tbd?"Next game TBD":"No Mets game this week"));
+    text("game-2",g?(gameWhen(g)+(g.gameNumber===2?" · Game 2":"")):(w.state!=="CONNECTED"?"":tbd?"Still in the postseason; waiting for MLB to list the next game":"Checks the schedule "+everyText));
   }
   // Between games the only thing the Apple fetches is the schedule, so that is
   // what this tile reports; the live feed takes over once a game is on. A
@@ -461,7 +469,7 @@ function render(s){
     text("feed-label","Schedule");
     var ago=sc.checkedAgoMs>=0?Math.round(sc.checkedAgoMs/60000):-1;
     if(sc.lastError){text("feed","Problem","bad");text("feed-2",sc.lastError+weak+" · retrying")}
-    else if(sc.ok){text("feed",g?"Up to date":offseason?"Nothing scheduled":"No Mets game this week","ok");text("feed-2","Checked "+(ago<1?"just now":ago+" min ago")+" · "+everyText+(sc.failed?" · "+sc.failed+(sc.failed===1?" retry":" retries")+" since power-on":""))}
+    else if(sc.ok){text("feed",g?"Up to date":offseason?"Nothing scheduled":tbd?"Next game not listed yet":"No Mets game this week","ok");text("feed-2","Checked "+(ago<1?"just now":ago+" min ago")+" · "+everyText+(sc.failed?" · "+sc.failed+(sc.failed===1?" retry":" retries")+" since power-on":""))}
     else{text("feed",w.state==="CONNECTED"?"Waiting for the schedule":"Needs Wi-Fi");text("feed-2","")}
   }
   var seq=(s.sequence||"IDLE"),liftWord={IDLE:"Home",LEAD_IN:"Getting ready",REVIEW_HOLD:"Waiting on a review",EXTENDING:"Rising",RAISED:"Raised",RETRACTING:"Lowering",FAULT:"Stopped"}[seq]||seq;
@@ -545,9 +553,9 @@ $("join").addEventListener("click",function(){
   authFetch("/api/wifi",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:"ssid="+encodeURIComponent(ssid)+"&password="+encodeURIComponent(pw)+(browserZone?"&tz="+encodeURIComponent(browserZone):"")})
     .then(function(r){if(!r.ok)throw new Error();}).catch(function(){joining=false;b.disabled=false;b.textContent="Join";notice("Failed to start joining. Try again.","bad")});
 });
-function fillSettings(st){var z=null;$("raised").value=st.raisedSeconds;$("raised-out").value=st.raisedSeconds+" s";if(st.brightness){$("bright").value=st.brightness;$("bright-out").value=st.brightness+"%"}if(typeof st.volume==="number"){$("volume").value=st.volume;$("volume-out").value=st.volume+"%"}$("motor").checked=!!st.motor;$("winfull").checked=st.winFullTrack!==false;$("pause").checked=!st.follow;$("sleep").checked=!!st.sleepDisplay;$("lock").checked=!!st.requireCode;$("autoupd").checked=st.autoUpdate!==false;if(zones.length){z=zoneFor(st.timeZone||"");tzSelected=z?z.id:"";$("tz").value=z?z.label:"";zoneHint()}}
+function fillSettings(st){var z=null;$("raised").value=st.raisedSeconds;$("raised-out").value=st.raisedSeconds+" s";if(st.brightness){$("bright").value=st.brightness;$("bright-out").value=st.brightness+"%"}if(typeof st.volume==="number"){$("volume").value=st.volume;$("volume-out").value=st.volume+"%"}$("motor").checked=!!st.motor;$("winfull").checked=st.winFullTrack!==false;$("spring").checked=st.springCelebrations!==false;$("pause").checked=!st.follow;$("sleep").checked=!!st.sleepDisplay;$("lock").checked=!!st.requireCode;$("autoupd").checked=st.autoUpdate!==false;if(zones.length){z=zoneFor(st.timeZone||"");tzSelected=z?z.id:"";$("tz").value=z?z.label:"";zoneHint()}}
 function markDirty(){settingsDirty=true;$("save").disabled=false;$("revert").hidden=false;}
-["motor","pause","sleep","lock","autoupd","winfull"].forEach(function(id){$(id).addEventListener("change",markDirty)});
+["motor","pause","sleep","lock","autoupd","winfull","spring"].forEach(function(id){$(id).addEventListener("change",markDirty)});
 $("tz").addEventListener("input",function(){var z=resolveText(this.value);tzSelected=z&&(z.label.toLowerCase()===this.value.trim().toLowerCase()||zoneFor(this.value.trim()))?z.id:"";showZoneList();markDirty();zoneHint(true)});
 $("tz").addEventListener("focus",showZoneList);
 $("tz").addEventListener("blur",function(){var self=this;setTimeout(function(){var z,cur;$("tz-list").hidden=true;z=resolveText(self.value);if(z){tzSelected=z.id;self.value=z.label}else if(!self.value.trim()&&lastSettings){cur=zoneFor(lastSettings.timeZone||"");tzSelected=cur?cur.id:"";self.value=cur?cur.label:""}zoneHint()},150)});
@@ -565,7 +573,7 @@ $("save").addEventListener("click",function(){
 });
 function saveSettings(){
   var b=$("save");b.disabled=true;b.innerHTML="";var sp=document.createElement("span");sp.className="spin";b.appendChild(sp);b.appendChild(document.createTextNode("Saving"));
-  var body="raised="+$("raised").value+"&motor="+($("motor").checked?"on":"off")+"&follow="+($("pause").checked?"paused":"auto")+"&sleep="+($("sleep").checked?"on":"off")+"&lock="+($("lock").checked?"on":"off")+"&auto="+($("autoupd").checked?"on":"off")+"&bright="+$("bright").value+"&volume="+$("volume").value+"&winfull="+($("winfull").checked?"on":"off")+(tzSelected?"&tz="+encodeURIComponent(tzSelected):"");
+  var body="raised="+$("raised").value+"&motor="+($("motor").checked?"on":"off")+"&follow="+($("pause").checked?"paused":"auto")+"&sleep="+($("sleep").checked?"on":"off")+"&lock="+($("lock").checked?"on":"off")+"&auto="+($("autoupd").checked?"on":"off")+"&bright="+$("bright").value+"&volume="+$("volume").value+"&winfull="+($("winfull").checked?"on":"off")+"&spring="+($("spring").checked?"on":"off")+(tzSelected?"&tz="+encodeURIComponent(tzSelected):"");
   authFetch("/api/settings",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:body})
     .then(function(r){b.textContent="Save";if(!r.ok){b.disabled=false;toast(r.status===401?"Not saved: the password is needed.":"Failed to save.","bad",{id:"settings"});return}settingsDirty=false;$("revert").hidden=true;toast("Saved.","ok",{id:"settings"});status()})
     .catch(function(){b.textContent="Save";b.disabled=false;toast("Failed to save.","bad",{id:"settings"})});

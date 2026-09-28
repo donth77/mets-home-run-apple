@@ -1,5 +1,7 @@
 #include "apple/mlb_feed/schedule.hpp"
 
+#include "apple/mlb_feed/feed.hpp"
+
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
@@ -12,19 +14,23 @@ using ArduinoJson::JsonObjectConst;
 using ArduinoJson::JsonVariantConst;
 
 constexpr char kScheduleFields[] =
-    "dates,date,games,gamePk,gameNumber,gameDate,status,abstractGameState,"
-    "detailedState,teams,away,home,team,id,abbreviation,name,venue";
+    "dates,date,games,gamePk,gameNumber,gameDate,gameType,seriesDescription,"
+    "seriesGameNumber,status,abstractGameState,detailedState,startTimeTBD,"
+    "teams,away,home,team,id,abbreviation,name,venue,seriesStatus,isOver,"
+    "winningTeam,losingTeam";
 
 constexpr char kScheduleFilter[] = R"({
   "dates": [{"date": true,
     "games": [{
       "gamePk": true, "gameNumber": true, "gameDate": true,
-      "status": {"abstractGameState": true, "detailedState": true},
+      "gameType": true, "seriesDescription": true, "seriesGameNumber": true,
+      "status": {"abstractGameState": true, "detailedState": true, "startTimeTBD": true},
       "venue": {"name": true},
       "teams": {
         "away": {"team": {"id": true, "abbreviation": true, "name": true}},
         "home": {"team": {"id": true, "abbreviation": true, "name": true}}
-      }
+      },
+      "seriesStatus": {"isOver": true, "winningTeam": {"id": true}, "losingTeam": {"id": true}}
     }]
   }]
 })";
@@ -108,6 +114,53 @@ bool ScheduleGame::followable() const {
   return true;
 }
 
+bool ScheduleGame::spring() const { return game_type == "S" || game_type == "E"; }
+
+bool ScheduleGame::postseason() const {
+  return game_type == "F" || game_type == "D" || game_type == "L" || game_type == "W";
+}
+
+std::string game_label(const ScheduleGame &game) {
+  if (game.game_type == "S")
+    return "SPRING TRAINING";
+  if (game.game_type == "E")
+    return "EXHIBITION";
+  // The Mets are a National League club, so their rounds are the NLDS and
+  // NLCS; the series description names the league in case that ever differs.
+  const std::string league =
+      game.series_description.compare(0, 3, "AL ") == 0 ? "AL" : "NL";
+  std::string round;
+  if (game.game_type == "F")
+    round = "WILD CARD";
+  else if (game.game_type == "D")
+    round = league + "DS";
+  else if (game.game_type == "L")
+    round = league + "CS";
+  else if (game.game_type == "W")
+    round = "WORLD SERIES";
+  else
+    return {};
+  if (game.series_game_number > 0)
+    round += " GAME " + std::to_string(game.series_game_number);
+  return round;
+}
+
+bool yields_to_home_split_squad(const ScheduleGame &game,
+                                const std::vector<ScheduleGame> &games) {
+  if (!game.spring() || game.home.id == kMetsTeamId || game.official_date.empty())
+    return false;
+  for (const ScheduleGame &other : games) {
+    if (other.game_pk == game.game_pk || !other.spring() || other.home.id != kMetsTeamId ||
+        other.official_date != game.official_date || !other.followable())
+      continue;
+    // The same opponent twice in a day is a doubleheader, not a split squad.
+    if (other.away.id == game.home.id)
+      continue;
+    return true;
+  }
+  return false;
+}
+
 std::vector<ScheduleGame> parse_schedule(JsonVariantConst payload) {
   std::vector<ScheduleGame> games;
   for (JsonVariantConst date : payload["dates"].as<JsonArrayConst>()) {
@@ -129,6 +182,19 @@ std::vector<ScheduleGame> parse_schedule(JsonVariantConst payload) {
       game.abstract_state = std::string(text(candidate["status"]["abstractGameState"], "Preview"));
       game.detailed_state = std::string(text(candidate["status"]["detailedState"], "Scheduled"));
       game.venue = std::string(text(candidate["venue"]["name"]));
+      game.game_type = std::string(text(candidate["gameType"], "R"));
+      game.series_description = std::string(text(candidate["seriesDescription"]));
+      game.series_game_number = static_cast<std::int32_t>(integer(candidate["seriesGameNumber"]));
+      game.start_time_tbd = candidate["status"]["startTimeTBD"].as<bool>();
+      JsonVariantConst series = candidate["seriesStatus"];
+      if (series.is<JsonObjectConst>()) {
+        game.series_status.present = true;
+        game.series_status.is_over = series["isOver"].as<bool>();
+        game.series_status.winning_team_id =
+            static_cast<std::int32_t>(integer(series["winningTeam"]["id"]));
+        game.series_status.losing_team_id =
+            static_cast<std::int32_t>(integer(series["losingTeam"]["id"]));
+      }
       game.away = schedule_team(teams["away"]);
       game.home = schedule_team(teams["home"]);
       games.push_back(std::move(game));
@@ -168,7 +234,7 @@ std::optional<ScheduleGame> choose_game(const std::vector<ScheduleGame> &games,
   const ScheduleGame *next = nullptr;
   std::int64_t next_start = 0;
   for (const ScheduleGame &game : games) {
-    if (!game.followable())
+    if (!game.followable() || yields_to_home_split_squad(game, games))
       continue;
     if (game.live()) {
       if (live == nullptr)

@@ -45,6 +45,7 @@ void read_settings() {
   const std::uint8_t vol = settings_store.getUChar("volume", settings.volume);
   settings.volume = vol > 100 ? 100 : vol;
   settings.win_full_track = settings_store.getBool("winfull", settings.win_full_track);
+  settings.spring_celebrations = settings_store.getBool("springcel", settings.spring_celebrations);
   settings.auto_update = settings_store.getBool("autoupd", settings.auto_update);
   settings.beta = settings_store.getBool("beta", settings.beta);
   settings_store.getString("ghtok", settings.github_token, sizeof(settings.github_token));
@@ -62,6 +63,7 @@ void save_settings() {
   settings_store.putUChar("bright", settings.brightness);
   settings_store.putUChar("volume", settings.volume);
   settings_store.putBool("winfull", settings.win_full_track);
+  settings_store.putBool("springcel", settings.spring_celebrations);
   settings_store.putBool("autoupd", settings.auto_update);
   settings_store.putBool("beta", settings.beta);
   settings_store.putString("ghtok", settings.github_token);

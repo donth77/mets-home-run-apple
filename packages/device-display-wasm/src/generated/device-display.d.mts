@@ -37,6 +37,7 @@ interface DeviceDisplayEmscriptenModule {
     timePointer: number,
     timezonePointer: number,
     seasonPointer: number,
+    labelPointer: number,
   ): number;
   _apple_display_set_card(
     handle: number,

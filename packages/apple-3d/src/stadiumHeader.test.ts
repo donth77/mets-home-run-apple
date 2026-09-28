@@ -85,4 +85,26 @@ describe("stadium scoreboard header", () => {
     expect(header.center).toBe("LIVE");
     expect(JSON.stringify(header)).not.toContain("FINAL");
   });
+
+  it("names the round in place of NEXT GAME and a plain LIVE, as the physical Apple does", () => {
+    const base = { half: "TOP" as const, inning: 1, outs: 0 };
+    expect(
+      stadiumHeaderText({
+        ...base,
+        phase: "SLEEP",
+        label: "BETWEEN GAMES",
+        gameLabel: "Spring Training",
+        nextGame: { day: "Fri", time: "TIME TBD" },
+      }).center,
+    ).toBe("SPRING TRAINING · FRI - TIME TBD");
+    expect(stadiumHeaderText({ ...base, phase: "LIVE", label: "LIVE", gameLabel: "World Series Game 7" }).center).toBe(
+      "WORLD SERIES GAME 7",
+    );
+    expect(
+      stadiumHeaderText({ ...base, phase: "CELEBRATION", label: "HOME RUN!", gameLabel: "NLDS Game 2" }).center,
+    ).toBe("HOME RUN!");
+    expect(stadiumHeaderText({ ...base, phase: "FINAL", label: "FINAL", gameLabel: "NLCS Game 6" }).center).toBe(
+      "FINAL",
+    );
+  });
 });

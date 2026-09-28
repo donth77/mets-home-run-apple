@@ -59,7 +59,24 @@ export function deviceOffseasonSeasonLabel(date: Date) {
   return `${seasonYear} SEASON`;
 }
 
-export function deviceUpcomingTime(scheduledStart: string | undefined, timeZone = "America/New_York") {
+export function deviceUpcomingTime(
+  scheduledStart: string | undefined,
+  timeZone = "America/New_York",
+  listed: { officialDate?: string; startTimeTbd?: boolean } = {},
+) {
+  // As the Apple does: until MLB sets a start time, its own date and TIME TBD.
+  if (listed.startTimeTbd && listed.officialDate && /^\d{4}-\d{2}-\d{2}$/.test(listed.officialDate)) {
+    const day = new Date(`${listed.officialDate}T12:00:00Z`);
+    const parts = new Intl.DateTimeFormat("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      timeZone: "UTC",
+    }).formatToParts(day);
+    const part = (type: Intl.DateTimeFormatPartTypes) =>
+      parts.find((candidate) => candidate.type === type)?.value ?? "";
+    return { date: `${part("weekday")} ${part("month")} ${part("day")}`.toUpperCase(), time: "TIME TBD", timezone: "" };
+  }
   if (!scheduledStart) return { date: "DATE TBD", time: "TIME TBD", timezone: "" };
   const startsAt = new Date(scheduledStart);
   if (Number.isNaN(startsAt.getTime())) return { date: "DATE TBD", time: "TIME TBD", timezone: "" };
@@ -160,7 +177,7 @@ export class DeviceDisplayRenderer {
 
   renderScreenRgb565(state: DeviceDisplayState, elapsedMs = 0, options: DeviceScreenRenderOptions = {}): Uint16Array {
     this.#assertAlive();
-    const local = deviceUpcomingTime(state.scheduledStart, options.timeZone);
+    const local = deviceUpcomingTime(state.scheduledStart, options.timeZone, state);
     const season = deviceOffseasonSeasonLabel(options.now ?? new Date());
     const values = [
       state.away.abbreviation,
@@ -174,6 +191,7 @@ export class DeviceDisplayRenderer {
       local.time,
       local.timezone,
       season,
+      state.label ?? "",
     ] as const;
     const signature = JSON.stringify([
       screenStateCode[state.kind],
@@ -205,6 +223,7 @@ export class DeviceDisplayRenderer {
           timePointer,
           timezonePointer,
           seasonPointer,
+          labelPointer,
         ] = pointers;
         const occupiedBases =
           (state.bases.first ? 0x01 : 0) | (state.bases.second ? 0x02 : 0) | (state.bases.third ? 0x04 : 0);
@@ -233,6 +252,7 @@ export class DeviceDisplayRenderer {
           timePointer,
           timezonePointer,
           seasonPointer,
+          labelPointer,
         );
         if (accepted !== 1) throw new Error(`Physical-display renderer rejected ${state.kind}`);
       });

@@ -60,6 +60,7 @@ struct SettingsUpdate {
   int brightness{-1};  ///< -1 unchanged, else 10..100 percent
   int volume{-1};      ///< -1 unchanged, else 0..100 percent
   int win_full{-1};    ///< -1 unchanged, 1 stay up for the whole track on a win, 0 use the raised time
+  int spring{-1};      ///< -1 unchanged, 1 celebrate spring training and exhibition games, 0 follow them quietly
   int auto_update{-1};  ///< -1 unchanged, 0 only check, 1 install new firmware on its own
   int beta{-1};         ///< -1 unchanged, 1 also take pre-releases (developer setting)
   bool token_given{false};  ///< `github_token` was sent (empty clears it)

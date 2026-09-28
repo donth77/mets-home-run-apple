@@ -28,6 +28,26 @@ constexpr std::int16_t kStatusScoreY = 210;
 constexpr std::int16_t kStatusIconCenterY =
     (kStatusCardY + kStatusLineOneY) / 2;
 
+// The live screen's middle section: the bases, the outs, and the count. A
+// spring training or postseason game names its round across the top of the
+// section in the small text size, and the bases and outs shrink a little to
+// make room for it.
+struct SituationLayout {
+  std::int16_t base_radius;
+  std::int16_t second_base_y;
+  std::int16_t corner_bases_y;
+  std::int16_t corner_bases_dx;
+  std::int16_t outs_y;
+  std::int16_t out_radius;
+  std::int16_t out_spacing;
+  std::int16_t count_label_y;
+  std::int16_t count_y;
+  std::uint8_t count_scale;
+};
+constexpr SituationLayout kFullSituation{13, 75, 96, 21, 126, 6, 20, 72, 86, 4};
+constexpr SituationLayout kRoundSituation{11, 87, 105, 18, 126, 5, 18, 78, 90, 4};
+constexpr std::int16_t kRoundLabelY = 64;
+
 std::int16_t panel_text_width(const char* value, std::uint8_t scale) {
   const std::size_t length = std::strlen(value);
   if (length == 0) return 0;
@@ -230,14 +250,15 @@ void ScreenPainter::draw_base_diamond(std::int16_t center_x, std::int16_t center
                    color);
 }
 
-void ScreenPainter::draw_out_dots(std::uint8_t outs) {
+void ScreenPainter::draw_out_dots(std::uint8_t outs, std::int16_t center_y,
+                                  std::int16_t radius, std::int16_t spacing) {
   for (std::uint8_t index = 0; index < 2; ++index) {
     const std::int16_t x =
-        kLiveBasesCenterX - 10 + static_cast<std::int16_t>(index * 20);
+        kLiveBasesCenterX - spacing / 2 + static_cast<std::int16_t>(index * spacing);
     if (index < outs) {
-      canvas_.fillCircle(x, 126, 6, kMetsOrange);
+      canvas_.fillCircle(x, center_y, radius, kMetsOrange);
     } else {
-      canvas_.drawCircle(x, 126, 6, kMutedBlue);
+      canvas_.drawCircle(x, center_y, radius, kMutedBlue);
     }
   }
 }
@@ -334,9 +355,12 @@ void ScreenPainter::draw_upcoming_layout(const ScreenModel& model) {
   canvas_.fillScreen(kDarkBlue);
   canvas_.fillRect(0, 0, kDisplayWidth, 42, kMetsBlue);
   canvas_.fillRect(0, 38, kDisplayWidth, 4, kMetsOrange);
-  draw_centered(model.upcoming.game_number == 2 ? "DOUBLEHEADER GAME 2"
-                                                : "NEXT METS GAME",
-                160, 10, 2, ST77XX_WHITE);
+  // Spring training and the postseason name the game in place of the usual
+  // heading: SPRING TRAINING, NLDS GAME 1, WORLD SERIES GAME 7.
+  const char* heading = model.upcoming.label[0] != '\0' ? model.upcoming.label
+                        : model.upcoming.game_number == 2 ? "DOUBLEHEADER GAME 2"
+                                                          : "NEXT METS GAME";
+  draw_centered(heading, 160, 10, 2, ST77XX_WHITE);
 
   const std::uint16_t away_color =
       std::strcmp(model.upcoming.away, "NYM") == 0 ? kMetsOrange : ST77XX_WHITE;
@@ -599,18 +623,24 @@ void ScreenPainter::draw_game_layout(const ScreenModel& model) {
   draw_centered(model.game.inning, 160, 7, 2, ST77XX_WHITE);
   draw_centered("LIVE", 160, 34, 1, kLiveGreen);
 
+  // The round (SPRING TRAINING, WORLD SERIES GAME 7) heads the middle
+  // section; the header has no room for it between the scores.
+  const bool round = model.game.label[0] != '\0';
+  const SituationLayout& layout = round ? kRoundSituation : kFullSituation;
+  if (round) draw_centered(model.game.label, 160, kRoundLabelY, 1, ST77XX_WHITE);
+
   char count[8] = {};
   std::snprintf(count, sizeof(count), "%u-%u", model.game.balls, model.game.strikes);
-  draw_centered("COUNT", kLiveCountCenterX, 72, 1, kMutedBlue);
-  draw_centered(count, kLiveCountCenterX, 86, 4, kGold);
+  draw_centered("COUNT", kLiveCountCenterX, layout.count_label_y, 1, kMutedBlue);
+  draw_centered(count, kLiveCountCenterX, layout.count_y, layout.count_scale, kGold);
 
-  draw_base_diamond(kLiveBasesCenterX, 75, 13,
+  draw_base_diamond(kLiveBasesCenterX, layout.second_base_y, layout.base_radius,
                     (model.game.occupied_bases & 0x02U) != 0);
-  draw_base_diamond(kLiveBasesCenterX + 21, 96, 13,
+  draw_base_diamond(kLiveBasesCenterX + layout.corner_bases_dx, layout.corner_bases_y, layout.base_radius,
                     (model.game.occupied_bases & 0x01U) != 0);
-  draw_base_diamond(kLiveBasesCenterX - 21, 96, 13,
+  draw_base_diamond(kLiveBasesCenterX - layout.corner_bases_dx, layout.corner_bases_y, layout.base_radius,
                     (model.game.occupied_bases & 0x04U) != 0);
-  draw_out_dots(model.game.outs);
+  draw_out_dots(model.game.outs, layout.outs_y, layout.out_radius, layout.out_spacing);
   draw_centered("OUTS", kLiveBasesCenterX, 139, 1, kMutedBlue);
 
   canvas_.drawFastHLine(0, 151, kDisplayWidth, kMutedBlue);

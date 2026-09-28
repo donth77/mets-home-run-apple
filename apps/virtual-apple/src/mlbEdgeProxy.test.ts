@@ -50,6 +50,42 @@ describe("Virtual Apple edge feed", () => {
     expect(fetcher.mock.calls[0][1]).toMatchObject({ cf: { cacheEverything: true, cacheTtl: 1 } });
   });
 
+  it("forwards the end-of-season lookups: the Mets' postseason and their standing", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => Response.json({}));
+    const postseason = await proxyMlbRequest(
+      {
+        request: request(
+          "/api/mlb/api/v1/schedule?sportId=1&teamId=121&season=2026&gameType=F%2CD%2CL%2CW&hydrate=team%2CseriesStatus",
+        ),
+      },
+      fetcher,
+    );
+    const standing = await proxyMlbRequest(
+      {
+        request: request(
+          "/api/mlb/api/v1/teams/121?season=2026&hydrate=standings&fields=teams%2Cid%2Crecord%2Cclinched",
+        ),
+      },
+      fetcher,
+    );
+
+    expect([postseason.status, standing.status]).toEqual([200, 200]);
+    expect(fetcher.mock.calls[1][0].toString()).toBe(
+      "https://statsapi.mlb.com/api/v1/teams/121?season=2026&hydrate=standings&fields=teams%2Cid%2Crecord%2Cclinched",
+    );
+    expect(fetcher.mock.calls[1][1]).toMatchObject({ cf: { cacheEverything: true, cacheTtl: 600 } });
+    for (const path of [
+      "/api/mlb/api/v1/teams/147?season=2026&hydrate=standings",
+      "/api/mlb/api/v1/teams/121?season=2026&hydrate=roster",
+      "/api/mlb/api/v1/teams/121?hydrate=standings",
+      "/api/mlb/api/v1/schedule?sportId=1&teamId=121&season=26",
+      "/api/mlb/api/v1/schedule?sportId=1&teamId=121&gameType=F;D",
+    ]) {
+      expect((await proxyMlbRequest({ request: request(path) }, fetcher)).status, path).toBe(400);
+    }
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
   it("rejects non-Mets schedules, unknown endpoints, and non-GET requests", async () => {
     const fetcher = vi.fn<typeof fetch>();
 

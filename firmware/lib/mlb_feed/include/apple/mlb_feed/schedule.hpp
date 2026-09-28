@@ -25,6 +25,15 @@ struct ScheduleTeam {
   std::string name;
 };
 
+/// Where a postseason series stands after a game. Present only when the
+/// schedule was asked for `hydrate=seriesStatus`.
+struct ScheduleSeriesStatus {
+  bool present{false};
+  bool is_over{false};
+  std::int32_t winning_team_id{0};
+  std::int32_t losing_team_id{0};
+};
+
 struct ScheduleGame {
   std::int64_t game_pk{0};
   std::int32_t game_number{1};
@@ -33,6 +42,14 @@ struct ScheduleGame {
   std::string abstract_state;
   std::string detailed_state;
   std::string venue;
+  /// MLB's gameType: R regular season, S spring training, E exhibition,
+  /// F Wild Card, D Division Series, L League Championship, W World Series.
+  std::string game_type{"R"};
+  std::string series_description; ///< e.g. "NL Division Series"
+  std::int32_t series_game_number{0};
+  /// MLB lists a start time before it is set, at 3:33 AM Eastern.
+  bool start_time_tbd{false};
+  ScheduleSeriesStatus series_status;
   ScheduleTeam away;
   ScheduleTeam home;
 
@@ -40,15 +57,29 @@ struct ScheduleGame {
   bool finished() const;
   /// Postponed, cancelled, or suspended games are not followed.
   bool followable() const;
+  /// Spring training and exhibition games.
+  bool spring() const;
+  bool postseason() const;
 };
 
 std::vector<ScheduleGame> parse_schedule(ArduinoJson::JsonVariantConst payload);
+
+/// What kind of game this is when it is not the regular season, in capitals
+/// for the panel: SPRING TRAINING, EXHIBITION, WILD CARD GAME 2, NLDS GAME 3,
+/// NLCS GAME 5, WORLD SERIES GAME 7. Empty for a regular season game.
+std::string game_label(const ScheduleGame &game);
+
+/// True for the away half of a split-squad day: two spring games on the same
+/// date against different clubs, where the Apple follows the one at home.
+bool yields_to_home_split_squad(const ScheduleGame &game,
+                                const std::vector<ScheduleGame> &games);
 
 /// Seconds since the Unix epoch for an ISO-8601 UTC timestamp, or nullopt.
 std::optional<std::int64_t> parse_iso8601_utc(std::string_view value);
 
 /// The game to follow now: a live game first, otherwise the next game that
-/// has not finished. Returns nullopt when nothing in the list qualifies.
+/// has not finished. The away half of a split-squad day is never chosen.
+/// Returns nullopt when nothing in the list qualifies.
 std::optional<ScheduleGame>
 choose_game(const std::vector<ScheduleGame> &games, std::int64_t now_epoch);
 

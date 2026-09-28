@@ -85,6 +85,9 @@ void show_snapshot_as_is(const GameSnapshot& snapshot) {
       }
       ascii_fold(snapshot.venue.value_or("").c_str(), screen.venue, sizeof(screen.venue));
       ascii_fold(snapshot.last_event.c_str(), screen.event, sizeof(screen.event));
+      // A replay shows its own recorded game, which the schedule knows nothing about.
+      copy_text(screen.label, sizeof(screen.label),
+                game && !replay_active ? apple::mlb_feed::game_label(*game).c_str() : "");
       screen.valid = true;
       model.state = ScreenState::Game;
       break;
@@ -174,9 +177,26 @@ void show_upcoming(const ScheduleGame& next) {
   ascii_fold(next.away.abbreviation.c_str(), model.upcoming.away, sizeof(model.upcoming.away));
   ascii_fold(next.home.abbreviation.c_str(), model.upcoming.home, sizeof(model.upcoming.home));
   ascii_fold(next.venue.c_str(), model.upcoming.venue, sizeof(model.upcoming.venue));
+  copy_text(model.upcoming.label, sizeof(model.upcoming.label), apple::mlb_feed::game_label(next).c_str());
   copy_text(model.upcoming.date, sizeof(model.upcoming.date), "DATE TBD");
   copy_text(model.upcoming.time, sizeof(model.upcoming.time), "TIME TBD");
   copy_text(model.upcoming.timezone, sizeof(model.upcoming.timezone), "");
+  // Until MLB sets a start time it lists the game at 3:33 AM Eastern, which
+  // is the day before west of Eastern: show MLB's own date and TIME TBD.
+  struct tm listed{};
+  if (next.start_time_tbd &&
+      std::sscanf(next.official_date.c_str(), "%4d-%2d-%2d", &listed.tm_year, &listed.tm_mon, &listed.tm_mday) == 3) {
+    listed.tm_year -= 1900;
+    listed.tm_mon -= 1;
+    listed.tm_hour = 12;
+    listed.tm_isdst = -1;
+    mktime(&listed);  // fills in the weekday
+    strftime(model.upcoming.date, sizeof(model.upcoming.date), "%a %b %e", &listed);
+    upper(model.upcoming.date);
+    collapse_spaces(model.upcoming.date);
+    request_redraw();
+    return;
+  }
   const std::optional<std::int64_t> start = apple::mlb_feed::parse_iso8601_utc(next.game_date);
   if (start && clock_valid()) {
     const time_t at = static_cast<time_t>(*start);
@@ -226,10 +246,19 @@ void show_joining_screen() {
   show_waiting("JOINING WI-FI", apple::firmware::kMetsOrange, apple::firmware::WaitingIcon::Wifi);
 }
 
+namespace {
+
+bool idle_waiting_card() {
+  return model.state == ScreenState::Waiting && (std::strcmp(model.status_message, kNoGameThisWeek) == 0 ||
+                                                  std::strcmp(model.status_message, kNextGameTbd) == 0);
+}
+
+}  // namespace
+
 // "NEXT CHECK IN N MIN" under the no-game screen, refreshed every minute.
 void update_idle_note(bool force) {
   static std::int32_t shown_minutes = -1;
-  if (game || model.state != ScreenState::Waiting || std::strcmp(model.status_message, "NO GAME THIS WEEK") != 0) {
+  if (game || !idle_waiting_card()) {
     shown_minutes = -1;
     return;
   }
@@ -247,9 +276,8 @@ void update_idle_note(bool force) {
 // week, or the offseason. Anything else (a live game, a celebration, setup,
 // the info screen, a replay, a warning card) keeps the screen on.
 void service_backlight() {
-  const bool idle_card = model.state == ScreenState::Upcoming || model.state == ScreenState::Offseason ||
-                         (model.state == ScreenState::Waiting &&
-                          std::strcmp(model.status_message, "NO GAME THIS WEEK") == 0);
+  const bool idle_card =
+      model.state == ScreenState::Upcoming || model.state == ScreenState::Offseason || idle_waiting_card();
   const bool between_games = settings.sleep_display && idle_card && !replay_active &&
                              !manager.setup_network_active() && settings.follow &&
                              net_state == NetState::Connected;
@@ -278,7 +306,7 @@ void restore_default_screen() {
   } else if (!clock_valid()) {
     model.waiting_note[0] = '\0';
     show_waiting("SYNCING CLOCK", apple::firmware::kMetsOrange, apple::firmware::WaitingIcon::Clock);
-  } else {
+  } else if (!show_idle_card()) {
     model.waiting_note[0] = '\0';
     show_waiting("WAITING FOR LIVE DATA");
   }

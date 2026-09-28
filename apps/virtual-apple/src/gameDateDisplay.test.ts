@@ -18,6 +18,27 @@ describe("browser-local game date labels", () => {
     expect(gameDateParts("2026-08-30T20:10:00Z", now, timeZone)).toMatchObject({ day: "Sun", date: "Aug 30" });
   });
 
+  it("shows MLB's own date and no time while the start time is not set", () => {
+    // The 2027 opener at Clover Park, listed at 3:33 AM Eastern until MLB sets
+    // a time: that is the evening before in Los Angeles.
+    const listed = { officialDate: "2027-02-19", startTimeTbd: true };
+    const beforeOpener = new Date("2027-02-16T18:00:00Z");
+    expect(gameDateParts("2027-02-19T08:33:00Z", beforeOpener, timeZone, listed)).toEqual({
+      day: "Fri",
+      date: "Feb 19",
+      time: "TBD",
+      timeSet: false,
+    });
+    expect(gameDateParts("2027-02-19T08:33:00Z", new Date("2027-02-18T18:00:00Z"), timeZone, listed).day).toBe(
+      "Tomorrow",
+    );
+    expect(gameDateParts("2027-02-19T08:33:00Z", beforeOpener, timeZone)).toMatchObject({
+      day: "Fri",
+      time: "12:33 AM",
+      timeSet: true,
+    });
+  });
+
   it("uses the browser time zone's current abbreviation", () => {
     expect(timeZoneAbbreviation(new Date("2026-08-27T16:00:00Z"), "America/Los_Angeles")).toBe("PDT");
     expect(timeZoneAbbreviation(new Date("2026-12-27T16:00:00Z"), "America/Los_Angeles")).toBe("PST");

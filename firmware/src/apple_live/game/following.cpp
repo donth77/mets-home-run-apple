@@ -15,12 +15,14 @@
 #include "apple_live/system/trace.hpp"
 
 #include "apple/firmware/screens.hpp"
+#include "apple/mlb_feed/season.hpp"
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
 
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <ctime>
 
 namespace apple::live {
@@ -61,10 +63,28 @@ bool final_has_game_two = false;
 
 namespace {
 
+using apple::mlb_feed::IdleCard;
+
 std::uint64_t schedule_fingerprint = 0;
 std::uint32_t final_card_started_ms = 0;
 bool final_card_visible = false;
 bool final_handoff_requested = false;
+
+// The card for a week with nothing to follow, once a schedule has said so.
+std::optional<IdleCard> idle_card;
+
+// Whether the Mets' season is over, asked of MLB only when a week is empty
+// in September or October, and at most hourly. An elimination or a finished
+// postseason stands for the rest of the year.
+constexpr std::uint32_t kSeasonFactsRefreshMs = 60 * 60 * 1000;
+struct SeasonFacts {
+  int year{0};
+  std::optional<apple::mlb_feed::TeamStanding> standing;
+  std::optional<std::uint32_t> standing_checked_ms;
+  std::optional<bool> postseason_over;
+  std::optional<std::uint32_t> postseason_checked_ms;
+};
+SeasonFacts season_facts;
 
 std::uint32_t final_hold_ms() {
   return final_has_game_two ? kDoubleheaderFinalHoldMs : kStandardFinalHoldMs;
@@ -77,46 +97,128 @@ void local_date(int offset_days, char* out, std::size_t capacity) {
   strftime(out, capacity, "%Y-%m-%d", &local);
 }
 
+struct tm local_now() {
+  const time_t at = static_cast<time_t>(wall_epoch());
+  struct tm local;
+  localtime_r(&at, &local);
+  return local;
+}
+
+bool season_fact_due(const std::optional<std::uint32_t>& checked_ms) {
+  return !checked_ms || due(*checked_ms + kSeasonFactsRefreshMs);
+}
+
+void refresh_season_facts(int year) {
+  if (season_facts.year != year) {
+    season_facts = SeasonFacts{};
+    season_facts.year = year;
+  }
+  const bool eliminated = season_facts.standing && season_facts.standing->eliminated;
+  if (!eliminated && season_fact_due(season_facts.standing_checked_ms)) {
+    season_facts.standing_checked_ms = now32();
+    const String url = String(kMlbOrigin) + "/api/v1/teams/121?season=" + String(year) +
+                       "&hydrate=standings&fields=" + apple::mlb_feed::team_standing_fields();
+    JsonDocument doc(&json_allocator);
+    FetchStats stats;
+    if (fetch_json(url, doc, apple::mlb_feed::team_standing_filter_json(), stats)) {
+      if (const auto standing = apple::mlb_feed::parse_team_standing(doc.as<JsonVariantConst>())) {
+        season_facts.standing = standing;
+        publish_trace("SEASON", standing->eliminated ? "standing: eliminated"
+                                : standing->clinched ? "standing: clinched"
+                                                     : "standing: in the race");
+      }
+    } else {
+      char detail[96];
+      std::snprintf(detail, sizeof(detail), "standing lookup failed: %s", stats.error);
+      publish_trace("SEASON", detail);
+    }
+  }
+  if (!season_facts.standing || !season_facts.standing->clinched || season_facts.postseason_over.value_or(false) ||
+      !season_fact_due(season_facts.postseason_checked_ms))
+    return;
+  season_facts.postseason_checked_ms = now32();
+  const String url = String(kMlbOrigin) + "/api/v1/schedule?sportId=1&teamId=121&season=" + String(year) +
+                     "&gameType=F,D,L,W&hydrate=team,seriesStatus&fields=" + apple::mlb_feed::schedule_fields();
+  JsonDocument doc(&json_allocator);
+  FetchStats stats;
+  if (!fetch_json(url, doc, apple::mlb_feed::schedule_filter_json(), stats)) {
+    char detail[96];
+    std::snprintf(detail, sizeof(detail), "postseason lookup failed: %s", stats.error);
+    publish_trace("SEASON", detail);
+    return;
+  }
+  season_facts.postseason_over =
+      apple::mlb_feed::postseason_run_over(apple::mlb_feed::parse_schedule(doc.as<JsonVariantConst>()));
+  publish_trace("SEASON", *season_facts.postseason_over ? "postseason: over" : "postseason: still going");
+}
+
+IdleCard decide_idle_card() {
+  const struct tm local = local_now();
+  const int month = local.tm_mon + 1;
+  if (apple::mlb_feed::season_facts_needed(month)) refresh_season_facts(local.tm_year + 1900);
+  return apple::mlb_feed::idle_card(month, season_facts.standing, season_facts.postseason_over);
+}
+
+const char* idle_card_name(IdleCard card) {
+  switch (card) {
+    case IdleCard::Offseason: return "offseason card";
+    case IdleCard::NextGameTbd: return "next game TBD";
+    case IdleCard::NoGameThisWeek:
+    default: return "no game this week";
+  }
+}
+
+void show_idle(IdleCard card) {
+  if (!idle_card || *idle_card != card) {
+    char detail[64];
+    std::snprintf(detail, sizeof(detail), "no followable game: %s", idle_card_name(card));
+    publish_trace("SCHEDULE", detail);
+  }
+  idle_card = card;
+  // The info and setup screens hand back through restore_default_screen,
+  // which paints the card then.
+  if (model.state == ScreenState::Info || model.state == ScreenState::Setup ||
+      model.state == ScreenState::SetupQr)
+    return;
+  show_idle_card();
+}
+
+// A change the upcoming card shows: a start time set or moved, or the round.
+bool upcoming_card_differs(const ScheduleGame& shown, const ScheduleGame& latest) {
+  return shown.game_date != latest.game_date || shown.start_time_tbd != latest.start_time_tbd ||
+         shown.official_date != latest.official_date || shown.game_type != latest.game_type ||
+         shown.series_game_number != latest.series_game_number;
+}
+
 void follow(const std::optional<ScheduleGame>& chosen) {
   const bool changed = chosen.has_value() != game.has_value() ||
                        (chosen && game && chosen->game_pk != game->game_pk);
   if (chosen && game && !changed) {
+    const bool redraw = upcoming_card_differs(*game, *chosen);
     game = chosen;  // refresh state text and start time
-  }
-  if (!changed) return;
-  game = chosen;
-  tracker.reset();
-  // The old game's scoreboard would otherwise outlive it: status would keep
-  // reporting last night's final beside the next game, and the info screen
-  // would hand back to it. The next game's first frame builds a fresh one.
-  projector = apple::game_state::Projector{};
-  reset_final_tracking();
-  poll_failure_streak = 0;
-  last_error[0] = '\0';
-  next_poll_ms = now32();
-  if (!game) {
-    // Nothing scheduled from October through February is the offseason (a
-    // Mets postseason run keeps games on the schedule, so an empty October
-    // means the season is over); the sleeping-Apple card fits better than a
-    // weekly countdown.
-    const time_t at = static_cast<time_t>(wall_epoch());
-    struct tm local;
-    localtime_r(&at, &local);
-    const int month = local.tm_mon + 1;
-    if (clock_valid() && (month >= 10 || month <= 2)) {
-      const int next_season = month >= 10 ? local.tm_year + 1901 : local.tm_year + 1900;
-      std::snprintf(model.offseason_season, sizeof(model.offseason_season), "%04u SEASON",
-                    static_cast<unsigned>(next_season % 10000));
-      model.state = ScreenState::Offseason;
-      request_redraw();
-      publish_trace("SCHEDULE", "no followable game: offseason card");
-      return;
-    }
-    show_waiting("NO GAME THIS WEEK");
-    update_idle_note(true);
-    publish_trace("SCHEDULE", "no followable game");
+    if (redraw && model.state == ScreenState::Upcoming && !projector.has_projection()) show_upcoming(*game);
     return;
   }
+  if (changed) {
+    game = chosen;
+    tracker.reset();
+    // The old game's scoreboard would otherwise outlive it: status would keep
+    // reporting last night's final beside the next game, and the info screen
+    // would hand back to it. The next game's first frame builds a fresh one.
+    projector = apple::game_state::Projector{};
+    reset_final_tracking();
+    poll_failure_streak = 0;
+    last_error[0] = '\0';
+    next_poll_ms = now32();
+  }
+  if (!game) {
+    // Every empty schedule decides the card again, not only the first after
+    // a game: after a restart or a lost connection the screen still shows
+    // the startup card, and an empty week can become the offseason.
+    show_idle(decide_idle_card());
+    return;
+  }
+  idle_card.reset();
   char detail[96];
   std::snprintf(detail, sizeof(detail), "following %lld %s at %s %s game %ld",
                 static_cast<long long>(game->game_pk), game->away.abbreviation.c_str(),
@@ -226,6 +328,29 @@ void refresh_schedule() {
 }
 
 }  // namespace
+
+bool show_idle_card() {
+  if (!idle_card || game) return false;
+  if (*idle_card == IdleCard::Offseason) {
+    const struct tm local = local_now();
+    char season[sizeof(model.offseason_season)];
+    std::snprintf(season, sizeof(season), "%04d SEASON",
+                  apple::mlb_feed::next_season_year(local.tm_year + 1900, local.tm_mon + 1));
+    if (model.state != ScreenState::Offseason || std::strcmp(season, model.offseason_season) != 0) {
+      copy_text(model.offseason_season, sizeof(model.offseason_season), season);
+      model.state = ScreenState::Offseason;
+      request_redraw();
+    }
+    return true;
+  }
+  const char* status = *idle_card == IdleCard::NextGameTbd ? kNextGameTbd : kNoGameThisWeek;
+  if (model.state != ScreenState::Waiting || std::strcmp(model.status_message, status) != 0) {
+    copy_text(model.waiting_title, sizeof(model.waiting_title), "HOME RUN APPLE");
+    show_waiting(status);
+  }
+  update_idle_note(true);
+  return true;
+}
 
 void reset_final_tracking() {
   final_seen = false;

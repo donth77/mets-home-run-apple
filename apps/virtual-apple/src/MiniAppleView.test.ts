@@ -38,4 +38,23 @@ describe("miniAppleStatus", () => {
       }),
     ).toEqual({ detail: celebration.lastEvent, label: celebration.label });
   });
+
+  it("names the round in place of NEXT GAME and a plain LIVE", () => {
+    const options = { nextGame: { day: "Tomorrow", time: "8:08 PM" }, offseason: false, standby: false };
+    expect(
+      miniAppleStatus(getScenario("sleep").frames[0].snapshot, {
+        ...options,
+        betweenGames: true,
+        gameLabel: "NLDS Game 1",
+      }),
+    ).toEqual({ detail: "Tomorrow · 8:08 PM", label: "NLDS GAME 1" });
+    expect(miniAppleStatus(liveSnapshot, { ...options, betweenGames: false, gameLabel: "Spring Training" })).toEqual({
+      detail: liveSnapshot.lastEvent,
+      label: "SPRING TRAINING",
+    });
+    const celebration = getScenario("home-run").frames[1].snapshot;
+    expect(miniAppleStatus(celebration, { ...options, betweenGames: false, gameLabel: "Spring Training" }).label).toBe(
+      celebration.label,
+    );
+  });
 });

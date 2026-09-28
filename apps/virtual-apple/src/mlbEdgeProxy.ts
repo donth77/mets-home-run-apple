@@ -1,7 +1,7 @@
 const MLB_STATS_API_ORIGIN = "https://statsapi.mlb.com";
 const PROXY_PATH_PREFIX = "/api/mlb";
 
-type FeedRoute = "DIFF" | "FULL" | "SCHEDULE" | "SEASON";
+type FeedRoute = "DIFF" | "FULL" | "SCHEDULE" | "SEASON" | "STANDING";
 
 interface CloudflareRequestInit extends RequestInit {
   cf?: {
@@ -18,13 +18,16 @@ export interface MlbProxyContext {
 const queryParameters: Record<FeedRoute, ReadonlySet<string>> = {
   DIFF: new Set(["endTimecode", "startTimecode"]),
   FULL: new Set(["timecode"]),
-  SCHEDULE: new Set(["date", "endDate", "hydrate", "sportId", "startDate", "teamId"]),
+  SCHEDULE: new Set(["date", "endDate", "gameType", "hydrate", "season", "sportId", "startDate", "teamId"]),
   SEASON: new Set(["sportId"]),
+  // Whether the Mets clinched or are out of the race, for the offseason.
+  STANDING: new Set(["fields", "hydrate", "season"]),
 };
 
 function routeForPath(pathname: string): FeedRoute | undefined {
   if (pathname === "/api/v1/schedule") return "SCHEDULE";
   if (/^\/api\/v1\/seasons\/\d{4}$/.test(pathname)) return "SEASON";
+  if (pathname === "/api/v1/teams/121") return "STANDING";
   if (/^\/api\/v1\.1\/game\/\d+\/feed\/live$/.test(pathname)) return "FULL";
   if (/^\/api\/v1\.1\/game\/\d+\/feed\/live\/diffPatch$/.test(pathname)) return "DIFF";
   return undefined;
@@ -32,6 +35,10 @@ function routeForPath(pathname: string): FeedRoute | undefined {
 
 function validDate(value: string | null) {
   return value === null || /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+function validSeason(value: string | null) {
+  return value === null || /^\d{4}$/.test(value);
 }
 
 function validTimecode(value: string | null) {
@@ -42,11 +49,18 @@ function queryIsAllowed(url: URL, route: FeedRoute) {
   if ([...url.searchParams.keys()].some((key) => !queryParameters[route].has(key))) return false;
   if (route === "SCHEDULE") {
     if (url.searchParams.get("teamId") !== "121" || url.searchParams.get("sportId") !== "1") return false;
+    const gameType = url.searchParams.get("gameType");
     return (
       validDate(url.searchParams.get("date")) &&
       validDate(url.searchParams.get("startDate")) &&
-      validDate(url.searchParams.get("endDate"))
+      validDate(url.searchParams.get("endDate")) &&
+      validSeason(url.searchParams.get("season")) &&
+      (gameType === null || /^[A-Z](?:,[A-Z])*$/.test(gameType))
     );
+  }
+  if (route === "STANDING") {
+    const season = url.searchParams.get("season");
+    return season !== null && validSeason(season) && url.searchParams.get("hydrate") === "standings";
   }
   if (route === "SEASON") return url.searchParams.get("sportId") === "1";
   if (route === "FULL") return validTimecode(url.searchParams.get("timecode"));
@@ -55,6 +69,7 @@ function queryIsAllowed(url: URL, route: FeedRoute) {
 
 function edgeCacheSeconds(route: FeedRoute) {
   if (route === "SEASON") return 24 * 60 * 60;
+  if (route === "STANDING") return 10 * 60;
   if (route === "SCHEDULE") return 15;
   return route === "FULL" ? 2 : 1;
 }

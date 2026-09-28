@@ -29,6 +29,9 @@ struct Settings {
   // react to: it can stay up and play the whole track. Off, a win behaves
   // like a home run and uses the raised time.
   bool win_full_track{true};
+  // Spring training and exhibition games are followed and labeled either
+  // way; this decides whether their home runs and wins raise the Apple.
+  bool spring_celebrations{true};
   bool auto_update{true};   // install a new release on its own, between games
   bool beta{false};         // developer: also take pre-releases
   char github_token[128]{""};  // developer: read-only token while the repository is private

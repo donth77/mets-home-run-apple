@@ -3,6 +3,7 @@ import type { GameStateProjector } from "@apple/game-state-wasm";
 import {
   easternDate,
   fetchMetsScheduleRange,
+  isSpringGame,
   LIVE_FEED_FIELDS,
   MlbRecordingClient,
   type MlbScheduleGame,
@@ -29,6 +30,16 @@ export async function dispatchToShards(env: NotificationEnv, event: VerifiedNoti
     const stub = env.DISPATCHER.get(env.DISPATCHER.idFromName(shardName(shard)));
     await stub.enqueue(event, shard, shards, nowMs);
   }
+}
+
+/**
+ * A game whose events can go out as notifications: under way or just over,
+ * and not spring training or an exhibition. Both Apples celebrate those
+ * games, but subscribers are only told about the regular season and the
+ * postseason.
+ */
+export function notifiesFor(game: MlbScheduleGame) {
+  return !isSpringGame(game) && isTrackable(game);
 }
 
 function isTrackable(game: MlbScheduleGame) {
@@ -74,7 +85,7 @@ export async function runNotificationCycle(env: NotificationEnv, dependencies: W
   const fetcher = dependencies.fetcher ?? fetch;
   const store = new NotificationStore(env.NOTIFICATIONS_DB);
   const dispatch = dependencies.dispatch ?? ((event, at) => dispatchToShards(env, event, at));
-  const games = (await fetchMetsScheduleRange(previousEasternDate(now), easternDate(now), fetcher)).filter(isTrackable);
+  const games = (await fetchMetsScheduleRange(previousEasternDate(now), easternDate(now), fetcher)).filter(notifiesFor);
   let detected = 0;
 
   for (const game of games) {
