@@ -9,7 +9,7 @@ constexpr char kProfileName[] = "apple_live";
 #ifdef APPLE_UPDATE_CRASH_TEST
 constexpr char kFirmwareVersion[] = "0.2.2-crashtest";
 #else
-constexpr char kFirmwareVersion[] = "0.5.1";
+constexpr char kFirmwareVersion[] = "0.5.2";
 #endif
 constexpr char kHostname[] = "home-run-apple";
 
