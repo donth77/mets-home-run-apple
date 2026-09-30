@@ -79,6 +79,7 @@ rebuild them for every change.
 | `docs/ARCHITECTURE.md` | [System map and code boundaries](docs/ARCHITECTURE.md) |
 | `docs/WIRING.md` | [Wiring diagram](docs/WIRING.md) for the physical build |
 | `docs/PARTS.md` | [Parts list](docs/PARTS.md) for the physical build |
+| `docs/3D-PRINTING.md` | [3D printing guide](docs/3D-PRINTING.md) for the Apple part, the actuator mount, and the base cup, with the print files in `docs/3d-printing/` |
 
 ## Inspiration
 

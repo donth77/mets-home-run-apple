@@ -1,0 +1,117 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900" role="img">
+<title>Actuator tip mount</title>
+<desc>All dimensions are in millimeters (mm) &#183; the nylon adapter that joins the lifting rod to the Apple, hidden inside the Apple</desc>
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1L10 5L0 9z" fill="#5b7a8c"/></marker></defs>
+<style>
+  text { font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif; fill: #16344a; }
+  .title { font-size: 27px; font-weight: 700; }
+  .sub { font-size: 14px; fill: #5b7a8c; }
+  .view { font-size: 15px; font-weight: 600; }
+  .note { font-size: 13px; fill: #16344a; }
+  .cap { font-size: 13px; fill: #5b7a8c; }
+  .body { font-size: 14px; }
+  .onpart { font-size: 13px; fill: #16344a; paint-order: stroke; stroke: #c7d4dc; stroke-width: 5px; stroke-linejoin: round; }
+  .part { fill: #c7d4dc; stroke: #2b4a60; stroke-width: 1.3; stroke-linejoin: round; }
+  .void { fill: #ffffff; stroke: #2b4a60; stroke-width: 1.1; }
+  .light { fill: #eef3f6; stroke: #2b4a60; stroke-width: 1.1; }
+  .dim { stroke: #5b7a8c; stroke-width: 1; fill: none; marker-start: url(#a); marker-end: url(#a); }
+  .ext { stroke: #5b7a8c; stroke-width: 0.8; fill: none; }
+  .lead { stroke: #5b7a8c; stroke-width: 0.9; fill: none; }
+  .center { stroke: #5b7a8c; stroke-width: 0.8; stroke-dasharray: 9 4 2 4; fill: none; }
+  .dash { stroke: #2b4a60; stroke-width: 1.1; stroke-dasharray: 6 4; fill: none; }
+</style>
+<rect width="1200" height="900" fill="#ffffff"/>
+<text class="title" x="60" y="62">Actuator tip mount</text>
+<text class="sub" x="60" y="88">All dimensions are in millimeters (mm) &#183; the nylon adapter that joins the lifting rod to the Apple, hidden inside the Apple</text>
+<text class="view" x="215.0" y="150.0" text-anchor="middle">Cutaway through the snap arms</text>
+<path class="part" d="M290.90 602.00L293.54 602.00L297.50 598.04L297.50 582.20L299.15 580.55L299.15 498.05L297.50 496.40L297.50 423.80L269.78 396.08L254.60 396.08L254.60 346.39L259.88 338.85L259.88 336.87L254.60 329.33L254.60 328.69L251.96 326.05L246.02 326.05L246.02 388.16L240.08 388.16L240.08 330.01L215.00 330.01L215.00 417.20L246.02 417.20L246.02 464.72L247.34 464.72L247.34 471.32L284.30 471.32L284.30 595.40Z"/>
+<path class="part" d="M139.10 602.00L136.46 602.00L132.50 598.04L132.50 582.20L130.85 580.55L130.85 498.05L132.50 496.40L132.50 423.80L160.22 396.08L175.40 396.08L175.40 346.39L170.12 338.85L170.12 336.87L175.40 329.33L175.40 328.69L178.04 326.05L183.98 326.05L183.98 388.16L189.92 388.16L189.92 330.01L215.00 330.01L215.00 417.20L183.98 417.20L183.98 464.72L182.66 464.72L182.66 471.32L145.70 471.32L145.70 595.40Z"/>
+<path class="light" d="M185.30 470.00L244.70 470.00L244.70 417.20L185.30 417.20Z"/>
+<circle class="void" cx="215.0" cy="443.6" r="13.2"/>
+<path class="center" d="M215.0 615.2V306.3"/>
+<path class="ext" d="M132.5 623.0V636.0 M297.5 623.0V636.0"/>
+<path class="dim" d="M132.5 632.0H297.5"/>
+<text class="cap" x="215.0" y="649.0" text-anchor="middle">25&#160;mm wide body</text>
+<path class="ext" d="M145.7 655.0V668.0 M284.3 655.0V668.0"/>
+<path class="dim" d="M145.7 664.0H284.3"/>
+<text class="cap" x="215.0" y="681.0" text-anchor="middle">21&#160;mm wide inside the sleeve</text>
+<path class="ext" d="M113.9 326.1H100.9 M113.9 602.0H100.9"/>
+<path class="dim" d="M104.9 326.1V602.0"/>
+<text class="cap" x="96.9" y="468.0" text-anchor="end">41.8&#160;mm tall</text>
+<path class="ext" d="M152.7 471.3H165.7 M152.7 602.0H165.7"/>
+<path class="dim" d="M161.7 471.3V602.0"/>
+<text class="cap" x="177.7" y="536.7" text-anchor="middle" transform="rotate(-90 177.7 536.7)">sleeve, 19.8&#160;mm deep</text>
+<path class="lead" d="M259.9 337.9L305.5 322.1"/>
+<text class="cap" x="311.5" y="326.1" text-anchor="start">hooks stick out 0.8&#160;mm</text>
+<path class="lead" d="M283.6 409.9L305.5 398.1"/>
+<text class="cap" x="311.5" y="402.1" text-anchor="start">45&#176; cone the Apple rests on</text>
+<path class="lead" d="M238.1 421.2L305.5 443.6"/>
+<text class="cap" x="311.5" y="447.6" text-anchor="start">pocket rests on the rod tip</text>
+<path class="lead" d="M299.1 536.0L305.5 555.8"/>
+<text class="cap" x="311.5" y="559.8" text-anchor="start">guide rib, 25.5&#160;mm across</text>
+<text class="view" x="610.0" y="150.0" text-anchor="middle">Cutaway through the screw</text>
+<path class="part" d="M534.10 602.00L531.46 602.00L527.50 598.04L527.50 582.20L525.85 580.55L525.85 498.05L527.50 496.40L527.50 473.96L540.70 473.96L540.70 595.40Z"/>
+<path class="part" d="M547.30 461.42L588.22 461.42L588.22 464.72L577.66 464.72L577.66 471.32L547.30 471.32Z"/>
+<path class="part" d="M547.30 425.78L547.30 413.24L538.06 413.24L555.22 396.08L570.40 396.08L570.40 346.39L565.12 338.85L565.12 336.87L570.40 329.33L570.40 328.69L573.04 326.05L578.98 326.05L578.98 388.16L584.92 388.16L584.92 330.01L610.00 330.01L610.00 417.20L588.22 417.20L588.22 425.78Z"/>
+<path class="part" d="M685.90 602.00L688.54 602.00L692.50 598.04L692.50 582.20L694.15 580.55L694.15 498.05L692.50 496.40L692.50 475.48L679.30 475.48L679.30 595.40Z"/>
+<path class="part" d="M610.00 417.20L630.13 417.20L630.13 411.72L680.42 411.72L664.78 396.08L649.60 396.08L649.60 346.39L654.88 338.85L654.88 336.87L649.60 329.33L649.60 328.69L646.96 326.05L641.02 326.05L641.02 388.16L635.08 388.16L635.08 330.01L610.00 330.01Z"/>
+<path class="light" d="M588.55 470.00L631.45 470.00L631.45 417.20L588.55 417.20Z"/>
+<path class="void" d="M532.78 468.68L547.30 468.68L547.30 418.52L532.78 418.52Z"/>
+<path class="void" d="M547.30 456.80L679.30 456.80L679.30 430.40L547.30 430.40Z"/>
+<path class="void" d="M631.45 470.27L664.45 470.27L664.45 416.93L631.45 416.93Z"/>
+<path class="center" d="M610.0 615.2V306.3"/>
+<path class="lead" d="M588.2 463.1L519.5 516.2"/>
+<text class="cap" x="513.5" y="520.2" text-anchor="end">the tip clamps to this flat wall</text>
+<path class="lead" d="M648.0 416.9L698.5 371.0"/>
+<text class="cap" x="704.5" y="375.0" text-anchor="start">nut presses on the rod tip</text>
+<path class="lead" d="M540.0 418.5L519.5 371.0"/>
+<text class="cap" x="513.5" y="375.0" text-anchor="end">screw head sits in a recess</text>
+<text class="cap" x="610.0" y="636.0" text-anchor="middle">Screw slot: 4.4&#160;mm wide and 5.4&#160;mm tall,</text>
+<text class="cap" x="610.0" y="655.0" text-anchor="middle">centered 4&#160;mm above the bottom of the rod tip</text>
+<text class="cap" x="610.0" y="681.0" text-anchor="middle">Screw: M4, 20&#160;mm long, with an M4 lock nut</text>
+<text class="view" x="985.0" y="150.0" text-anchor="middle">Top view</text>
+<circle class="part" cx="985.0" cy="340.0" r="82.5"/>
+<circle class="light" cx="985.0" cy="340.0" r="54.8"/>
+<circle class="dash" cx="985.0" cy="340.0" r="69.3"/>
+<path class="part" d="M1066.18 335.98L1065.40 328.10L1068.36 327.81L1069.13 335.69Z"/>
+<path class="part" d="M980.98 258.82L973.10 259.60L972.81 256.64L980.69 255.87Z"/>
+<path class="part" d="M903.82 344.02L904.60 351.90L901.64 352.19L900.87 344.31Z"/>
+<path class="part" d="M989.02 421.18L996.90 420.40L997.19 423.36L989.31 424.13Z"/>
+<path class="part" d="M1051.27 291.46L1051.27 278.40L1046.60 273.73L1033.54 273.73Z"/>
+<path class="dash" d="M1022.34 279.33L1031.67 270.00L1027.00 265.33L1017.67 274.66Z"/>
+<path class="dash" d="M1045.67 302.66L1055.00 293.33L1059.67 298.00L1050.34 307.33Z"/>
+<path class="part" d="M936.46 273.73L923.40 273.73L918.73 278.40L918.73 291.46Z"/>
+<path class="dash" d="M924.33 302.66L915.00 293.33L910.33 298.00L919.66 307.33Z"/>
+<path class="dash" d="M947.66 279.33L938.33 270.00L943.00 265.33L952.33 274.66Z"/>
+<path class="part" d="M918.73 388.54L918.73 401.60L923.40 406.27L936.46 406.27Z"/>
+<path class="dash" d="M947.66 400.67L938.33 410.00L943.00 414.67L952.33 405.34Z"/>
+<path class="dash" d="M924.33 377.34L915.00 386.67L910.33 382.00L919.66 372.67Z"/>
+<path class="part" d="M1033.54 406.27L1046.60 406.27L1051.27 401.60L1051.27 388.54Z"/>
+<path class="dash" d="M1045.67 377.34L1055.00 386.67L1059.67 382.00L1050.34 372.67Z"/>
+<path class="dash" d="M1022.34 400.67L1031.67 410.00L1027.00 414.67L1017.67 405.34Z"/>
+<circle class="light" cx="985.0" cy="340.0" r="39.6"/>
+<circle class="void" cx="985.0" cy="340.0" r="31.0"/>
+<circle class="light" cx="985.0" cy="340.0" r="25.1"/>
+<path class="part" d="M1028.14 352.37L1028.90 349.33L1029.44 346.25L1029.77 343.13L1029.88 340.00L1029.77 336.87L1029.44 333.75L1028.90 330.67L1028.14 327.63L1014.82 331.45L1015.34 333.55L1015.72 335.68L1015.94 337.84L1016.02 340.00L1015.94 342.16L1015.72 344.32L1015.34 346.45L1014.82 348.55Z"/>
+<path class="part" d="M997.37 296.86L994.33 296.10L991.25 295.56L988.13 295.23L985.00 295.12L981.87 295.23L978.75 295.56L975.67 296.10L972.63 296.86L976.45 310.18L978.55 309.66L980.68 309.28L982.84 309.06L985.00 308.98L987.16 309.06L989.32 309.28L991.45 309.66L993.55 310.18Z"/>
+<path class="part" d="M941.86 327.63L941.10 330.67L940.56 333.75L940.23 336.87L940.12 340.00L940.23 343.13L940.56 346.25L941.10 349.33L941.86 352.37L955.18 348.55L954.66 346.45L954.28 344.32L954.06 342.16L953.98 340.00L954.06 337.84L954.28 335.68L954.66 333.55L955.18 331.45Z"/>
+<path class="part" d="M972.63 383.14L975.67 383.90L978.75 384.44L981.87 384.77L985.00 384.88L988.13 384.77L991.25 384.44L994.33 383.90L997.37 383.14L993.55 369.82L991.45 370.34L989.32 370.72L987.16 370.94L985.00 371.02L982.84 370.94L980.68 370.72L978.55 370.34L976.45 369.82Z"/>
+<path class="center" d="M882.7 340.0h204.6 M985.0 237.7v204.6"/>
+<path class="lead" d="M1048.9 276.1L1005.0 224.5"/>
+<text class="cap" x="1011.0" y="228.5" text-anchor="start">ridge that fits a groove</text>
+<path class="lead" d="M1038.7 393.7L1005.0 455.5"/>
+<text class="cap" x="1011.0" y="459.5" text-anchor="start">spring finger</text>
+<path class="ext" d="M945.4 469.6V482.6 M1024.6 469.6V482.6"/>
+<path class="dim" d="M945.4 478.6H1024.6"/>
+<text class="cap" x="985.0" y="495.6" text-anchor="middle">12&#160;mm post with four hooked snap arms</text>
+<text class="cap" x="985.0" y="522.6" text-anchor="middle">Four spring fingers on the diagonals, each with a ridge</text>
+<text class="cap" x="985.0" y="542.6" text-anchor="middle">Four small guide ribs around the outside</text>
+<text class="cap" x="985.0" y="562.6" text-anchor="middle">Dashed lines show hidden edges</text>
+<text class="cap" x="985.0" y="582.6" text-anchor="middle">The screw head faces the bottom of the page</text>
+<path class="ext" d="M60 700H1140"/>
+<text class="body" x="60.0" y="734.0" text-anchor="start">Body 25&#160;mm wide, 41.8&#160;mm tall. Fits the Apple's 26&#160;mm hole. Pocket 9.4&#160;mm wide for a 9&#160;mm rod tip with flats 6.5&#160;mm apart.</text>
+<text class="body" x="60.0" y="756.0" text-anchor="start">M4 &#215; 20&#160;mm button-head screw and M4 lock nut. The pocket rests on the end of the tip; the nut pulls the tip's flat against the wall.</text>
+<text class="body" x="60.0" y="778.0" text-anchor="start">Push on 14 to 18&#160;N (about 3 to 4 lb). Pull off 16 to 19&#160;N (about 4 lb). Calculated, not measured.</text>
+<text class="body" x="60.0" y="800.0" text-anchor="start">Print in black nylon (SLS or MJF).</text>
+<text class="cap" x="60.0" y="832.0" text-anchor="start">Design sizes. Printed parts land within 0.2 to 0.3&#160;mm of them.</text>
+</svg>

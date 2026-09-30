@@ -37,6 +37,28 @@ its own charger.
 | --- | --- |
 | Project box, black ABS | The display, speaker, button, switch and power jack mount in its walls. The build uses a 6 × 4 × 2.1 in box ([Amazon B08N1DD5WJ](https://a.co/d/03WHWDAA)); any box that fits the parts will do |
 
+### Holes in the box
+
+
+
+| Hole | Where | Notes |
+| --- | --- | --- |
+| Display window | Front wall, centered | Rectangular, to fit the display |
+| Reset button | Lid, back left | 12 mm round |
+| Power jack | Back wall | round |
+| Power switch | Back wall | Rectangular |
+| Actuator | Lid, centered under the cup | clears the actuator's 15.8 × 11.6 mm tube |
+| Speaker | left side | Rectangular  |
+
+## Apple and base
+
+| Part | Notes |
+| --- | --- |
+| Printed Apple, tip mount and base cup | The red Apple, the nylon connector that snaps it onto the actuator, and the black cup it drops into. Print files, materials, paints and assembly are in the [3D printing guide](3D-PRINTING.md). |
+| [2018 New York Mets Citi Field Delta Home Run Apple Figurine](https://www.ebay.com/sch/i.html?_nkw=2018+New+York+Mets+Citi+Field+Delta+Home+Run+Apple+Figurine), optional | The giveaway. Apple and a cup, and the printed [tip mount](3D-PRINTING.md) fits it. The [printed Apple and cup](3D-PRINTING.md) can replace this. |
+| M4 × 20 mm button-head socket screw and M4 nylon-insert lock nut | Clamp the tip mount to the actuator's rod tip |
+| Velcro strips, optional | Holds the cup on the box |
+
 ## Optional
 
 | Part | What it adds |

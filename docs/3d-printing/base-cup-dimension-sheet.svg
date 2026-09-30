@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900" role="img">
+<title>Apple base cup</title>
+<desc>All dimensions are in millimeters (mm) &#183; the open-top cup that the Apple lowers into</desc>
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1L10 5L0 9z" fill="#5b7a8c"/></marker></defs>
+<style>
+  text { font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif; fill: #16344a; }
+  .title { font-size: 27px; font-weight: 700; }
+  .sub { font-size: 14px; fill: #5b7a8c; }
+  .view { font-size: 15px; font-weight: 600; }
+  .note { font-size: 13px; fill: #16344a; }
+  .cap { font-size: 13px; fill: #5b7a8c; }
+  .body { font-size: 14px; }
+  .onpart { font-size: 13px; fill: #16344a; paint-order: stroke; stroke: #c7d4dc; stroke-width: 5px; stroke-linejoin: round; }
+  .part { fill: #c7d4dc; stroke: #2b4a60; stroke-width: 1.3; stroke-linejoin: round; }
+  .void { fill: #ffffff; stroke: #2b4a60; stroke-width: 1.1; }
+  .light { fill: #eef3f6; stroke: #2b4a60; stroke-width: 1.1; }
+  .dim { stroke: #5b7a8c; stroke-width: 1; fill: none; marker-start: url(#a); marker-end: url(#a); }
+  .ext { stroke: #5b7a8c; stroke-width: 0.8; fill: none; }
+  .lead { stroke: #5b7a8c; stroke-width: 0.9; fill: none; }
+  .center { stroke: #5b7a8c; stroke-width: 0.8; stroke-dasharray: 9 4 2 4; fill: none; }
+  .dash { stroke: #2b4a60; stroke-width: 1.1; stroke-dasharray: 6 4; fill: none; }
+</style>
+<rect width="1200" height="900" fill="#ffffff"/>
+<text class="title" x="60" y="62">Apple base cup</text>
+<text class="sub" x="60" y="88">All dimensions are in millimeters (mm) &#183; the open-top cup that the Apple lowers into</text>
+<text class="view" x="330.0" y="150.0" text-anchor="middle">Top view</text>
+<path class="part" d="M196.80 243.40L463.20 243.40L463.20 243.40L465.66 243.64L468.02 244.36L470.20 245.52L472.11 247.09L473.68 249.00L474.84 251.18L475.56 253.54L475.80 256.00L475.80 410.80L475.80 410.80L475.72 415.57L475.49 420.34L475.10 425.09L474.55 429.83L473.85 434.55L473.00 439.24L471.99 443.91L470.83 448.54L469.52 453.12L468.06 457.67L466.46 462.16L464.70 466.60L462.80 470.97L460.76 475.29L458.58 479.53L456.27 483.70L453.81 487.79L451.23 491.80L448.51 495.73L445.67 499.56L442.70 503.29L439.62 506.93L436.41 510.47L433.10 513.90L429.67 517.21L426.13 520.42L422.49 523.50L418.76 526.47L414.93 529.31L411.00 532.03L406.99 534.61L402.90 537.07L398.73 539.38L394.49 541.56L390.17 543.60L385.80 545.50L381.36 547.26L376.87 548.86L372.32 550.32L367.74 551.63L363.11 552.79L358.44 553.80L353.75 554.65L349.03 555.35L344.29 555.90L339.54 556.29L334.77 556.52L330.00 556.60L325.23 556.52L320.46 556.29L315.71 555.90L310.97 555.35L306.25 554.65L301.56 553.80L296.89 552.79L292.26 551.63L287.68 550.32L283.13 548.86L278.64 547.26L274.20 545.50L269.83 543.60L265.51 541.56L261.27 539.38L257.10 537.07L253.01 534.61L249.00 532.03L245.07 529.31L241.24 526.47L237.51 523.50L233.87 520.42L230.33 517.21L226.90 513.90L223.59 510.47L220.38 506.93L217.30 503.29L214.33 499.56L211.49 495.73L208.77 491.80L206.19 487.79L203.73 483.70L201.42 479.53L199.24 475.29L197.20 470.97L195.30 466.60L193.54 462.16L191.94 457.67L190.48 453.12L189.17 448.54L188.01 443.91L187.00 439.24L186.15 434.55L185.45 429.83L184.90 425.09L184.51 420.34L184.28 415.57L184.20 410.80L184.20 256.00L184.20 256.00L184.44 253.54L185.16 251.18L186.32 249.00L187.89 247.09L189.80 245.52L191.98 244.36L194.34 243.64L196.80 243.40Z"/>
+<path class="void" d="M196.80 254.20L463.20 254.20L463.20 254.20L463.55 254.23L463.89 254.34L464.20 254.50L464.47 254.73L464.70 255.00L464.86 255.31L464.97 255.65L465.00 256.00L465.00 410.80L465.00 410.80L464.93 415.22L464.71 419.63L464.35 424.03L463.85 428.42L463.20 432.79L462.41 437.14L461.47 441.46L460.40 445.74L459.19 449.99L457.84 454.19L456.35 458.35L454.72 462.46L452.97 466.52L451.08 470.51L449.06 474.44L446.91 478.30L444.64 482.09L442.25 485.80L439.73 489.43L437.10 492.98L434.36 496.44L431.50 499.81L428.53 503.08L425.46 506.26L422.28 509.33L419.01 512.30L415.64 515.16L412.18 517.90L408.63 520.53L405.00 523.05L401.29 525.44L397.50 527.71L393.64 529.86L389.71 531.88L385.72 533.77L381.66 535.52L377.55 537.15L373.39 538.64L369.19 539.99L364.94 541.20L360.66 542.27L356.34 543.21L351.99 544.00L347.62 544.65L343.23 545.15L338.83 545.51L334.42 545.73L330.00 545.80L325.58 545.73L321.17 545.51L316.77 545.15L312.38 544.65L308.01 544.00L303.66 543.21L299.34 542.27L295.06 541.20L290.81 539.99L286.61 538.64L282.45 537.15L278.34 535.52L274.28 533.77L270.29 531.88L266.36 529.86L262.50 527.71L258.71 525.44L255.00 523.05L251.37 520.53L247.82 517.90L244.36 515.16L240.99 512.30L237.72 509.33L234.54 506.26L231.47 503.08L228.50 499.81L225.64 496.44L222.90 492.98L220.27 489.43L217.75 485.80L215.36 482.09L213.09 478.30L210.94 474.44L208.92 470.51L207.03 466.52L205.28 462.46L203.65 458.35L202.16 454.19L200.81 449.99L199.60 445.74L198.53 441.46L197.59 437.14L196.80 432.79L196.15 428.42L195.65 424.03L195.29 419.63L195.07 415.22L195.00 410.80L195.00 256.00L195.00 256.00L195.03 255.65L195.14 255.31L195.30 255.00L195.53 254.73L195.80 254.50L196.11 254.34L196.45 254.23L196.80 254.20Z"/>
+<circle class="light" cx="330.0" cy="400.0" r="36.0"/>
+<path class="center" d="M304.0 400.0h52 M330.0 374.0v52"/>
+<path class="ext" d="M184.2 226.4V213.4 M475.8 226.4V213.4"/>
+<path class="dim" d="M184.2 217.4H475.8"/>
+<text class="cap" x="330.0" y="210.4" text-anchor="middle">81&#160;mm wide</text>
+<path class="ext" d="M159.2 243.4H146.2 M159.2 556.6H146.2"/>
+<path class="dim" d="M150.2 243.4V556.6"/>
+<text class="cap" x="142.2" y="404.0" text-anchor="end">87&#160;mm deep</text>
+<path class="lead" d="M355.2 374.8L480.0 340.0"/>
+<text class="cap" x="486.0" y="344.0" text-anchor="start">20&#160;mm hole in the floor</text>
+<path class="lead" d="M470.4 337.4L480.0 299.8"/>
+<text class="cap" x="486.0" y="303.8" text-anchor="start">3&#160;mm thick wall</text>
+<text class="cap" x="330.0" y="460.0" text-anchor="middle">hole center is 43.5&#160;mm</text>
+<text class="cap" x="330.0" y="478.0" text-anchor="middle">from the flat front</text>
+<text class="cap" x="330.0" y="602.6" text-anchor="middle">The flat front is at the top of this view. The rounded back is at the bottom.</text>
+<text class="view" x="870.0" y="150.0" text-anchor="middle">Cutaway through the center, seen from the side</text>
+<path class="part" d="M713.4 180.0h10.8V455.4H834.0V471.6H713.4z"/>
+<path class="part" d="M1026.6 180.0h-10.8V455.4H906.0V471.6H1026.6z"/>
+<path class="ext" d="M1057.6 180.0H1070.6 M1057.6 471.6H1070.6"/>
+<path class="dim" d="M1066.6 180.0V471.6"/>
+<text class="cap" x="1074.6" y="329.8" text-anchor="start">81&#160;mm tall</text>
+<path class="ext" d="M713.4 502.6V515.6 M1026.6 502.6V515.6"/>
+<path class="dim" d="M713.4 511.6H1026.6"/>
+<text class="cap" x="870.0" y="528.6" text-anchor="middle">87&#160;mm front to back</text>
+<path class="ext" d="M834.0 442.4V429.4 M906.0 442.4V429.4"/>
+<path class="dim" d="M834.0 433.4H906.0"/>
+<text class="cap" x="870.0" y="426.4" text-anchor="middle">20&#160;mm hole</text>
+<path class="ext" d="M749.2 180.0H762.2 M749.2 455.4H762.2"/>
+<path class="dim" d="M758.2 180.0V455.4"/>
+<text class="cap" x="766.2" y="321.7" text-anchor="start">76.5&#160;mm deep inside</text>
+<path class="lead" d="M783.4 463.5L759.4 555.6"/>
+<text class="cap" x="765.4" y="559.6" text-anchor="start">4.5&#160;mm thick floor</text>
+<path class="ext" d="M60 700H1140"/>
+<text class="body" x="60.0" y="734.0" text-anchor="start">Outside 81&#160;mm wide, 87&#160;mm front to back, 81&#160;mm tall. Walls 3&#160;mm, floor 4.5&#160;mm, inside 76.5&#160;mm deep. Open top.</text>
+<text class="body" x="60.0" y="756.0" text-anchor="start">20&#160;mm hole in the floor for the actuator, centered, 43.5&#160;mm from the flat front. Outside edges rounded 1&#160;mm.</text>
+<text class="body" x="60.0" y="778.0" text-anchor="start">Print in black nylon (MJF or SLS).</text>
+<text class="cap" x="60.0" y="810.0" text-anchor="start">Design sizes. Printed parts land within 0.2 to 0.3&#160;mm of them.</text>
+</svg>
