@@ -149,6 +149,7 @@ export function AppleStage({
   className = "",
   onReadyChange,
   animationWindow,
+  holdLoading = false,
 }: AppleStageProps) {
   const outfield = mode === "outfield";
   const [startupAttempt] = useState(() => (outfield ? beginSceneStartup(browserStorage(), PAGE_SCENE_STARTUP_ID) : 1));
@@ -212,11 +213,11 @@ export function AppleStage({
   return (
     <div
       className={`apple-stage apple-stage--${mode} ${className}`.trim()}
-      aria-busy={!stageSettled}
+      aria-busy={!stageSettled || holdLoading}
       data-render-quality={renderQuality}
       data-renderer-status={rendererUnavailable ? "unavailable" : assetsReady ? "ready" : "loading"}
     >
-      {!stageSettled && <LoadingApple mode={mode} />}
+      {(!stageSettled || holdLoading) && <LoadingApple mode={mode} />}
       <div
         className="apple-stage__visual"
         data-weather={outfield ? weather.toLowerCase() : undefined}

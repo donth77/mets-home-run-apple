@@ -18,6 +18,11 @@ export interface AppleStageProps extends Omit<AppleAssemblyProps, "restingOffset
   className?: string;
   onReadyChange?: (ready: boolean) => void;
   /**
+   * Keeps the loading overlay up after the scene is ready, while the page
+   * decides what to show, so nothing it would replace flashes on the way in.
+   */
+  holdLoading?: boolean;
+  /**
    * Draw on this window's animation frames instead of the page's. The Mini
    * Apple passes its own window, which keeps painting while the page that owns
    * the scene sits in a background tab.

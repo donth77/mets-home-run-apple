@@ -51,6 +51,8 @@ function settleSharedAppleStage(host: HTMLElement) {
 interface SharedAppleStageProps {
   /** The Mini Apple window while it is open, so the scene is drawn on its frames. */
   animationWindow?: Window;
+  /** Keep the loading overlay up while the page decides what to show. */
+  holdLoading: boolean;
   host: HTMLElement;
   mini: boolean;
   onReadyChange: (ready: boolean) => void;
@@ -62,6 +64,7 @@ interface SharedAppleStageProps {
 
 export function SharedAppleStage({
   animationWindow,
+  holdLoading,
   host,
   mini,
   onReadyChange,
@@ -73,6 +76,7 @@ export function SharedAppleStage({
   return createPortal(
     <AppleStage
       animationWindow={animationWindow}
+      holdLoading={holdLoading}
       className={mini ? "mini-apple-stage" : ""}
       framing={mini ? "mini" : "default"}
       mode="outfield"

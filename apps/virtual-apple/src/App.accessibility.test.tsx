@@ -1,7 +1,7 @@
 /** @vitest-environment happy-dom */
 
 import { getScenario } from "@apple/test-fixtures";
-import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import axe from "axe-core";
 import { Window as HappyDomWindow } from "happy-dom";
 import { StrictMode } from "react";
@@ -16,6 +16,7 @@ const metsSeasonTestState = vi.hoisted(() => ({
   gameThisWeek: false,
   recheck: vi.fn(),
   seasonOver: undefined as boolean | undefined,
+  status: "READY" as "CHECKING" | "READY",
 }));
 const liveTestState = vi.hoisted(() => ({
   celebration: undefined as unknown,
@@ -78,10 +79,12 @@ vi.mock("./useCelebrationSound", () => ({
 
 vi.mock("@apple/apple-3d", () => ({
   AppleStage: ({
+    holdLoading,
     positionMm,
     scoreboardData,
     weather,
   }: {
+    holdLoading?: boolean;
     positionMm: number;
     scoreboardData?: {
       atCitiField?: boolean;
@@ -102,6 +105,7 @@ vi.mock("@apple/apple-3d", () => ({
         aria-label="Virtual Home Run Apple behind the center-field wall"
         data-away={scoreboardData?.away?.abbreviation}
         data-at-citi-field={String(scoreboardData?.atCitiField)}
+        data-hold-loading={String(Boolean(holdLoading))}
         data-batter-line={scoreboardData?.batterLine}
         data-home={scoreboardData?.home?.abbreviation}
         data-next-game={
@@ -166,7 +170,7 @@ vi.mock("./useMetsSeason", () => ({
     gameThisWeek: metsSeasonTestState.gameThisWeek,
     recheck: metsSeasonTestState.recheck,
     seasonOver: metsSeasonTestState.seasonOver ?? leagueOffseason,
-    status: "READY",
+    status: metsSeasonTestState.status,
   }),
 }));
 
@@ -216,6 +220,7 @@ afterEach(() => {
   metsSeasonTestState.gameThisWeek = false;
   metsSeasonTestState.recheck.mockReset();
   metsSeasonTestState.seasonOver = undefined;
+  metsSeasonTestState.status = "READY";
   liveTestState.celebration = undefined;
   liveTestState.game = undefined;
   liveTestState.snapshot = undefined;
@@ -708,6 +713,43 @@ describe("Virtual Apple accessibility", () => {
         "data-scoreboard-label",
       ),
     ).toBe("OFFSEASON");
+  });
+
+  it("keeps the loading overlay up until it knows what to show, then never brings it back", () => {
+    metsSeasonTestState.status = "CHECKING";
+    liveTestState.status = "CHECKING";
+    const { getByRole, rerender } = render(<App />);
+    const stage = () => getByRole("img", { name: "Virtual Home Run Apple behind the center-field wall" });
+    expect(stage().getAttribute("data-hold-loading")).toBe("true");
+
+    // The season is decided (the Mets are out), but today's games are not yet.
+    metsSeasonTestState.status = "READY";
+    metsSeasonTestState.seasonOver = true;
+    rerender(<App />);
+    expect(stage().getAttribute("data-hold-loading")).toBe("true");
+
+    liveTestState.status = "BETWEEN_GAMES";
+    rerender(<App />);
+    expect(stage().getAttribute("data-hold-loading")).toBe("false");
+    expect(stage().getAttribute("data-scoreboard-label")).toBe("OFFSEASON");
+
+    // A later check, such as the tab coming back into view, never hides the page again.
+    metsSeasonTestState.status = "CHECKING";
+    liveTestState.status = "CHECKING";
+    rerender(<App />);
+    expect(stage().getAttribute("data-hold-loading")).toBe("false");
+  });
+
+  it("shows the page after a few seconds even when MLB has not answered", () => {
+    vi.useFakeTimers();
+    metsSeasonTestState.status = "CHECKING";
+    const { getByRole } = render(<App />);
+    const stage = () => getByRole("img", { name: "Virtual Home Run Apple behind the center-field wall" });
+    expect(stage().getAttribute("data-hold-loading")).toBe("true");
+    act(() => {
+      vi.advanceTimersByTime(8_000);
+    });
+    expect(stage().getAttribute("data-hold-loading")).toBe("false");
   });
 
   it("stays in the offseason while the live hook checks the schedule again", () => {

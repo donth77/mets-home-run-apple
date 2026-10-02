@@ -47,6 +47,9 @@ const modes = [
   { id: "offseason", label: "Offseason" },
 ];
 
+// The longest the page waits on MLB before showing what it has.
+const FIRST_STATE_WAIT_MS = 8_000;
+
 export function App() {
   const playback = useFixturePlayback("sleep");
   const seasonPhase = useMlbSeasonPhase();
@@ -94,6 +97,26 @@ export function App() {
     [],
   );
   const [demoOverride, setDemoOverride] = useState(() => showDemoControls && playback.scenarioId !== "sleep");
+  // Until the page knows what to show (the season decided, and the live
+  // hook's first look at today's games) the stage keeps its loading overlay
+  // up and the rest of the page stays hidden, so the between-games view never
+  // flashes on the way into the offseason or a game. A slow answer is waited
+  // on for a few seconds at most, and once shown the page never hides again.
+  const [firstStateShown, setFirstStateShown] = useState(false);
+  const firstStateKnown =
+    demoOverride ||
+    (seasonChecked &&
+      metsSeason.status !== "CHECKING" &&
+      (!liveEnabled || (live.status !== "CHECKING" && live.status !== "CONNECTING")));
+  useEffect(() => {
+    if (firstStateShown) return;
+    if (firstStateKnown) {
+      setFirstStateShown(true);
+      return;
+    }
+    const timer = window.setTimeout(() => setFirstStateShown(true), FIRST_STATE_WAIT_MS);
+    return () => window.clearTimeout(timer);
+  }, [firstStateKnown, firstStateShown]);
   // The Mets' season is over and no game is on show. A game still on the
   // board or a celebration holds the offseason off, and so does a win's track
   // (see `offseason` below). The live hook's own schedule checks, such as the
@@ -325,7 +348,7 @@ export function App() {
         data-focus-mode={activeFocusMode}
         data-mini-open={miniAppleWindow.isOpen}
         data-phase={liveStandby ? "STANDBY" : publicSnapshot.phase}
-        data-scene-ready={miniAppleWindow.isOpen || sceneReady}
+        data-scene-ready={miniAppleWindow.isOpen || (sceneReady && firstStateShown)}
         data-weather={rainAtCitiField ? "rain" : "clear"}
       >
         {!offseason && !activeFocusMode && !miniAppleWindow.isOpen && (
@@ -531,6 +554,7 @@ export function App() {
       </main>
 
       <SharedAppleStage
+        holdLoading={!firstStateShown}
         animationWindow={miniAppleWindow.animationWindow ?? undefined}
         host={stageHost}
         mini={miniAppleWindow.isOpen}

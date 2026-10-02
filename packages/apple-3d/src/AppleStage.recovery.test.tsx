@@ -117,6 +117,26 @@ describe("AppleStage assembly placement", () => {
   });
 });
 
+describe("AppleStage loading hold", () => {
+  it("keeps the loading overlay up after the scene is ready while the page asks it to", async () => {
+    const onReadyChange = vi.fn();
+    await act(async () => {
+      root.render(<AppleStage mode="outfield" positionMm={0} onReadyChange={onReadyChange} holdLoading />);
+    });
+    const stage = container.querySelector(".apple-stage");
+    expect(stage?.getAttribute("data-renderer-status")).toBe("ready");
+    expect(onReadyChange).toHaveBeenLastCalledWith(true);
+    expect(container.querySelector(".apple-loading-overlay")).not.toBeNull();
+    expect(stage?.getAttribute("aria-busy")).toBe("true");
+
+    await act(async () => {
+      root.render(<AppleStage mode="outfield" positionMm={0} onReadyChange={onReadyChange} />);
+    });
+    expect(container.querySelector(".apple-loading-overlay")).toBeNull();
+    expect(stage?.getAttribute("aria-busy")).toBe("false");
+  });
+});
+
 describe("AppleStage frame source", () => {
   it("draws on another window's animation frames while it is given one", async () => {
     const frames = new Map<number, FrameRequestCallback>();
