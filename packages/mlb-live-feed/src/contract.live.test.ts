@@ -11,9 +11,15 @@ const live = environment?.MLB_CONTRACT_LIVE === "1";
 
 describe.skipIf(!live)("MLB API contract (live)", () => {
   it("bootstraps the most recent completed Mets game through the browser adapter", async () => {
+    // Ten days covers any in-season week; in the offseason, widen to the last
+    // completed game of the season, as firmware/tools/mlb_contract_check.py does.
     const today = easternDate();
-    const start = new Date(Date.parse(`${today}T12:00:00Z`) - 10 * 86_400_000).toISOString().slice(0, 10);
-    const games = await fetchMetsScheduleRange(start, today);
+    let games: Awaited<ReturnType<typeof fetchMetsScheduleRange>> = [];
+    for (const lookback of [10, 220]) {
+      const start = new Date(Date.parse(`${today}T12:00:00Z`) - lookback * 86_400_000).toISOString().slice(0, 10);
+      games = await fetchMetsScheduleRange(start, today);
+      if (games.length > 0) break;
+    }
     expect(games.length).toBeGreaterThan(0);
     // Postponed and cancelled games are abstractly Final too, but have no plays.
     const finals = games.filter(
