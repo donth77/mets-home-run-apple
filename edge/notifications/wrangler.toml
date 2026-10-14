@@ -3,8 +3,9 @@ main = "src/index.ts"
 compatibility_date = "2026-09-03"
 workers_dev = false
 
-[triggers]
-crons = ["* * * * *"]
+# No [triggers] on purpose. The watcher's every-minute Cron Trigger is on while
+# the Mets are playing and off in the offseason; scripts/sync-schedule.mjs sets
+# it, and without a [triggers] table `wrangler deploy` leaves it alone.
 
 [[d1_databases]]
 binding = "NOTIFICATIONS_DB"

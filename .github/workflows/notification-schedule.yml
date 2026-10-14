@@ -1,0 +1,45 @@
+name: Notification schedule
+
+# The notification watcher runs every minute while the Mets are playing and
+# not at all in the offseason. Once a day this job checks the MLB schedule and
+# sets the worker's Cron Trigger to match (edge/notifications/scripts/
+# sync-schedule.mjs); the site deploy runs the same script after publishing
+# the worker.
+#
+# GitHub disables scheduled workflows in a public repository after 60 days
+# without activity, and an offseason can be that quiet. Enabling the workflow
+# through the API restarts that clock, so every run does it and the job is
+# still here to turn the watcher back on before Opening Day.
+
+on:
+  schedule:
+    - cron: "23 9 * * *" # daily, 05:23 New York in season
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: notification-schedule
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Match the watcher's Cron Trigger to the Mets schedule
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: node edge/notifications/scripts/sync-schedule.mjs
+      - name: Keep this schedule from lapsing in a quiet offseason
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method PUT "repos/${{ github.repository }}/actions/workflows/notification-schedule.yml/enable"

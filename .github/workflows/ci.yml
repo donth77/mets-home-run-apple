@@ -145,6 +145,17 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
         run: pnpm run deploy
+      # The watcher's Cron Trigger follows the Mets schedule rather than
+      # wrangler.toml. Matching it here sets it on a first deploy and catches
+      # up if the daily Notification schedule job ever stalled; that job
+      # retries a failure, so one does not hold up the site.
+      - name: Match the watcher's schedule to the Mets schedule
+        if: steps.creds.outputs.ready == 'true'
+        continue-on-error: true
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: node edge/notifications/scripts/sync-schedule.mjs
       # The app carries its own wrangler so pnpm can run it here; the
       # working directory matters, because wrangler picks up the Pages
       # Functions from apps/virtual-apple/functions.
